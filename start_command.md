@@ -1,0 +1,1 @@
+Set-Location -LiteralPath 'C:\Users\faisa\AndroidStudioProjects\AlMathina\flutter_preview'; flutter run -d chrome --verbose

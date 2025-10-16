@@ -100,6 +100,14 @@ try:
 except Exception as e:
     logger.error(f"✗ Failed to load admin routes: {e}")
 
+# Import Flutter routes
+try:
+    from routes import flutter
+    app.include_router(flutter.router, tags=["Flutter Mobile App"])
+    logger.info("✓ Flutter routes loaded")
+except Exception as e:
+    logger.error(f"✗ Failed to load Flutter routes: {e}")
+
 # Root endpoint
 @app.get("/")
 async def root():

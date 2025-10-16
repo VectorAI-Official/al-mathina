@@ -54,9 +54,11 @@ async def get_home_data():
             main_category_name = main_cat["_id"]
             
             # Get image from metadata if exists
+            # Note: Best seller items come from various sections, so we need to find
+            # any metadata for this main_category regardless of section
             metadata = metadata_collection.find_one({
-                "level": "main",
-                "name": main_category_name
+                "main_category": main_category_name,
+                "type": "main_category"
             })
             
             response["best_sellers"]["main_categories"].append({
@@ -98,8 +100,8 @@ async def get_home_data():
                 # Get image from metadata
                 metadata = metadata_collection.find_one({
                     "section": section_name,
-                    "level": "main",
-                    "name": main_cat_name
+                    "main_category": main_cat_name,
+                    "type": "main_category"
                 })
                 
                 section_data["main_categories"].append({
@@ -160,7 +162,8 @@ async def get_subcategories(section: str, main_category: str):
         if main_category not in main_categories:
             raise HTTPException(status_code=404, detail=f"Main category not found: {main_category}")
         
-        subcategories_list = main_categories[main_category].get("subcategories", [])
+        # main_categories[main_category] is already a list of subcategories
+        subcategories_list = main_categories[main_category]
         
         # Build response with product counts
         response = {
@@ -459,7 +462,9 @@ async def get_best_sellers(
                 "subcategory": prod.get("category_sub"),
                 "category_breadcrumb": f"{prod.get('category_section')} → {prod.get('category_main')} → {prod.get('category_sub')}",
                 "stock": prod.get("stock", 0),
-                "in_stock": prod.get("stock", 0) > 0
+                "in_stock": prod.get("stock", 0) > 0,
+                "is_best_seller": True,  # All products in this endpoint are best sellers
+                "description": prod.get("description", "")
             })
         
         response = {

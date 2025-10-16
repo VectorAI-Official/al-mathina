@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - AL-Madhina</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+    <link rel="stylesheet" href="/static/admin/css/dashboard.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1>🏪 AL-Madhina Admin</h1>
+            </div>
+            <div class="header-actions">
+                <span class="welcome-text">Welcome, {{ username }}</span>
+                <form method="POST" action="/admin/logout" style="display: inline;">
+                    <button type="submit" class="logout-button">Logout</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Top Action Bar -->
+        <div class="action-bar">
+            <div class="search-section">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="🔍 Search by product name, ID, section, category..." 
+                    class="search-input"
+                >
+                <select id="categoryFilter" class="category-filter">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+            <div class="action-buttons-group">
+                <button class="btn-secondary" onclick="openMobileView()">
+                    📱 Mobile View
+                </button>
+                <button class="btn-primary" onclick="openCreateModal()">
+                    ➕ Add New Product
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📦</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="totalProducts">0</div>
+                    <div class="stat-label">Total Products</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📂</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="totalCategories">0</div>
+                    <div class="stat-label">Categories</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⚠️</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="lowStock">0</div>
+                    <div class="stat-label">Low Stock Items</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Table -->
+        <div class="table-container">
+            <table class="products-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Product Name</th>
+                        <th>Section</th>
+                        <th>Main Category</th>
+                        <th>Subcategory</th>
+                        <th>Price</th>
+                        <th>Stock</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="productsTableBody">
+                    <tr>
+                        <td colspan="8" class="loading-cell">
+                            <div class="loading-spinner"></div>
+                            Loading products...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create/Edit Product Modal -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Product</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <form id="productForm" class="product-form">
+                <input type="hidden" id="productId" value="">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productItemId">Item ID (SKU) *</label>
+                        <input type="text" id="productItemId" placeholder="Auto-generated..." readonly required>
+                        <small class="form-hint">Automatically generated unique identifier</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="productName">Product Name *</label>
+                        <input type="text" id="productName" placeholder="e.g., Sprite 600ml Bottle" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productSection">Section (Level 1) *</label>
+                        <select id="productSection" required>
+                            <option value="">Select Section</option>
+                        </select>
+                        <input type="text" id="newSectionInput" placeholder="Or enter new section name" style="margin-top: 8px; display: none;">
+                        <small class="form-hint">App home screen section</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="productMainCategory">Main Category (Level 2) *</label>
+                        <select id="productMainCategory" required disabled>
+                            <option value="">Select Section First</option>
+                        </select>
+                        <input type="text" id="newMainInput" placeholder="Or enter new main category" style="margin-top: 8px; display: none;">
+                        <small class="form-hint">Category card display</small>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productSubCategory">Subcategory (Level 3) *</label>
+                        <select id="productSubCategory" required disabled>
+                            <option value="">Select Main Category First</option>
+                        </select>
+                        <input type="text" id="newSubInput" placeholder="Or enter new subcategory" style="margin-top: 8px; display: none;">
+                        <small class="form-hint">Drill-down filter</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="productWeight">Weight/Size *</label>
+                        <input type="text" id="productWeight" placeholder="e.g., 600ml, 5kg" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productPrice">Price (₹) *</label>
+                        <input type="number" id="productPrice" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="productStock">Stock Quantity *</label>
+                        <input type="number" id="productStock" min="0" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="productDescription">Description</label>
+                    <textarea id="productDescription" rows="3"></textarea>
+                </div>
+
+                <!-- Hidden active checkbox - always true, kept for backend compatibility -->
+                <input type="checkbox" id="productActive" checked style="display: none;">
+
+                <div class="form-group">
+                    <label for="productImage" style="color: #D32F2F; font-weight: bold;">
+                        📸 Product Image <span style="color: #D32F2F;">*</span> (Required)
+                    </label>
+                    <input type="file" id="productImage" accept="image/jpeg,image/jpg,image/png,image/webp" style="border: 2px solid #D32F2F; padding: 8px; border-radius: 4px;">
+                    <small class="form-hint" style="color: #D32F2F; font-weight: bold;">
+                        ⚠️ Please select a product image before saving
+                    </small>
+                    <small class="form-hint" style="display: block; margin-top: 4px;">
+                        Accepted formats: JPG, PNG, WEBP (Max 5MB)
+                    </small>
+                    <div id="imagePreview" class="image-preview">
+                        <div class="image-preview-content"></div>
+                        <button type="button" class="image-remove-btn" onclick="clearProductImagePreview()" style="display: none;">
+                            ✕ Remove Image
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" id="submitButton">Save Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>⚠️ Confirm Delete</h2>
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <p class="delete-message">
+                Are you sure you want to delete this product? This action cannot be undone.
+            </p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button type="button" class="btn-danger" id="confirmDeleteButton">Delete Product</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Mobile Preview Backdrop -->
+    <div id="mobilePreviewBackdrop" class="mobile-preview-backdrop" onclick="closeMobileView()"></div>
+
+    <!-- Mobile Preview Panel -->
+    <div id="mobilePreviewPanel" class="mobile-preview-panel">
+        <div class="mobile-preview-header">
+            <h3>Mobile Preview</h3>
+            <button class="close-mobile-btn" onclick="closeMobileView()">&times;</button>
+        </div>
+        <div class="mobile-preview-content">
+            <div class="mobile-device">
+                <div class="mobile-screen">
+                    <div class="mobile-statusbar">
+                        <span class="mobile-time">9:41</span>
+                        <span class="mobile-icons">📶 📡 🔋</span>
+                    </div>
+                    <div class="mobile-app-content" id="mobileAppContent">
+                        <div class="mobile-header">
+                            <h2>🏪 AL-Madhina</h2>
+                        </div>
+                        <div class="mobile-categories" id="mobileCategorySections">
+                            <!-- Categories will be loaded here -->
+                        </div>
+                        <div class="mobile-products" id="mobileProductsList">
+                            <!-- Products will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Section Modal (Level 1 - Icons Only) -->
+    <div id="editSectionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Section</h2>
+                <button class="close-modal" onclick="closeEditSectionModal()">&times;</button>
+            </div>
+            <form id="editSectionForm" onsubmit="handleSectionEdit(event)">
+                <input type="hidden" id="editSectionOldName">
+                
+                <div class="form-group">
+                    <label for="editSectionName">Category Name *</label>
+                    <input type="text" id="editSectionName" required placeholder="Enter category name">
+                    <span class="form-hint">📝 Section icons are automatically assigned based on the category name</span>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeEditSectionModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">💾 Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Main Category Modal (Level 2 - Icons Only) -->
+    <div id="editMainCategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Main Category</h2>
+                <button class="close-modal" onclick="closeEditMainCategoryModal()">&times;</button>
+            </div>
+            <form id="editMainCategoryForm" onsubmit="handleMainCategoryEdit(event)">
+                <input type="hidden" id="editMainCategoryOldName">
+                <input type="hidden" id="editMainCategorySection">
+                
+                <div class="form-group">
+                    <label for="editMainCategorySectionDisplay">Section (Level 1)</label>
+                    <input type="text" id="editMainCategorySectionDisplay" disabled placeholder="Section name">
+                    <span class="form-hint">📂 Parent section (cannot be changed)</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editMainCategoryName">Main Category Name *</label>
+                    <input type="text" id="editMainCategoryName" required placeholder="Enter main category name">
+                    <span class="form-hint">🏷️ Name displayed on the category card</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="editMainCategoryImageFile">Change Image</label>
+                    <input type="file" id="editMainCategoryImageFile" 
+                           accept="image/jpeg,image/jpg,image/png,image/webp"
+                           onchange="handleEditMainCategoryImagePreview(event)">
+                    <span class="form-hint">📷 Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                </div>
+                
+                <div id="editMainCategoryImagePreview" class="image-preview" style="display: none;">
+                    <img id="editMainCategoryPreviewImg" alt="Preview">
+                    <button type="button" class="remove-image-btn" onclick="clearEditMainCategoryImage()">✕ Remove</button>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeEditMainCategoryModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">💾 Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Subcategory Modal (Level 3 - With Image Upload) -->
+    <div id="editSubCategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Edit Subcategory</h2>
+                <button class="close-modal" onclick="closeEditSubCategoryModal()">&times;</button>
+            </div>
+            <form id="editSubCategoryForm" onsubmit="handleSubCategoryEdit(event)">
+                <input type="hidden" id="editSubCategoryOldName">
+                <input type="hidden" id="editSubCategorySection">
+                <input type="hidden" id="editSubCategoryMainCategory">
+                
+                <!-- DISABLED SECTION FIELD -->
+                <div class="form-group">
+                    <label for="editSubCategorySectionDisplay">Section (Level 1)</label>
+                    <input type="text" id="editSubCategorySectionDisplay" disabled>
+                    <span class="form-hint">📂 Parent section (cannot be changed)</span>
+                </div>
+                
+                <!-- DISABLED MAIN CATEGORY FIELD -->
+                <div class="form-group">
+                    <label for="editSubCategoryMainCategoryDisplay">Main Category (Level 2)</label>
+                    <input type="text" id="editSubCategoryMainCategoryDisplay" disabled>
+                    <span class="form-hint">📂 Parent main category (cannot be changed)</span>
+                </div>
+                
+                <!-- EDITABLE SUBCATEGORY NAME -->
+                <div class="form-group">
+                    <label for="editSubCategoryName">Subcategory Name *</label>
+                    <input type="text" id="editSubCategoryName" required placeholder="Enter subcategory name">
+                    <span class="form-hint">🏷️ Name displayed in the sidebar</span>
+                </div>
+
+                <!-- IMAGE UPLOAD -->
+                <div class="form-group">
+                    <label for="editSubCategoryImageFile">Change Image</label>
+                    <input type="file" id="editSubCategoryImageFile" 
+                           accept="image/jpeg,image/jpg,image/png,image/webp"
+                           onchange="handleEditSubCategoryImagePreview(event)">
+                    <span class="form-hint">📷 Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                </div>
+                
+                <!-- IMAGE PREVIEW -->
+                <div id="editSubCategoryImagePreview" class="image-preview" style="display: none;">
+                    <img id="editSubCategoryPreviewImg" alt="Preview">
+                    <button type="button" class="remove-image-btn" 
+                            onclick="clearEditSubCategoryImage()">✕ Remove</button>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeEditSubCategoryModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">💾 Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Category Modal -->
+    <div id="addCategoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Category</h2>
+                <button class="close-modal" onclick="closeAddCategoryModal()">&times;</button>
+            </div>
+            <form id="addCategoryForm" onsubmit="handleAddCategory(event)">
+                <div class="form-group">
+                    <label for="addCategoryName">Category Name *</label>
+                    <input type="text" id="addCategoryName" required placeholder="Enter category name (e.g., Electronics, Clothing)">
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeAddCategoryModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">✓ Add Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/admin/js/dashboard.js"></script>
+</body>
+</html>

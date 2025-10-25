@@ -33,3 +33,28 @@ class Settings(BaseSettings):
 
 # Create settings instance
 settings = Settings()
+
+# MongoDB client instance
+from pymongo import MongoClient
+
+_mongo_client = None
+_mongo_db = None
+
+def get_database():
+    """Get MongoDB database instance"""
+    global _mongo_client, _mongo_db
+    
+    if _mongo_db is None:
+        _mongo_client = MongoClient(settings.mongo_uri)
+        _mongo_db = _mongo_client[settings.mongo_db_name]
+    
+    return _mongo_db
+
+def close_database():
+    """Close MongoDB connection"""
+    global _mongo_client, _mongo_db
+    
+    if _mongo_client is not None:
+        _mongo_client.close()
+        _mongo_client = None
+        _mongo_db = None

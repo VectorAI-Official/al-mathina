@@ -2,7 +2,7 @@
 Flutter Mobile App API Routes
 Provides optimized endpoints for Flutter mobile application.
 """
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from typing import Optional, List, Dict, Any
 from urllib.parse import unquote
 import logging
@@ -13,8 +13,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/flutter", tags=["Flutter Mobile App"])
 
 
+def make_absolute(request: Request, path: str) -> str:
+    """Normalize image paths to absolute URLs using request.base_url.
+
+    - If path is empty, return empty string
+    - If path already starts with http/https, return as-is
+    - Otherwise prefix with request.base_url
+    """
+    if not path:
+        return ""
+    p = path.strip()
+    if p.startswith('http://') or p.startswith('https://'):
+        return p
+    base = str(request.base_url).rstrip('/')
+    if not p.startswith('/'):
+        p = '/' + p
+    return f"{base}{p}"
+
+
 @router.get("/home")
-async def get_home_data():
+async def get_home_data(request: Request):
     """
     Get all sections and main categories for home page.
     
@@ -57,14 +75,17 @@ async def get_home_data():
             # Note: Best seller items come from various sections, so we need to find
             # any metadata for this main_category regardless of section
             metadata = metadata_collection.find_one({
-                "main_category": main_category_name,
-                "type": "main_category"
+                "type": "main_category",
+                "$or": [
+                    {"main_category": main_category_name},
+                    {"name": main_category_name}
+                ]
             })
             
             response["best_sellers"]["main_categories"].append({
                 "id": f"best_seller_{main_category_name.lower().replace(' ', '_')}",
                 "name": main_category_name,
-                "image_url": metadata.get("image_url", "") if metadata else "",
+                "image_url": make_absolute(request, metadata.get("image_url", "") if metadata else ""),
                 "product_count": main_cat["count"],
                 "section": "Best Seller",
                 "main_category": main_category_name
@@ -100,14 +121,17 @@ async def get_home_data():
                 # Get image from metadata
                 metadata = metadata_collection.find_one({
                     "section": section_name,
-                    "main_category": main_cat_name,
-                    "type": "main_category"
+                    "type": "main_category",
+                    "$or": [
+                        {"main_category": main_cat_name},
+                        {"name": main_cat_name}
+                    ]
                 })
                 
                 section_data["main_categories"].append({
                     "id": f"{section_name.lower().replace(' ', '_')}_{main_cat_name.lower().replace(' ', '_')}",
                     "name": main_cat_name,
-                    "image_url": metadata.get("image_url", "") if metadata else "",
+                    "image_url": make_absolute(request, metadata.get("image_url", "") if metadata else ""),
                     "product_count": product_count,
                     "section": section_name,
                     "main_category": main_cat_name
@@ -131,7 +155,7 @@ async def get_home_data():
 
 
 @router.get("/main-category/{section}/{main_category}/subcategories")
-async def get_subcategories(section: str, main_category: str):
+async def get_subcategories(request: Request, section: str, main_category: str):
     """
     Get subcategories for a specific main category.
     
@@ -147,31 +171,29 @@ async def get_subcategories(section: str, main_category: str):
         section = unquote(section)
         main_category = unquote(main_category)
         
+
         db = get_mongo_db()
         products_collection = db["products"]
         hierarchy_collection = db["category_hierarchy"]
-        
+        metadata_collection = db["category_metadata"]
+
         # Get subcategories from hierarchy
         section_doc = hierarchy_collection.find_one({"section": section})
-        
         if not section_doc:
             raise HTTPException(status_code=404, detail=f"Section not found: {section}")
-        
+
         main_categories = section_doc.get("main_categories", {})
-        
         if main_category not in main_categories:
             raise HTTPException(status_code=404, detail=f"Main category not found: {main_category}")
-        
-        # main_categories[main_category] is already a list of subcategories
+
         subcategories_list = main_categories[main_category]
-        
-        # Build response with product counts
+
         response = {
             "section": section,
             "main_category": main_category,
             "subcategories": []
         }
-        
+
         for subcategory in subcategories_list:
             # Count products in this subcategory
             product_count = products_collection.count_documents({
@@ -180,15 +202,39 @@ async def get_subcategories(section: str, main_category: str):
                 "category_sub": subcategory,
                 "active": True
             })
-            
+            # Get image from metadata (type: subcategory)
+            metadata = metadata_collection.find_one({
+                "section": section,
+                "main_category": main_category,
+                "type": "subcategory",
+                "$or": [
+                    {"subcategory": subcategory},
+                    {"name": subcategory}
+                ]
+            })
+            image_url = metadata.get("image_url", "") if metadata else ""
+            # Fallback: if no specific subcategory image, try main category metadata only.
+            if not image_url:
+                main_meta = metadata_collection.find_one({
+                    "section": section,
+                    "type": "main_category",
+                    "$or": [
+                        {"main_category": main_category},
+                        {"name": main_category}
+                    ]
+                })
+                if main_meta and main_meta.get("image_url"):
+                    image_url = main_meta.get("image_url", "")
+            # convert to absolute URL if needed
+            image_url = make_absolute(request, image_url)
             response["subcategories"].append({
                 "name": subcategory,
                 "product_count": product_count,
-                "icon": "📦"  # Default icon, can be customized
+                "icon": "📦",  # Default icon, can be customized
+                "image_url": image_url
             })
-        
+
         logger.info(f"Retrieved {len(response['subcategories'])} subcategories for {section} > {main_category}")
-        
         return response
         
     except HTTPException:
@@ -200,19 +246,20 @@ async def get_subcategories(section: str, main_category: str):
 
 @router.get("/products")
 async def get_products(
-    section: str = Query(..., description="Section name"),
-    main_category: str = Query(..., description="Main category name"),
-    subcategory: str = Query(..., description="Subcategory name"),
+    request: Request,
+    section: str = Query(None, description="Section name"),
+    main_category: str = Query(None, description="Main category name"),
+    subcategory: str = Query(None, description="Subcategory name"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Products per page")
 ):
     """
-    Get products for a specific subcategory with pagination.
+    Get products with optional filters and pagination.
     
     Args:
-    - section: Section name
-    - main_category: Main category name
-    - subcategory: Subcategory name
+    - section: Section name (optional)
+    - main_category: Main category name (optional)
+    - subcategory: Subcategory name (optional)
     - page: Page number (default: 1)
     - limit: Products per page (default: 20, max: 100)
     
@@ -223,13 +270,15 @@ async def get_products(
         db = get_mongo_db()
         products_collection = db["products"]
         
-        # Build query
-        query = {
-            "category_section": section,
-            "category_main": main_category,
-            "category_sub": subcategory,
-            "active": True
-        }
+        # Build query with optional filters
+        query = {"active": True}
+        
+        if section:
+            query["category_section"] = section
+        if main_category:
+            query["category_main"] = main_category
+        if subcategory:
+            query["category_sub"] = subcategory
         
         # Calculate pagination
         skip = (page - 1) * limit
@@ -243,12 +292,16 @@ async def get_products(
         
         products = []
         for prod in products_cursor:
+            raw_image = prod.get("image_url", prod.get("image", ""))
             products.append({
                 "item_id": prod.get("item_id"),
+                "section": prod.get("section"),
+                "main_category": prod.get("main_category"),
+                "subcategory": prod.get("subcategory"),
                 "product_name": prod.get("product_name"),
                 "weight": prod.get("weight", ""),
                 "price": float(prod.get("price", 0.0)),
-                "image_url": prod.get("image_url", prod.get("image", "")),
+                "image_url": make_absolute(request, raw_image),
                 "stock": prod.get("stock", 0),
                 "in_stock": prod.get("stock", 0) > 0,
                 "is_best_seller": prod.get("is_best_seller", False),
@@ -256,9 +309,6 @@ async def get_products(
             })
         
         response = {
-            "section": section,
-            "main_category": main_category,
-            "subcategory": subcategory,
             "products": products,
             "pagination": {
                 "current_page": page,
@@ -270,7 +320,15 @@ async def get_products(
             }
         }
         
-        logger.info(f"Retrieved {len(products)} products for {section} > {main_category} > {subcategory} (page {page})")
+        # Add filter info if provided
+        if section:
+            response["section"] = section
+        if main_category:
+            response["main_category"] = main_category
+        if subcategory:
+            response["subcategory"] = subcategory
+        
+        logger.info(f"Retrieved {len(products)} products (filters: section={section}, main_category={main_category}, subcategory={subcategory}, page={page})")
         
         return response
         
@@ -280,7 +338,7 @@ async def get_products(
 
 
 @router.get("/product/{item_id}")
-async def get_product_details(item_id: str):
+async def get_product_details(request: Request, item_id: str):
     """
     Get detailed information for a single product.
     
@@ -313,9 +371,9 @@ async def get_product_details(item_id: str):
             "in_stock": product.get("stock", 0) > 0,
             "is_best_seller": product.get("is_best_seller", False),
             "description": product.get("description", ""),
-            "image_url": product.get("image_url", product.get("image", "")),
+            "image_url": make_absolute(request, product.get("image_url", product.get("image", ""))),
             "images": [
-                product.get("image_url", product.get("image", ""))
+                make_absolute(request, product.get("image_url", product.get("image", "")))
             ]  # Can be extended for multiple images
         }
         
@@ -332,6 +390,7 @@ async def get_product_details(item_id: str):
 
 @router.get("/search")
 async def search_products(
+    request: Request,
     q: str = Query(..., min_length=1, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Results per page")
@@ -378,12 +437,13 @@ async def search_products(
         
         results = []
         for prod in products_cursor:
+            raw_image = prod.get("image_url", prod.get("image", ""))
             results.append({
                 "item_id": prod.get("item_id"),
                 "product_name": prod.get("product_name"),
                 "weight": prod.get("weight", ""),
                 "price": float(prod.get("price", 0.0)),
-                "image_url": prod.get("image_url", prod.get("image", "")),
+                "image_url": make_absolute(request, raw_image),
                 "category_breadcrumb": f"{prod.get('category_section')} → {prod.get('category_main')} → {prod.get('category_sub')}",
                 "section": prod.get("category_section"),
                 "main_category": prod.get("category_main"),
@@ -416,6 +476,7 @@ async def search_products(
 
 @router.get("/best-sellers")
 async def get_best_sellers(
+    request: Request,
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Products per page")
 ):
@@ -451,12 +512,13 @@ async def get_best_sellers(
         
         products = []
         for prod in products_cursor:
+            raw_image = prod.get("image_url", prod.get("image", ""))
             products.append({
                 "item_id": prod.get("item_id"),
                 "product_name": prod.get("product_name"),
                 "weight": prod.get("weight", ""),
                 "price": float(prod.get("price", 0.0)),
-                "image_url": prod.get("image_url", prod.get("image", "")),
+                "image_url": make_absolute(request, raw_image),
                 "section": prod.get("category_section"),
                 "main_category": prod.get("category_main"),
                 "subcategory": prod.get("category_sub"),

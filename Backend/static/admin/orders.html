@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Management - AL-Madhina Admin</title>
+    <link rel="stylesheet" href="css/orders.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="orders-page">
+        <!-- Header -->
+        <div class="orders-header">
+            <h1><i class="fas fa-shopping-cart"></i> Order Management</h1>
+            <button class="btn btn-primary" onclick="window.location.href='/admin/dashboard'" style="padding: 10px 20px;">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+
+        <!-- Order Statistics -->
+        <div class="order-stats">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-shopping-bag"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Total Orders</h3>
+                    <p id="totalOrders">-</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Pending</h3>
+                    <p id="pendingOrders">-</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Delivered</h3>
+                    <p id="deliveredOrders">-</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-rupee-sign"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Total Revenue</h3>
+                    <p id="totalRevenue">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="orders-filters">
+            <div class="filter-group">
+                <label for="searchInput">
+                    <i class="fas fa-search"></i> Search
+                </label>
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Search by Order ID, Customer, Phone..."
+                    onkeyup="filterOrders()"
+                >
+            </div>
+            <div class="filter-group">
+                <label for="statusFilter">
+                    <i class="fas fa-filter"></i> Filter by Status
+                </label>
+                <select id="statusFilter" onchange="filterOrders()">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Orders Container -->
+        <div id="ordersContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading orders...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Details Modal -->
+    <div id="orderDetailsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-invoice"></i> Order Details</h2>
+                <span class="close-modal" onclick="closeOrderDetailsModal()">&times;</span>
+            </div>
+            <div id="orderDetailsContent">
+                <!-- Order details will be loaded here (including modal-body and actions) -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/orders.js"></script>
+</body>
+</html>

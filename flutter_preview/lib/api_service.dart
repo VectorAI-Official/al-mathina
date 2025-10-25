@@ -104,11 +104,13 @@ class Subcategory {
   final String name;
   final int productCount;
   final String icon;
+  final String imageUrl;
 
   Subcategory({
     required this.name,
     required this.productCount,
     required this.icon,
+    required this.imageUrl,
   });
 
   factory Subcategory.fromJson(Map<String, dynamic> json) {
@@ -116,12 +118,16 @@ class Subcategory {
       name: json['name'],
       productCount: json['product_count'],
       icon: json['icon'],
+      imageUrl: json['image_url'] ?? '',
     );
   }
 }
 
 class Product {
   final String? itemId;  // Changed to nullable
+  final String? section;
+  final String? mainCategory;
+  final String? subcategory;
   final String productName;
   final String weight;
   final double price;
@@ -136,6 +142,9 @@ class Product {
 
   Product({
     this.itemId,  // Changed to optional
+    this.section,
+    this.mainCategory,
+    this.subcategory,
     required this.productName,
     required this.weight,
     required this.price,
@@ -152,6 +161,9 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       itemId: json['item_id']?.toString(),  // Convert to string or null
+      section: json['section']?.toString(),
+      mainCategory: json['main_category']?.toString(),
+      subcategory: json['subcategory']?.toString(),
       productName: json['product_name'] ?? 'Unknown Product',
       weight: json['weight'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
@@ -338,7 +350,232 @@ class ApiService {
 
   static String getImageUrl(String imagePath) {
     if (imagePath.isEmpty) return '';
-    if (imagePath.startsWith('http')) return imagePath;
-    return '$BASE_URL$imagePath';
+    final trimmed = imagePath.trim();
+    // If already absolute (http or https), return as-is
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    // Ensure leading slash for relative paths
+    final normalized = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    return '$BASE_URL$normalized';
+  }
+
+  // User Profile APIs
+  static Future<Map<String, dynamic>> getUserProfile(String phone) async {
+    try {
+      final response = await http.get(Uri.parse('$API_BASE/user/profile/$phone'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load user profile: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error loading user profile: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateUserProfile(String phone, String? name, String? email) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$API_BASE/user/profile/$phone'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          if (name != null) 'name': name,
+          if (email != null) 'email': email,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to update profile: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error updating profile: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> addAddress(String phone, Map<String, dynamic> address) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$API_BASE/user/address/$phone'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(address),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to add address: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error adding address: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateAddress(String phone, int index, Map<String, dynamic> address) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$API_BASE/user/address/$phone/$index'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(address),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to update address: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error updating address: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteAddress(String phone, int index) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$API_BASE/user/address/$phone/$index'),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to delete address: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error deleting address: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getUserOrders(String phone) async {
+    try {
+      final response = await http.get(Uri.parse('$API_BASE/user/orders/$phone'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load orders: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error loading orders: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> createOrder({
+    required String userPhone,
+    required List<Map<String, dynamic>> items,
+    required double totalAmount,
+    required String paymentMethod,
+    required Map<String, dynamic> deliveryAddress,
+  }) async {
+    try {
+      final orderData = {
+        'user_phone': userPhone,
+        'items': items,
+        'total_amount': totalAmount,
+        'payment_method': paymentMethod,
+        'delivery_address': deliveryAddress,
+        'status': 'pending',
+      };
+      
+      final response = await http.post(
+        Uri.parse('$API_BASE/user/orders'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(orderData),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to create order: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error creating order: $e');
+    }
+  }
+
+  // Get order details
+  static Future<Map<String, dynamic>> getOrderDetails(String phone, String orderId) async {
+    try {
+      final response = await http.get(Uri.parse('$API_BASE/user/orders/$phone/$orderId'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load order details: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error loading order details: $e');
+    }
+  }
+
+  // Store Details APIs
+  static Future<Map<String, dynamic>> getStoreDetails(String phone) async {
+    try {
+      final response = await http.get(Uri.parse('$API_BASE/user/store-details/$phone'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load store details: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error loading store details: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateStoreDetails(String phone, Map<String, dynamic> storeDetails) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$API_BASE/user/store-details/$phone'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(storeDetails),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to update store details: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error updating store details: $e');
+    }
+  }
+
+  // Favorites APIs
+  static Future<List<Product>> getFavorites(String phone) async {
+    try {
+      final response = await http.get(Uri.parse('$API_BASE/user/favorites/$phone'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> favorites = data['favorites'] ?? [];
+        return favorites.map((item) => Product.fromJson(item)).toList();
+      } else {
+        throw Exception('Failed to load favorites: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error loading favorites: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> addFavorite(String phone, String itemId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$API_BASE/user/favorites/$phone'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'item_id': itemId}),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to add favorite: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error adding favorite: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> removeFavorite(String phone, String itemId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$API_BASE/user/favorites/$phone/$itemId'),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to remove favorite: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error removing favorite: $e');
+    }
   }
 }

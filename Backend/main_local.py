@@ -108,6 +108,22 @@ try:
 except Exception as e:
     logger.error(f"✗ Failed to load Flutter routes: {e}")
 
+# Import User Profile routes
+try:
+    from routes import user_profile
+    app.include_router(user_profile.router, tags=["User Profile"])
+    logger.info("✓ User Profile routes loaded")
+except Exception as e:
+    logger.error(f"✗ Failed to load User Profile routes: {e}")
+
+# Import Admin Orders routes
+try:
+    from routes import admin_orders
+    app.include_router(admin_orders.router, tags=["Admin Orders"])
+    logger.info("✓ Admin Orders routes loaded")
+except Exception as e:
+    logger.error(f"✗ Failed to load Admin Orders routes: {e}")
+
 # Root endpoint
 @app.get("/")
 async def root():

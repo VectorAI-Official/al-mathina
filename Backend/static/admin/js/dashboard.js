@@ -103,15 +103,43 @@ async function loadCategories() {
         
         if (data && data.hierarchy) {
             categoryHierarchy = data.hierarchy;
+            
+            // Handle empty database case
+            if (categoryHierarchy.length === 0) {
+                console.log('No categories found in database');
+                // Initialize with empty array to allow adding
+                categoryHierarchy = [];
+            }
+            
+            populateCategoryFilters();
+            populateSectionDropdown();
+        } else {
+            // If no hierarchy returned, initialize as empty
+            console.log('No category hierarchy returned from server');
+            categoryHierarchy = [];
             populateCategoryFilters();
             populateSectionDropdown();
         }
         
         // Load category metadata (images, etc.)
         await loadCategoryMetadata();
+        
+        // Load mobile category sections after categories are loaded
+        if (typeof loadMobileCategorySections === 'function') {
+            loadMobileCategorySections();
+        }
     } catch (error) {
         console.error('Error loading categories:', error);
-        showToast('Failed to load categories', 'error');
+        showToast('Failed to load categories. Database may be empty.', 'warning');
+        // Initialize with empty array to allow adding
+        categoryHierarchy = [];
+        populateCategoryFilters();
+        populateSectionDropdown();
+        
+        // Load mobile sections even on error (to show Add button)
+        if (typeof loadMobileCategorySections === 'function') {
+            loadMobileCategorySections();
+        }
     }
 }
 
@@ -252,17 +280,26 @@ async function loadProducts() {
             allProducts = data.products;
             displayProducts(allProducts);
             updateStatistics();
+        } else {
+            // No products returned
+            allProducts = [];
+            displayProducts(allProducts);
+            updateStatistics();
         }
     } catch (error) {
         console.error('Error loading products:', error);
-        showToast('Failed to load products', 'error');
+        showToast('Failed to load products. Database may be empty.', 'warning');
+        allProducts = [];
         document.getElementById('productsTableBody').innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: #D32F2F;">
-                    ⚠️ Error loading products. Please refresh the page.
+                <td colspan="9" style="text-align: center; padding: 40px;">
+                    <div style="color: #FF9800; font-size: 48px; margin-bottom: 16px;">📦</div>
+                    <div style="color: #757575; font-size: 16px; margin-bottom: 8px;">No products in database</div>
+                    <div style="color: #9E9E9E; font-size: 14px;">Add your first product using the "Add Product" button</div>
                 </td>
             </tr>
         `;
+        updateStatistics();
     }
 }
 
@@ -351,15 +388,22 @@ function filterProducts() {
 
 // Update statistics
 function updateStatistics() {
-    document.getElementById('totalProducts').textContent = allProducts.length;
+    // Handle empty products array
+    const totalProducts = allProducts ? allProducts.length : 0;
+    document.getElementById('totalProducts').textContent = totalProducts;
     
-    // Count unique main categories
-    const uniqueCategories = [...new Set(allProducts.map(p => p.category_main))].length;
-    document.getElementById('totalCategories').textContent = uniqueCategories || 
-        (allCategories.main_categories ? allCategories.main_categories.length : 0);
+    // Count unique main categories from products or category hierarchy
+    let uniqueCategories = 0;
+    if (allProducts && allProducts.length > 0) {
+        uniqueCategories = [...new Set(allProducts.map(p => p.category_main).filter(c => c))].length;
+    } else if (categoryHierarchy && categoryHierarchy.length > 0) {
+        uniqueCategories = [...new Set(categoryHierarchy.map(c => c.main_category).filter(c => c))].length;
+    }
+    document.getElementById('totalCategories').textContent = uniqueCategories;
     
-    document.getElementById('lowStock').textContent = 
-        allProducts.filter(p => p.stock < 20).length;
+    // Count low stock products
+    const lowStockCount = allProducts ? allProducts.filter(p => p.stock < 20).length : 0;
+    document.getElementById('lowStock').textContent = lowStockCount;
 }
 
 // Open create product modal
@@ -1164,59 +1208,66 @@ function loadMobilePreview() {
 function loadMobileCategorySections() {
     const container = document.getElementById('mobileCategorySections');
     
-    if (!categoryHierarchy || categoryHierarchy.length === 0) {
-        container.innerHTML = `
-            <div class="mobile-empty-state">
-                <div class="icon">📂</div>
-                <div class="message">No categories available</div>
+    let html = '<div class="mobile-category-title">📂 Sections</div>';
+    
+    // Always show search container if there are categories
+    if (categoryHierarchy && categoryHierarchy.length > 0) {
+        html += `
+            <div class="mobile-search-container">
+                <input type="text" 
+                       id="mobileSearchInput" 
+                       class="mobile-search-input" 
+                       placeholder="🔍 Search categories..."
+                       oninput="filterMobileCategories(this.value)">
+                <button class="mobile-search-clear" onclick="clearMobileSearch()" style="display: none;">✕</button>
             </div>
         `;
-        return;
     }
     
-    let html = '<div class="mobile-category-title">📂 Sections</div>';
-    html += `
-        <div class="mobile-search-container">
-            <input type="text" 
-                   id="mobileSearchInput" 
-                   class="mobile-search-input" 
-                   placeholder="🔍 Search categories..."
-                   oninput="filterMobileCategories(this.value)">
-            <button class="mobile-search-clear" onclick="clearMobileSearch()" style="display: none;">✕</button>
-        </div>
-        <div class="mobile-category-grid" id="mobileCategoryGrid">
-    `;
+    html += '<div class="mobile-category-grid" id="mobileCategoryGrid">';
     
-    // Add Best Seller section FIRST (special section)
-    const bestSellerCount = allProducts.filter(p => p.is_best_seller === true).length;
-    html += `
-        <div class="mobile-category-card mobile-bestseller-section" data-category-name="best seller" onclick="showMobileCategoryProducts('Best Seller')">
-            <div class="bestseller-count">${bestSellerCount}</div>
-            <div class="name">⭐ Best Seller</div>
-        </div>
-    `;
-    
-    // Get unique sections from category hierarchy
-    const sections = [...new Set(categoryHierarchy.map(item => item.section))];
-    
-    sections.forEach(section => {
+    // Add Best Seller section FIRST (special section) - only if there are products
+    if (allProducts && allProducts.length > 0) {
+        const bestSellerCount = allProducts.filter(p => p.is_best_seller === true).length;
         html += `
-            <div class="mobile-category-card" data-category-name="${section.toLowerCase()}" onclick="showMobileCategoryProducts('${section.replace(/'/g, "\\'")}')">
-                <button class="edit-category-btn" onclick="openEditSectionModal('${section.replace(/'/g, "\\'")}', event)" title="Edit Section">
-                    ✏️
-                </button>
-                <button class="delete-category-btn" onclick="confirmDeleteSection('${section.replace(/'/g, "\\'")}', event)" title="Delete Section">
-                    🗑️
-                </button>
-                <div class="name">${section}</div>
+            <div class="mobile-category-card mobile-bestseller-section" data-category-name="best seller" onclick="showMobileCategoryProducts('Best Seller')">
+                <div class="bestseller-count">${bestSellerCount}</div>
+                <div class="name">⭐ Best Seller</div>
             </div>
         `;
-    });
+    }
     
-    // Add "Add New Category" card at the end
+    // Get unique sections from category hierarchy
+    if (categoryHierarchy && categoryHierarchy.length > 0) {
+        const sections = [...new Set(categoryHierarchy.map(item => item.section))];
+        
+        sections.forEach(section => {
+            html += `
+                <div class="mobile-category-card" data-category-name="${section.toLowerCase()}" onclick="showMobileCategoryProducts('${section.replace(/'/g, "\\'")}')">
+                    <button class="edit-category-btn" onclick="openEditSectionModal('${section.replace(/'/g, "\\'")}', event)" title="Edit Section">
+                        ✏️
+                    </button>
+                    <button class="delete-category-btn" onclick="confirmDeleteSection('${section.replace(/'/g, "\\'")}', event)" title="Delete Section">
+                        🗑️
+                    </button>
+                    <div class="name">${section}</div>
+                </div>
+            `;
+        });
+    } else {
+        // Show empty state message when no categories exist
+        html += `
+            <div class="mobile-empty-state-inline">
+                <div class="icon">📂</div>
+                <div class="message">No sections yet. Click "Add Section" to get started!</div>
+            </div>
+        `;
+    }
+    
+    // Always show "Add Section" button
     html += `
         <div class="mobile-category-card mobile-add-category-card" data-category-name="add new" onclick="openAddCategoryModal()">
-            <div class="name">➕ Add New</div>
+            <div class="name">➕ Add Section</div>
         </div>
     `;
     

@@ -172,12 +172,21 @@ async def create_section(request: Request, session: dict = Depends(require_admin
     try:
         data = await request.json()
         section = data.get("section")
+        section_ta = data.get("section_ta", "")  # Tamil name (optional)
         
         if not section:
             raise HTTPException(status_code=400, detail="Section name is required")
         
         success = add_new_section(section)
         if success:
+            # Store Tamil name in category_hierarchy
+            if section_ta:
+                db = get_mongo_db()
+                db.category_hierarchy.update_one(
+                    {"section": section},
+                    {"$set": {"section_ta": section_ta}},
+                    upsert=False
+                )
             return {"message": f"Section '{section}' created successfully"}
         else:
             raise HTTPException(status_code=400, detail="Failed to create section")
@@ -195,6 +204,7 @@ async def create_main_category(request: Request, session: dict = Depends(require
         data = await request.json()
         section = data.get("section")
         main_category = data.get("main_category")
+        main_category_ta = data.get("main_category_ta", "")  # Tamil name (optional)
         image_url = data.get("image_url")
         
         if not section or not main_category:
@@ -207,20 +217,21 @@ async def create_main_category(request: Request, session: dict = Depends(require
         if not success:
             raise HTTPException(status_code=400, detail="Failed to create main category")
         
-        # Save image metadata if provided
+        # Save metadata (image and Tamil name)
+        metadata_doc = {
+            "name": main_category,
+            "type": "main_category",
+            "section": section,
+            "name_ta": main_category_ta
+        }
         if image_url:
-            db.category_metadata.update_one(
-                {"name": main_category, "type": "main_category"},
-                {
-                    "$set": {
-                        "name": main_category,
-                        "type": "main_category",
-                        "section": section,
-                        "image_url": image_url
-                    }
-                },
-                upsert=True
-            )
+            metadata_doc["image_url"] = image_url
+            
+        db.category_metadata.update_one(
+            {"name": main_category, "type": "main_category"},
+            {"$set": metadata_doc},
+            upsert=True
+        )
         
         return {"message": f"Main category '{main_category}' created successfully"}
     except HTTPException:
@@ -238,7 +249,8 @@ async def create_subcategory(request: Request, session: dict = Depends(require_a
         section = data.get("section")
         main_category = data.get("main_category")
         subcategory = data.get("subcategory")
-        image_url = data.get("image_url")  # NEW: Get image URL
+        subcategory_ta = data.get("subcategory_ta", "")  # Tamil name (optional)
+        image_url = data.get("image_url")
         
         if not section or not main_category or not subcategory:
             raise HTTPException(status_code=400, detail="Section, main category, and subcategory are required")
@@ -246,20 +258,23 @@ async def create_subcategory(request: Request, session: dict = Depends(require_a
         # Add subcategory to hierarchy
         success = add_subcategory(section, main_category, subcategory)
         if success:
-            # Save image metadata if provided (NEW)
+            # Save metadata (image and Tamil name)
+            metadata_doc = {
+                "name": subcategory,
+                "type": "subcategory",
+                "section": section,
+                "main_category": main_category,
+                "name_ta": subcategory_ta
+            }
             if image_url:
-                db = get_mongo_db()
-                db.category_metadata.update_one(
-                    {"name": subcategory, "type": "subcategory"},
-                    {"$set": {
-                        "name": subcategory,
-                        "type": "subcategory",
-                        "section": section,
-                        "main_category": main_category,
-                        "image_url": image_url
-                    }},
-                    upsert=True
-                )
+                metadata_doc["image_url"] = image_url
+                
+            db = get_mongo_db()
+            db.category_metadata.update_one(
+                {"name": subcategory, "type": "subcategory"},
+                {"$set": metadata_doc},
+                upsert=True
+            )
             return {"message": f"Subcategory '{subcategory}' created successfully"}
         else:
             raise HTTPException(status_code=400, detail="Failed to create subcategory")
@@ -281,18 +296,23 @@ async def update_section_name(
         data = await request.json()
         new_name = data.get("new_name")
         image_url = data.get("image_url")
+        section_ta = data.get("section_ta")  # Tamil name (optional)
         
-        # At least one field should be provided (even if empty string, we check later)
-        if new_name is None and image_url is None:
+        # At least one field should be provided
+        if new_name is None and image_url is None and section_ta is None:
             raise HTTPException(status_code=400, detail="No update data provided")
         
         db = get_mongo_db()
         
         # Update section name in category_hierarchy
         if new_name and new_name != section_name:
+            update_data = {"section": new_name}
+            if section_ta is not None:
+                update_data["section_ta"] = section_ta
+                
             result = db.category_hierarchy.update_one(
                 {"section": section_name},
-                {"$set": {"section": new_name}}
+                {"$set": update_data}
             )
             if result.modified_count == 0:
                 raise HTTPException(status_code=404, detail="Section not found")
@@ -301,6 +321,12 @@ async def update_section_name(
             db.products.update_many(
                 {"category_section": section_name},
                 {"$set": {"category_section": new_name}}
+            )
+        elif section_ta is not None:
+            # Only updating Tamil name
+            db.category_hierarchy.update_one(
+                {"section": section_name},
+                {"$set": {"section_ta": section_ta}}
             )
         
         # Store image URL in a separate metadata collection
@@ -330,13 +356,14 @@ async def update_main_category(
         data = await request.json()
         new_name = data.get("new_name")
         image_url = data.get("image_url")
+        main_category_ta = data.get("main_category_ta")  # Tamil name (optional)
         section = data.get("section")  # Required to locate the category
         
         if not section:
             raise HTTPException(status_code=400, detail="Section name is required")
         
         # At least one update field should be provided
-        if new_name is None and image_url is None:
+        if new_name is None and image_url is None and main_category_ta is None:
             raise HTTPException(status_code=400, detail="No update data provided")
         
         db = get_mongo_db()
@@ -370,9 +397,20 @@ async def update_main_category(
             )
             
             # Update metadata if exists
+            metadata_update = {"name": new_name}
+            if main_category_ta is not None:
+                metadata_update["name_ta"] = main_category_ta
+                
             db.category_metadata.update_one(
                 {"name": main_category_name, "type": "main_category"},
-                {"$set": {"name": new_name}}
+                {"$set": metadata_update}
+            )
+        elif main_category_ta is not None:
+            # Only updating Tamil name
+            db.category_metadata.update_one(
+                {"name": main_category_name, "type": "main_category"},
+                {"$set": {"name_ta": main_category_ta}},
+                upsert=True
             )
         
         # Store/update image URL in category_metadata
@@ -408,10 +446,11 @@ async def update_subcategory(
     request: Request,
     session: dict = Depends(require_admin)
 ):
-    """Update subcategory name and/or image."""
+    """Update subcategory name, Tamil name, and/or image."""
     try:
         data = await request.json()
         new_name = data.get("new_name")
+        subcategory_ta = data.get("subcategory_ta")  # Tamil name (optional)
         image_url = data.get("image_url")
         section = data.get("section")  # Required to locate the subcategory
         main_category = data.get("main_category")  # Required to locate the subcategory
@@ -453,10 +492,21 @@ async def update_subcategory(
                 {"$set": {"category_sub": new_name}}
             )
             
-            # Update metadata if exists
+            # Update metadata if exists (including Tamil name if provided)
+            metadata_update = {"name": new_name}
+            if subcategory_ta is not None:
+                metadata_update["name_ta"] = subcategory_ta
+            
             db.category_metadata.update_one(
                 {"name": subcategory_name, "type": "subcategory"},
-                {"$set": {"name": new_name}}
+                {"$set": metadata_update}
+            )
+        elif subcategory_ta is not None:
+            # Only updating Tamil name (no English name change)
+            db.category_metadata.update_one(
+                {"name": subcategory_name, "type": "subcategory"},
+                {"$set": {"name_ta": subcategory_ta}},
+                upsert=True
             )
         
         # Store/update image URL in category_metadata
@@ -865,3 +915,112 @@ async def upload_product_image(
     except Exception as e:
         logger.error(f"Error uploading image: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload image")
+
+
+# ============================================================================
+# MOST BOUGHT MANAGEMENT
+# ============================================================================
+
+@router.post("/api/most-bought")
+async def add_to_most_bought(
+    data: dict,
+    session: dict = Depends(require_admin)
+):
+    """
+    Add a main category to Most Bought section.
+    """
+    try:
+        section = data.get("section")
+        main_category = data.get("main_category")
+        
+        if not section or not main_category:
+            raise HTTPException(status_code=400, detail="Section and main_category are required")
+        
+        db = get_mongo_db()
+        most_bought_collection = db["most_bought"]
+        
+        # Check if already exists
+        existing = most_bought_collection.find_one({
+            "section": section,
+            "main_category": main_category
+        })
+        
+        if existing:
+            raise HTTPException(status_code=409, detail="Already in Most Bought")
+        
+        # Insert new entry
+        result = most_bought_collection.insert_one({
+            "section": section,
+            "main_category": main_category,
+            "starred_at": datetime.utcnow()
+        })
+        
+        logger.info(f"Added to Most Bought: {section} -> {main_category}")
+        
+        return {
+            "message": "Added to Most Bought",
+            "id": str(result.inserted_id)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding to Most Bought: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add to Most Bought")
+
+
+@router.delete("/api/most-bought")
+async def remove_from_most_bought(
+    section: str,
+    main_category: str,
+    session: dict = Depends(require_admin)
+):
+    """
+    Remove a main category from Most Bought section.
+    """
+    try:
+        db = get_mongo_db()
+        most_bought_collection = db["most_bought"]
+        
+        result = most_bought_collection.delete_one({
+            "section": section,
+            "main_category": main_category
+        })
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Not found in Most Bought")
+        
+        logger.info(f"Removed from Most Bought: {section} -> {main_category}")
+        
+        return {"message": "Removed from Most Bought"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing from Most Bought: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove from Most Bought")
+
+
+@router.get("/api/most-bought")
+async def get_most_bought(session: dict = Depends(require_admin)):
+    """
+    Get all Most Bought main categories.
+    """
+    try:
+        db = get_mongo_db()
+        most_bought_collection = db["most_bought"]
+        
+        items = list(most_bought_collection.find().sort("starred_at", -1))
+        
+        # Convert ObjectId to string
+        for item in items:
+            item["_id"] = str(item["_id"])
+            if "starred_at" in item:
+                item["starred_at"] = item["starred_at"].isoformat()
+        
+        return {"items": items}
+        
+    except Exception as e:
+        logger.error(f"Error getting Most Bought: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get Most Bought")
+

@@ -17,78 +17,110 @@ def make_absolute(request: Request, path: str) -> str:
     """Normalize image paths to absolute URLs using request.base_url.
 
     - If path is empty, return empty string
-    - If path already starts with http/https, return as-is
+    - If path already starts with http/https, replace host with current request host
     - Otherwise prefix with request.base_url
     """
     if not path:
         return ""
     p = path.strip()
-    if p.startswith('http://') or p.startswith('https://'):
-        return p
+    
+    # Get current request's base URL
     base = str(request.base_url).rstrip('/')
+    
+    if p.startswith('http://') or p.startswith('https://'):
+        # Extract the path part after the domain
+        # Handle both http://127.0.0.1:8000/path and http://192.168.1.6:8000/path
+        import re
+        match = re.match(r'https?://[^/]+(/.+)', p)
+        if match:
+            path_part = match.group(1)
+            return f"{base}{path_part}"
+        return p  # Return as-is if no path part found
+    
+    # Relative path
     if not p.startswith('/'):
         p = '/' + p
     return f"{base}{p}"
 
 
 @router.get("/home")
-async def get_home_data(request: Request):
+async def get_home_data(request: Request, lang: str = Query("en", description="Language code (en or ta)")):
     """
-    Get all sections and main categories for home page.
+    Get all sections and main categories for home page with language support.
+    
+    Args:
+    - lang: Language code ("en" for English, "ta" for Tamil). Default: "en"
     
     Returns:
     - Best Sellers section with main categories
     - All regular sections with their main categories
     - Product counts for each main category
+    - Names in requested language when available
     """
     try:
         db = get_mongo_db()
         products_collection = db["products"]
         hierarchy_collection = db["category_hierarchy"]
         metadata_collection = db["category_metadata"]
+        most_bought_collection = db["most_bought"]
         
         response = {
             "best_sellers": {
-                "title": "Best Sellers",
+                "title": "Most Bought",
                 "icon": "⭐",
                 "main_categories": []
             },
             "sections": []
         }
         
-        # Get Best Seller main categories
-        best_seller_pipeline = [
-            {"$match": {"is_best_seller": True, "active": True}},
-            {"$group": {
-                "_id": "$category_main",
-                "count": {"$sum": 1}
-            }},
-            {"$sort": {"count": -1}}
-        ]
+        # Get Most Bought main categories from most_bought collection
+        most_bought_items = list(most_bought_collection.find().sort("starred_at", -1))
         
-        best_seller_mains = list(products_collection.aggregate(best_seller_pipeline))
-        
-        for main_cat in best_seller_mains:
-            main_category_name = main_cat["_id"]
+        for item in most_bought_items:
+            section = item.get("section")
+            main_category = item.get("main_category")
             
-            # Get image from metadata if exists
-            # Note: Best seller items come from various sections, so we need to find
-            # any metadata for this main_category regardless of section
-            metadata = metadata_collection.find_one({
-                "type": "main_category",
-                "$or": [
-                    {"main_category": main_category_name},
-                    {"name": main_category_name}
-                ]
+            # Count products in this main category
+            product_count = products_collection.count_documents({
+                "category_section": section,
+                "category_main": main_category,
+                "active": True
             })
             
+            # Get image from metadata
+            # Try exact match with section and name
+            metadata = metadata_collection.find_one({
+                "type": "main_category",
+                "section": section,
+                "name": main_category
+            })
+            
+            if not metadata:
+                # Fallback: try to find by name alone (for backwards compatibility)
+                metadata = metadata_collection.find_one({
+                    "type": "main_category",
+                    "name": main_category
+                })
+            
+            if not metadata:
+                # Legacy fallback: try main_category field (old format)
+                metadata = metadata_collection.find_one({
+                    "type": "main_category",
+                    "main_category": main_category
+                })
+            
+            # Get display name based on language
+            display_name = main_category  # Default to English
+            if lang == "ta" and metadata and metadata.get("name_ta"):
+                display_name = metadata.get("name_ta")
+            
             response["best_sellers"]["main_categories"].append({
-                "id": f"best_seller_{main_category_name.lower().replace(' ', '_')}",
-                "name": main_category_name,
+                "id": f"most_bought_{section.lower().replace(' ', '_')}_{main_category.lower().replace(' ', '_')}",
+                "name": display_name,
                 "image_url": make_absolute(request, metadata.get("image_url", "") if metadata else ""),
-                "product_count": main_cat["count"],
-                "section": "Best Seller",
-                "main_category": main_category_name
+                "product_count": product_count,
+                "section": section,
+                "main_category": main_category
             })
         
         # Get all regular sections from hierarchy
@@ -98,11 +130,16 @@ async def get_home_data(request: Request):
             section_name = section_doc.get("section")
             
             # Skip Best Seller if it exists in hierarchy (it's handled separately)
-            if section_name == "Best Seller":
+            if section_name == "Most Bought":
                 continue
             
+            # Get display name for section based on language
+            section_display_name = section_name  # Default to English
+            if lang == "ta" and section_doc.get("section_ta"):
+                section_display_name = section_doc.get("section_ta")
+            
             section_data = {
-                "title": section_name,
+                "title": section_display_name,
                 "icon": "📂",
                 "section_name": section_name,
                 "main_categories": []
@@ -128,9 +165,14 @@ async def get_home_data(request: Request):
                     ]
                 })
                 
+                # Get display name based on language
+                main_cat_display_name = main_cat_name  # Default to English
+                if lang == "ta" and metadata and metadata.get("name_ta"):
+                    main_cat_display_name = metadata.get("name_ta")
+                
                 section_data["main_categories"].append({
                     "id": f"{section_name.lower().replace(' ', '_')}_{main_cat_name.lower().replace(' ', '_')}",
-                    "name": main_cat_name,
+                    "name": main_cat_display_name,
                     "image_url": make_absolute(request, metadata.get("image_url", "") if metadata else ""),
                     "product_count": product_count,
                     "section": section_name,
@@ -155,16 +197,17 @@ async def get_home_data(request: Request):
 
 
 @router.get("/main-category/{section}/{main_category}/subcategories")
-async def get_subcategories(request: Request, section: str, main_category: str):
+async def get_subcategories(request: Request, section: str, main_category: str, lang: str = Query("en", description="Language code (en or ta)")):
     """
-    Get subcategories for a specific main category.
+    Get subcategories for a specific main category with language support.
     
     Args:
     - section: Section name (URL decoded)
     - main_category: Main category name (URL decoded)
+    - lang: Language code ("en" for English, "ta" for Tamil). Default: "en"
     
     Returns:
-    - List of subcategories with product counts
+    - List of subcategories with product counts and names in requested language
     """
     try:
         # URL decode parameters
@@ -212,6 +255,12 @@ async def get_subcategories(request: Request, section: str, main_category: str):
                     {"name": subcategory}
                 ]
             })
+            
+            # Get display name based on language
+            subcategory_display_name = subcategory  # Default to English
+            if lang == "ta" and metadata and metadata.get("name_ta"):
+                subcategory_display_name = metadata.get("name_ta")
+            
             image_url = metadata.get("image_url", "") if metadata else ""
             # Fallback: if no specific subcategory image, try main category metadata only.
             if not image_url:
@@ -228,7 +277,8 @@ async def get_subcategories(request: Request, section: str, main_category: str):
             # convert to absolute URL if needed
             image_url = make_absolute(request, image_url)
             response["subcategories"].append({
-                "name": subcategory,
+                "name": subcategory,  # Always English name for API queries
+                "name_display": subcategory_display_name,  # Localized name for display
                 "product_count": product_count,
                 "icon": "📦",  # Default icon, can be customized
                 "image_url": image_url
@@ -299,6 +349,7 @@ async def get_products(
                 "main_category": prod.get("main_category"),
                 "subcategory": prod.get("subcategory"),
                 "product_name": prod.get("product_name"),
+                "product_name_ta": prod.get("product_name_ta", ""),
                 "weight": prod.get("weight", ""),
                 "price": float(prod.get("price", 0.0)),
                 "image_url": make_absolute(request, raw_image),
@@ -360,6 +411,7 @@ async def get_product_details(request: Request, item_id: str):
         response = {
             "item_id": product.get("item_id"),
             "product_name": product.get("product_name"),
+            "product_name_ta": product.get("product_name_ta", ""),
             "category": {
                 "section": product.get("category_section"),
                 "main_category": product.get("category_main"),
@@ -417,6 +469,7 @@ async def search_products(
                 {
                     "$or": [
                         {"product_name": {"$regex": q, "$options": "i"}},
+                        {"product_name_ta": {"$regex": q, "$options": "i"}},
                         {"category_main": {"$regex": q, "$options": "i"}},
                         {"category_sub": {"$regex": q, "$options": "i"}},
                         {"description": {"$regex": q, "$options": "i"}}
@@ -441,6 +494,7 @@ async def search_products(
             results.append({
                 "item_id": prod.get("item_id"),
                 "product_name": prod.get("product_name"),
+                "product_name_ta": prod.get("product_name_ta", ""),
                 "weight": prod.get("weight", ""),
                 "price": float(prod.get("price", 0.0)),
                 "image_url": make_absolute(request, raw_image),
@@ -472,79 +526,3 @@ async def search_products(
     except Exception as e:
         logger.error(f"Error searching products: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to search products: {str(e)}")
-
-
-@router.get("/best-sellers")
-async def get_best_sellers(
-    request: Request,
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=100, description="Products per page")
-):
-    """
-    Get all best seller products with pagination.
-    
-    Args:
-    - page: Page number (default: 1)
-    - limit: Products per page (default: 20, max: 100)
-    
-    Returns:
-    - Paginated list of best seller products
-    """
-    try:
-        db = get_mongo_db()
-        products_collection = db["products"]
-        
-        # Build query
-        query = {
-            "is_best_seller": True,
-            "active": True
-        }
-        
-        # Calculate pagination
-        skip = (page - 1) * limit
-        
-        # Get total count
-        total_products = products_collection.count_documents(query)
-        total_pages = (total_products + limit - 1) // limit
-        
-        # Fetch products
-        products_cursor = products_collection.find(query).skip(skip).limit(limit).sort("product_name", 1)
-        
-        products = []
-        for prod in products_cursor:
-            raw_image = prod.get("image_url", prod.get("image", ""))
-            products.append({
-                "item_id": prod.get("item_id"),
-                "product_name": prod.get("product_name"),
-                "weight": prod.get("weight", ""),
-                "price": float(prod.get("price", 0.0)),
-                "image_url": make_absolute(request, raw_image),
-                "section": prod.get("category_section"),
-                "main_category": prod.get("category_main"),
-                "subcategory": prod.get("category_sub"),
-                "category_breadcrumb": f"{prod.get('category_section')} → {prod.get('category_main')} → {prod.get('category_sub')}",
-                "stock": prod.get("stock", 0),
-                "in_stock": prod.get("stock", 0) > 0,
-                "is_best_seller": True,  # All products in this endpoint are best sellers
-                "description": prod.get("description", "")
-            })
-        
-        response = {
-            "products": products,
-            "pagination": {
-                "current_page": page,
-                "total_pages": total_pages,
-                "total_products": total_products,
-                "per_page": limit,
-                "has_next": page < total_pages,
-                "has_prev": page > 1
-            }
-        }
-        
-        logger.info(f"Retrieved {len(products)} best seller products (page {page})")
-        
-        return response
-        
-    except Exception as e:
-        logger.error(f"Error fetching best sellers: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch best sellers: {str(e)}")

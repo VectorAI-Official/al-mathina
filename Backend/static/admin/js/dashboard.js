@@ -341,10 +341,6 @@ function displayProducts(products) {
                     <button class="action-btn btn-edit" onclick="editProduct('${product._id}')">
                         ✏️ Edit
                     </button>
-                    <button class="action-btn ${product.is_best_seller ? 'btn-bestseller-active' : 'btn-bestseller'}" 
-                            onclick="toggleBestSeller('${product._id}', ${product.is_best_seller ? 'true' : 'false'})">
-                        ${product.is_best_seller ? '⭐ Featured' : '☆ Best Seller'}
-                    </button>
                     <button class="action-btn btn-delete" onclick="confirmDelete('${product._id}')">
                         🗑️ Delete
                     </button>
@@ -547,6 +543,7 @@ function editProduct(productId) {
     itemIdInput.placeholder = 'Auto-filled from database';
     
     document.getElementById('productName').value = product.product_name || product.name;
+    document.getElementById('productNameTamil').value = product.product_name_ta || '';
     
     // Set section and populate main categories
     const section = product.category_section || '';
@@ -694,6 +691,7 @@ async function handleProductSubmit(e) {
         // Section (Level 1 sections) -> Main Category (Level 2) -> Subcategory (Level 3)
         const productData = {
             product_name: document.getElementById('productName').value,
+            product_name_ta: document.getElementById('productNameTamil').value || '',
             category_section: section,
             category_main: mainCategory,
             category_sub: subcategory,
@@ -1226,17 +1224,6 @@ function loadMobileCategorySections() {
     
     html += '<div class="mobile-category-grid" id="mobileCategoryGrid">';
     
-    // Add Best Seller section FIRST (special section) - only if there are products
-    if (allProducts && allProducts.length > 0) {
-        const bestSellerCount = allProducts.filter(p => p.is_best_seller === true).length;
-        html += `
-            <div class="mobile-category-card mobile-bestseller-section" data-category-name="best seller" onclick="showMobileCategoryProducts('Best Seller')">
-                <div class="bestseller-count">${bestSellerCount}</div>
-                <div class="name">⭐ Best Seller</div>
-            </div>
-        `;
-    }
-    
     // Get unique sections from category hierarchy
     if (categoryHierarchy && categoryHierarchy.length > 0) {
         const sections = [...new Set(categoryHierarchy.map(item => item.section))];
@@ -1434,7 +1421,7 @@ function showBestSellerProducts() {
 }
 
 // Show main category cards for a section (Level 2)
-function showMainCategoryCards(section) {
+async function showMainCategoryCards(section) {
     const productsContainer = document.getElementById('mobileProductsList');
     
     // Get category hierarchy for this section
@@ -1451,6 +1438,18 @@ function showMainCategoryCards(section) {
             </div>
         `;
         return;
+    }
+    
+    // Fetch most bought items to check starred status
+    let mostBoughtItems = [];
+    try {
+        const response = await fetch('/admin/api/most-bought');
+        if (response.ok) {
+            const data = await response.json();
+            mostBoughtItems = data.items || [];
+        }
+    } catch (error) {
+        console.error('Error fetching most bought:', error);
     }
     
     // Extract main categories (Level 2) - these are the keys of main_categories object
@@ -1479,8 +1478,17 @@ function showMainCategoryCards(section) {
         const imageUrl = metadata.image_url;
         const icon = getCategoryIcon(mainCat);
         
+        // Check if this category is starred
+        const isStarred = mostBoughtItems.some(item => 
+            item.section === section && item.main_category === mainCat
+        );
+        
         html += `
-            <div class="mobile-category-card" onclick="showSubCategoryProducts('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}')">
+            <div class="mobile-category-card ${isStarred ? 'starred-category' : ''}" onclick="showSubCategoryProducts('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}')">
+                ${isStarred ? '<span class="starred-badge">⭐ Starred</span>' : ''}
+                <button class="star-category-btn ${isStarred ? 'starred' : ''}" onclick="toggleStarMainCategory('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', ${isStarred}, event)" title="${isStarred ? 'Unstar' : 'Star'} Main Category">
+                    ${isStarred ? '★' : '⭐'}
+                </button>
                 <button class="edit-category-btn" onclick="openEditMainCategoryModal('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', event)" title="Edit Main Category">
                     ✏️
                 </button>
@@ -1810,12 +1818,17 @@ function openAddMainCategoryModal(section) {
                 </div>
                 
                 <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="mainCategoryNameTa">Main Category Name (Tamil)</label>
+                    <input type="text" id="mainCategoryNameTa" placeholder="முக்கிய வகையின் பெயரை உள்ளிடவும்">
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
                     <label for="addMainCategoryImageFile">Upload Image <span style="color: red;">*</span></label>
                     <input type="file" id="addMainCategoryImageFile" 
                            accept="image/jpeg,image/jpg,image/png,image/webp" 
                            onchange="handleAddMainCategoryImagePreview(event)"
                            required>
-                    <span class="form-hint">� Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                    <span class="form-hint">📐 Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
                 </div>
                 
                 <div id="addMainCategoryImagePreview" class="image-preview" style="display: none; margin-bottom: 20px;">
@@ -1847,6 +1860,7 @@ async function handleAddMainCategory(event, section) {
     event.preventDefault();
     
     const mainCategoryName = document.getElementById('mainCategoryName').value.trim();
+    const mainCategoryNameTa = document.getElementById('mainCategoryNameTa').value.trim();
     const imageFile = document.getElementById('addMainCategoryImageFile').files[0];
     
     if (!mainCategoryName) {
@@ -1877,17 +1891,22 @@ async function handleAddMainCategory(event, section) {
             return;
         }
         
-        // Create the main category with image URL
+        // Create the main category with image URL and Tamil name
+        const requestBody = {
+            section: section,
+            main_category: mainCategoryName,
+            image_url: imageUrl
+        };
+        if (mainCategoryNameTa) {
+            requestBody.main_category_ta = mainCategoryNameTa;
+        }
+        
         const response = await fetch('/admin/api/categories/main', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                section: section,
-                main_category: mainCategoryName,
-                image_url: imageUrl
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (response.ok) {
@@ -2003,6 +2022,11 @@ function openAddSectionCategory(section) {
                     <label for="sectionCategoryName">Subcategory Name * (Sidebar Item)</label>
                     <input type="text" id="sectionCategoryName" required placeholder="e.g., Basmati Rice, Soft Drinks">
                     <span class="form-hint">📱 This will appear as a clickable item in the mobile sidebar</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="sectionCategoryNameTa">Subcategory Name (Tamil)</label>
+                    <input type="text" id="sectionCategoryNameTa" placeholder="துணைப்பிரிவு பெயரை உள்ளிடவும்">
                 </div>
                 
                 <div class="form-group">
@@ -2208,6 +2232,7 @@ async function handleAddSectionCategory(event, section) {
     // Get main category from the disabled input field
     const mainCategory = document.getElementById('sectionCategoryMainGroup').value.trim();
     const subcategoryName = document.getElementById('sectionCategoryName').value.trim();
+    const subcategoryNameTa = document.getElementById('sectionCategoryNameTa').value.trim();
     const imageFile = document.getElementById('addSubCategoryImageFile').files[0];
     
     if (!mainCategory) {
@@ -2241,18 +2266,23 @@ async function handleAddSectionCategory(event, section) {
         const imageUrl = uploadResult.url;
         console.log('Image uploaded successfully:', imageUrl);
         
-        // Add the subcategory with image URL
+        // Add the subcategory with image URL and Tamil name
+        const requestBody = {
+            section: section,
+            main_category: mainCategory,
+            subcategory: subcategoryName,
+            image_url: imageUrl
+        };
+        if (subcategoryNameTa) {
+            requestBody.subcategory_ta = subcategoryNameTa;
+        }
+        
         const response = await fetch('/admin/api/categories/sub', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                section: section,
-                main_category: mainCategory,
-                subcategory: subcategoryName,
-                image_url: imageUrl
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (!response.ok) {
@@ -2496,6 +2526,71 @@ async function deleteSection(section) {
     }
 }
 
+// Toggle star main category (add/remove from Most Bought)
+async function toggleStarMainCategory(section, mainCategory, isCurrentlyStarred, event) {
+    // Stop propagation to prevent card click
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    console.log('Toggle star clicked:', section, mainCategory, 'Currently starred:', isCurrentlyStarred);
+    
+    try {
+        if (isCurrentlyStarred) {
+            // Unstar - remove from Most Bought
+            showToast('Removing from Most Bought...', 'warning');
+            
+            const response = await fetch(`/admin/api/most-bought?section=${encodeURIComponent(section)}&main_category=${encodeURIComponent(mainCategory)}`, {
+                method: 'DELETE'
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                showToast(data.detail || 'Failed to remove from Most Bought', 'error');
+                return;
+            }
+            
+            showToast('Removed from Most Bought', 'success');
+            
+        } else {
+            // Star - add to Most Bought
+            showToast('⭐ Adding to Most Bought...', 'warning');
+            
+            const response = await fetch('/admin/api/most-bought', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    section: section,
+                    main_category: mainCategory
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                if (response.status === 409) {
+                    showToast('⭐ Already in Most Bought section', 'info');
+                } else {
+                    showToast(data.detail || 'Failed to add to Most Bought', 'error');
+                }
+                return;
+            }
+            
+            showToast('⭐ Added to Most Bought section!', 'success');
+        }
+        
+        // Refresh the main category cards to update starred status
+        await showMainCategoryCards(section);
+        
+    } catch (error) {
+        console.error('Error toggling star:', error);
+        showToast('Error updating Most Bought', 'error');
+    }
+}
+
 // Confirm delete main category (Level 2)
 function confirmDeleteMainCategory(section, mainCategory, event) {
     // Stop propagation to prevent card click
@@ -2678,6 +2773,10 @@ function openEditSectionModal(sectionName, event) {
     document.getElementById('editSectionOldName').value = sectionName;
     document.getElementById('editSectionName').value = sectionName;
     
+    // Load current Tamil name from hierarchy
+    const sectionDoc = categoryHierarchy.find(s => s.section === sectionName);
+    document.getElementById('editSectionNameTa').value = sectionDoc?.section_ta || '';
+    
     modal.style.display = 'flex';
 }
 
@@ -2691,6 +2790,7 @@ async function handleSectionEdit(event) {
     
     const oldName = document.getElementById('editSectionOldName').value;
     const newName = document.getElementById('editSectionName').value.trim();
+    const newNameTa = document.getElementById('editSectionNameTa').value.trim();
     
     if (!newName) {
         showToast('Section name is required', 'error');
@@ -2700,10 +2800,17 @@ async function handleSectionEdit(event) {
     try {
         showToast('Updating section...', 'info');
         
+        const requestBody = {};
+        if (newName !== oldName) {
+            requestBody.new_name = newName;
+        }
+        // Always include section_ta (even if empty, to allow clearing)
+        requestBody.section_ta = newNameTa;
+        
         const response = await fetch(`/admin/api/categories/section/${encodeURIComponent(oldName)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ new_name: newName !== oldName ? newName : null })
+            body: JSON.stringify(requestBody)
         });
         
         if (response.ok) {
@@ -2738,6 +2845,9 @@ function openEditMainCategoryModal(section, mainCategoryName, event) {
     document.getElementById('editMainCategorySectionDisplay').value = section;
     document.getElementById('editMainCategoryName').value = mainCategoryName;
     
+    // Load Tamil name from metadata
+    document.getElementById('editMainCategoryNameTa').value = metadata.name_ta || '';
+    
     // Show existing image if available
     const preview = document.getElementById('editMainCategoryImagePreview');
     const previewImg = document.getElementById('editMainCategoryPreviewImg');
@@ -2767,6 +2877,7 @@ async function handleMainCategoryEdit(event) {
     
     const oldName = document.getElementById('editMainCategoryOldName').value;
     const newName = document.getElementById('editMainCategoryName').value.trim();
+    const newNameTa = document.getElementById('editMainCategoryNameTa').value.trim();
     const section = document.getElementById('editMainCategorySection').value;
     const imageFile = document.getElementById('editMainCategoryImageFile').files[0];
     
@@ -2796,15 +2907,21 @@ async function handleMainCategoryEdit(event) {
             }
         }
         
-        // Update main category
+        // Update main category with Tamil name
+        const requestBody = {
+            section: section,
+            image_url: imageUrl
+        };
+        if (newName !== oldName) {
+            requestBody.new_name = newName;
+        }
+        // Always include main_category_ta
+        requestBody.main_category_ta = newNameTa;
+        
         const response = await fetch(`/admin/api/categories/main/${encodeURIComponent(oldName)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                section: section,
-                new_name: newName !== oldName ? newName : null,
-                image_url: imageUrl
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (response.ok) {
@@ -2925,6 +3042,9 @@ function openEditSubCategoryModal(section, mainCategory, subCategoryName, event)
     // Set editable name field
     document.getElementById('editSubCategoryName').value = subCategoryName;
     
+    // Load Tamil name from metadata
+    document.getElementById('editSubCategoryNameTa').value = metadata.name_ta || '';
+    
     // Show existing image if available
     const preview = document.getElementById('editSubCategoryImagePreview');
     const previewImg = document.getElementById('editSubCategoryPreviewImg');
@@ -2956,6 +3076,7 @@ async function handleSubCategoryEdit(event) {
     
     const oldName = document.getElementById('editSubCategoryOldName').value;
     const newName = document.getElementById('editSubCategoryName').value.trim();
+    const newNameTa = document.getElementById('editSubCategoryNameTa').value.trim();
     const section = document.getElementById('editSubCategorySection').value;
     const mainCategory = document.getElementById('editSubCategoryMainCategory').value;
     const imageFile = document.getElementById('editSubCategoryImageFile').files[0];
@@ -2990,18 +3111,24 @@ async function handleSubCategoryEdit(event) {
             }
         }
         
-        // Update subcategory
+        // Update subcategory with Tamil name
+        const requestBody = {
+            section: section,
+            main_category: mainCategory,
+            image_url: imageUrl
+        };
+        if (newName !== oldName) {
+            requestBody.new_name = newName;
+        }
+        // Always include subcategory_ta
+        requestBody.subcategory_ta = newNameTa;
+        
         const response = await fetch(`/admin/api/categories/sub/${encodeURIComponent(oldName)}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                section: section,
-                main_category: mainCategory,
-                new_name: newName !== oldName ? newName : null,
-                image_url: imageUrl
-            })
+            body: JSON.stringify(requestBody)
         });
         
         if (!response.ok) {
@@ -3198,6 +3325,7 @@ async function handleAddCategory(event) {
     event.preventDefault();
     
     const categoryName = document.getElementById('addCategoryName').value.trim();
+    const categoryNameTa = document.getElementById('addCategoryNameTa').value.trim();
     
     if (!categoryName) {
         showToast('Category name is required', 'error');
@@ -3207,13 +3335,18 @@ async function handleAddCategory(event) {
     try {
         showToast('Creating category...', 'info');
         
-        // Create the section
+        // Create the section with Tamil name
+        const requestBody = { section: categoryName };
+        if (categoryNameTa) {
+            requestBody.section_ta = categoryNameTa;
+        }
+        
         const createResponse = await fetch('/admin/api/categories/section', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ section: categoryName })
+            body: JSON.stringify(requestBody)
         });
         
         if (createResponse.ok) {

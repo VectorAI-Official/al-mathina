@@ -120,8 +120,16 @@
                         <small class="form-hint">Automatically generated unique identifier</small>
                     </div>
                     <div class="form-group">
-                        <label for="productName">Product Name *</label>
+                        <label for="productName">Product Name (English) *</label>
                         <input type="text" id="productName" placeholder="e.g., Sprite 600ml Bottle" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="productNameTamil">Product Name (Tamil)</label>
+                        <input type="text" id="productNameTamil" placeholder="e.g., ஸ்பிரைட் 600ml பாட்டில்">
+                        <small class="form-hint">Optional: Tamil translation of product name</small>
                     </div>
                 </div>
 
@@ -272,6 +280,11 @@
                     <input type="text" id="editSectionName" required placeholder="Enter category name">
                     <span class="form-hint">📝 Section icons are automatically assigned based on the category name</span>
                 </div>
+                
+                <div class="form-group">
+                    <label for="editSectionNameTa">Category Name (Tamil)</label>
+                    <input type="text" id="editSectionNameTa" placeholder="பிரிவு பெயரை உள்ளிடவும்">
+                </div>
 
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary" onclick="closeEditSectionModal()">Cancel</button>
@@ -302,6 +315,11 @@
                     <label for="editMainCategoryName">Main Category Name *</label>
                     <input type="text" id="editMainCategoryName" required placeholder="Enter main category name">
                     <span class="form-hint">🏷️ Name displayed on the category card</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editMainCategoryNameTa">Main Category Name (Tamil)</label>
+                    <input type="text" id="editMainCategoryNameTa" placeholder="முக்கிய வகையின் பெயரை உள்ளிடவும்">
                 </div>
 
                 <div class="form-group">
@@ -357,6 +375,11 @@
                     <input type="text" id="editSubCategoryName" required placeholder="Enter subcategory name">
                     <span class="form-hint">🏷️ Name displayed in the sidebar</span>
                 </div>
+                
+                <div class="form-group">
+                    <label for="editSubCategoryNameTa">Subcategory Name (Tamil)</label>
+                    <input type="text" id="editSubCategoryNameTa" placeholder="துணைப்பிரிவு பெயரை உள்ளிடவும்">
+                </div>
 
                 <!-- IMAGE UPLOAD -->
                 <div class="form-group">
@@ -393,6 +416,11 @@
                 <div class="form-group">
                     <label for="addCategoryName">Category Name *</label>
                     <input type="text" id="addCategoryName" required placeholder="Enter category name (e.g., Electronics, Clothing)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="addCategoryNameTa">Category Name (Tamil)</label>
+                    <input type="text" id="addCategoryNameTa" placeholder="பிரிவு பெயரை உள்ளிடவும்">
                 </div>
 
                 <div class="modal-actions">

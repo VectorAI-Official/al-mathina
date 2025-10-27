@@ -1,0 +1,25 @@
+# Core FastAPI and Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.6
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# Database
+pymongo==4.10.1
+dnspython==2.7.0
+
+# Image Storage
+cloudinary==1.45.0
+
+# Authentication & Security
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.2
+
+# HTTP Client
+httpx==0.29.0
+
+# Additional Utilities
+python-dateutil==2.9.0.post0

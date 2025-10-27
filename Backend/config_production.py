@@ -18,13 +18,8 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, alias="DEBUG")
     
     # MongoDB Atlas Configuration (Cloud)
-    mongo_password: str = Field(..., alias="MONGO_PASSWORD")
+    mongo_uri: str = Field(..., alias="MONGO_URI")
     mongo_db_name: str = Field(default="almadhinadb", alias="MONGO_DB_NAME")
-    
-    @property
-    def mongo_uri(self) -> str:
-        """Construct MongoDB Atlas URI with password"""
-        return f"mongodb+srv://vectoraiautomations_db_user:{self.mongo_password}@al-mathina.9xt8cbd.mongodb.net/"
     
     # Cloudinary Configuration (Image Storage)
     cloudinary_cloud_name: str = Field(..., alias="CLOUDINARY_CLOUD_NAME")

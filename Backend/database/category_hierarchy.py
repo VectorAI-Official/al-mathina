@@ -105,10 +105,12 @@ def add_main_category_to_section(section: str, main_category: str) -> bool:
         db = get_mongo_db()
         result = db.category_hierarchy.update_one(
             {"section": section},
-            {"$set": {f"main_categories.{main_category}": []}}
+            {"$set": {f"main_categories.{main_category}": []}},
+            upsert=True  # Create section if it doesn't exist
         )
-        logger.info(f"Added main category '{main_category}' to section '{section}'")
-        return result.modified_count > 0
+        logger.info(f"Added main category '{main_category}' to section '{section}' (matched: {result.matched_count}, modified: {result.modified_count}, upserted: {result.upserted_id})")
+        # Return True if either modified or upserted
+        return result.modified_count > 0 or result.upserted_id is not None
     except Exception as e:
         logger.error(f"Error adding main category: {e}")
         return False

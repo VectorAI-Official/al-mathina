@@ -58,7 +58,7 @@ async def login(
     session_token = create_session(username)
     
     # Set session cookie
-    response = RedirectResponse(url="/admin/dashboard", status_code=303)
+    response = RedirectResponse(url="/admin/login", status_code=303)
     response.set_cookie(
         key="admin_session",
         value=session_token,

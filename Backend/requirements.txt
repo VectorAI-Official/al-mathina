@@ -234,7 +234,7 @@ preshed==3.0.10
 prometheus_client==0.22.1
 prompt_toolkit==3.0.51
 # Editable install with no version control (promptscope==1.0.0)
--e d:\module-2
+# -e d:\module-2  # Removed - local path not valid for Docker
 propcache==0.3.2
 proto-plus==1.26.1
 protobuf==5.29.5

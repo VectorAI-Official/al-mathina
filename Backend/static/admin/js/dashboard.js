@@ -98,7 +98,8 @@ function setupEventListeners() {
 // Load categories
 async function loadCategories() {
     try {
-        const response = await fetch('/admin/api/categories/all');
+        const timestamp = Date.now();
+        const response = await fetch(`/admin/api/categories/all?t=${timestamp}`);
         const data = await response.json();
         
         if (data && data.hierarchy) {
@@ -146,7 +147,8 @@ async function loadCategories() {
 // Load category metadata
 async function loadCategoryMetadata() {
     try {
-        const response = await fetch('/admin/api/categories/metadata');
+        const timestamp = Date.now();
+        const response = await fetch(`/admin/api/categories/metadata?t=${timestamp}`);
         const data = await response.json();
         
         if (data && data.metadata) {
@@ -195,10 +197,26 @@ function populateSectionDropdown() {
     const productSection = document.getElementById('productSection');
     productSection.innerHTML = '<option value="">Select Section</option>';
     
+    // Collect sections from both `item.section` and `item.sections` arrays (compat with different hierarchy shapes)
+    const sectionsSet = new Set();
     categoryHierarchy.forEach(item => {
+        if (!item) return;
+        if (item.section && item.section !== null && item.section !== 'undefined') {
+            sectionsSet.add(item.section);
+        }
+        if (Array.isArray(item.sections)) {
+            item.sections.forEach(s => {
+                if (s && s !== null && s !== 'undefined') sectionsSet.add(s);
+            });
+        }
+    });
+
+    // Convert to sorted array
+    const validSections = Array.from(sectionsSet).sort();
+    validSections.forEach(sectionName => {
         const option = document.createElement('option');
-        option.value = item.section;
-        option.textContent = item.section;
+        option.value = sectionName;
+        option.textContent = sectionName;
         productSection.appendChild(option);
     });
     
@@ -272,7 +290,8 @@ function populateSubCategoryDropdown(section, mainCategory) {
 // Load all products
 async function loadProducts() {
     try {
-        const response = await fetch('/admin/api/products/all');
+        const timestamp = Date.now();
+        const response = await fetch(`/admin/api/products/all?t=${timestamp}`);
         const data = await response.json();
         
         // Handle both response formats
@@ -321,8 +340,8 @@ function displayProducts(products) {
     tbody.innerHTML = products.map(product => `
         <tr>
             <td>
-                ${product.image || product.image_url ? 
-                    `<img src="${product.image || product.image_url}" alt="${product.product_name || product.name}" class="product-image">` : 
+                ${product.image_url || product.image ? 
+                    `<img src="${product.image_url || product.image}" alt="${product.product_name || product.name}" class="product-image">` : 
                     `<div class="product-image-placeholder">📦</div>`
                 }
             </td>
@@ -1224,10 +1243,19 @@ function loadMobileCategorySections() {
     
     html += '<div class="mobile-category-grid" id="mobileCategoryGrid">';
     
-    // Get unique sections from category hierarchy
+    // Get unique sections from category hierarchy (support `section` and `sections` array shapes)
     if (categoryHierarchy && categoryHierarchy.length > 0) {
-        const sections = [...new Set(categoryHierarchy.map(item => item.section))];
-        
+        const sectionsSet = new Set();
+        categoryHierarchy.forEach(item => {
+            if (!item) return;
+            if (item.section && item.section !== null && item.section !== 'undefined') sectionsSet.add(item.section);
+            if (Array.isArray(item.sections)) {
+                item.sections.forEach(s => { if (s && s !== null && s !== 'undefined') sectionsSet.add(s); });
+            }
+        });
+
+        const sections = Array.from(sectionsSet).sort();
+
         sections.forEach(section => {
             html += `
                 <div class="mobile-category-card" data-category-name="${section.toLowerCase()}" onclick="showMobileCategoryProducts('${section.replace(/'/g, "\\'")}')">
@@ -1443,7 +1471,8 @@ async function showMainCategoryCards(section) {
     // Fetch most bought items to check starred status
     let mostBoughtItems = [];
     try {
-        const response = await fetch('/admin/api/most-bought');
+        const timestamp = Date.now();
+        const response = await fetch(`/admin/api/most-bought?t=${timestamp}`);
         if (response.ok) {
             const data = await response.json();
             mostBoughtItems = data.items || [];
@@ -1859,9 +1888,13 @@ function closeAddMainCategoryModal() {
 async function handleAddMainCategory(event, section) {
     event.preventDefault();
     
+    console.log('handleAddMainCategory called with section:', section);
+    
     const mainCategoryName = document.getElementById('mainCategoryName').value.trim();
     const mainCategoryNameTa = document.getElementById('mainCategoryNameTa').value.trim();
     const imageFile = document.getElementById('addMainCategoryImageFile').files[0];
+    
+    console.log('Form values - name:', mainCategoryName, 'name_ta:', mainCategoryNameTa, 'imageFile:', imageFile);
     
     if (!mainCategoryName) {
         showToast('Please enter a main category name', 'error');
@@ -1901,6 +1934,7 @@ async function handleAddMainCategory(event, section) {
             requestBody.main_category_ta = mainCategoryNameTa;
         }
         
+        console.log('Creating main category with request body:', requestBody);
         const response = await fetch('/admin/api/categories/main', {
             method: 'POST',
             headers: {
@@ -1909,22 +1943,36 @@ async function handleAddMainCategory(event, section) {
             body: JSON.stringify(requestBody)
         });
         
+        console.log('Category creation response status:', response.status, response.statusText);
+        
         if (response.ok) {
             const data = await response.json();
+            console.log('Category creation successful:', data);
             showToast(data.message || 'Main category created successfully!', 'success');
             
             // Reload categories and metadata
+            console.log('Reloading categories...');
             await loadCategories();
+            console.log('Categories reloaded');
             
             // Close modal and refresh view
+            console.log('Closing modal and refreshing view...');
             closeAddMainCategoryModal();
             showMainCategoryCards(section);
+            console.log('Modal closed and view refreshed');
         } else {
-            const error = await response.json();
-            showToast(error.detail || 'Failed to create main category', 'error');
+            console.log('Category creation failed with status:', response.status);
+            try {
+                const error = await response.json();
+                console.log('Error response:', error);
+                showToast(error.detail || 'Failed to create main category', 'error');
+            } catch (parseError) {
+                console.log('Could not parse error response:', response.statusText);
+                showToast(`Failed to create main category: ${response.statusText}`, 'error');
+            }
         }
     } catch (error) {
-        console.error('Error creating main category:', error);
+        console.error('Error creating main category (catch block):', error);
         showToast('Error creating main category', 'error');
     }
 }
@@ -2105,6 +2153,12 @@ function openAddSubCategory(section, mainCategory) {
                 </div>
                 
                 <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="sectionCategoryNameTa">Subcategory Name (Tamil)</label>
+                    <input type="text" id="sectionCategoryNameTa" placeholder="துணைப்பிரிவு பெயரை உள்ளிடவும்" style="font-size: 16px;">
+                    <span class="form-hint">🇮🇳 பொருந்தினால் தமிழ் பெயரைச் சேர்க்கவும்</span>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
                     <label for="addSubCategoryImageFile">
                         Upload Image <span style="color: red;">*</span>
                     </label>
@@ -2201,13 +2255,19 @@ async function handleSectionCategoryImageUpload(event) {
         
         const data = await response.json();
         
+        // Handle both local (url) and Cloudinary (image_url) response formats
+        const imageUrl = data.url || data.image_url;
+        if (!imageUrl) {
+            throw new Error('Invalid response format - missing image URL');
+        }
+        
         // Set the image URL
-        document.getElementById('sectionCategoryImageUrl').value = data.url;
+        document.getElementById('sectionCategoryImageUrl').value = imageUrl;
         
         // Show preview
         const preview = document.getElementById('sectionCategoryImagePreview');
         const previewImg = document.getElementById('sectionCategoryPreviewImg');
-        previewImg.src = data.url;
+        previewImg.src = imageUrl;
         preview.style.display = 'block';
         
         showToast('Image uploaded successfully', 'success');
@@ -2229,11 +2289,35 @@ function clearSectionCategoryImagePreview() {
 async function handleAddSectionCategory(event, section) {
     event.preventDefault();
     
-    // Get main category from the disabled input field
-    const mainCategory = document.getElementById('sectionCategoryMainGroup').value.trim();
-    const subcategoryName = document.getElementById('sectionCategoryName').value.trim();
-    const subcategoryNameTa = document.getElementById('sectionCategoryNameTa').value.trim();
-    const imageFile = document.getElementById('addSubCategoryImageFile').files[0];
+    // Get main category from the form
+    let mainCategory = null;
+    const mainGroupElement = document.getElementById('sectionCategoryMainGroup');
+    
+    if (!mainGroupElement) {
+        showToast('Form error: Main category element not found', 'error');
+        console.error('sectionCategoryMainGroup element not found');
+        return;
+    }
+    
+    // Check if it's a select (dropdown) or input (disabled field)
+    if (mainGroupElement.tagName === 'SELECT') {
+        mainCategory = mainGroupElement.value.trim();
+    } else if (mainGroupElement.tagName === 'INPUT') {
+        mainCategory = mainGroupElement.value.trim();
+    }
+    
+    const subcategoryNameElement = document.getElementById('sectionCategoryName');
+    if (!subcategoryNameElement) {
+        showToast('Form error: Subcategory name element not found', 'error');
+        console.error('sectionCategoryName element not found');
+        return;
+    }
+    
+    const subcategoryName = subcategoryNameElement.value.trim();
+    const subcategoryNameTaElement = document.getElementById('sectionCategoryNameTa');
+    const subcategoryNameTa = subcategoryNameTaElement ? subcategoryNameTaElement.value.trim() : '';
+    const imageFileElement = document.getElementById('addSubCategoryImageFile');
+    const imageFile = imageFileElement ? imageFileElement.files[0] : null;
     
     if (!mainCategory) {
         showToast('Main category is required', 'error');
@@ -2990,17 +3074,38 @@ async function uploadMainCategoryImage(file) {
     try {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('category_type', 'main_category');
         
+        console.log('Starting image upload for main category, file:', file.name, 'size:', file.size);
         const response = await fetch('/admin/api/upload-image', {
             method: 'POST',
             body: formData
         });
         
+        console.log('Image upload response status:', response.status, response.statusText);
+        
         if (!response.ok) {
+            console.log('Image upload failed with status:', response.status);
             throw new Error('Failed to upload image');
         }
         
-        return await response.json();
+        const result = await response.json();
+        console.log('Image upload result:', result);
+        
+        // Handle both local (url) and Cloudinary (image_url) response formats
+        if (!result.url && !result.image_url) {
+            console.error('Image upload response missing url/image_url:', result);
+            throw new Error('Invalid response format - missing image URL');
+        }
+        
+        // Normalize response to always have 'url' property
+        const normalizedResult = {
+            ...result,
+            url: result.url || result.image_url
+        };
+        
+        console.log('Normalized upload result:', normalizedResult);
+        return normalizedResult;
     } catch (error) {
         console.error('Error uploading main category image:', error);
         return null;
@@ -3204,19 +3309,38 @@ async function uploadSubCategoryImage(file) {
     try {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('category_type', 'subcategory');
         
+        console.log('Starting image upload for subcategory, file:', file.name, 'size:', file.size);
         const response = await fetch('/admin/api/upload-image', {
             method: 'POST',
             body: formData
         });
         
+        console.log('Image upload response status:', response.status, response.statusText);
+        
         if (!response.ok) {
+            console.log('Image upload failed with status:', response.status);
             throw new Error('Failed to upload image');
         }
         
         const result = await response.json();
         console.log('Subcategory image uploaded:', result);
-        return result;
+        
+        // Handle both local (url) and Cloudinary (image_url) response formats
+        if (!result.url && !result.image_url) {
+            console.error('Image upload response missing url/image_url:', result);
+            throw new Error('Invalid response format - missing image URL');
+        }
+        
+        // Normalize response to always have 'url' property
+        const normalizedResult = {
+            ...result,
+            url: result.url || result.image_url
+        };
+        
+        console.log('Normalized upload result:', normalizedResult);
+        return normalizedResult;
     } catch (error) {
         console.error('Error uploading subcategory image:', error);
         return null;
@@ -3341,6 +3465,9 @@ async function handleAddCategory(event) {
             requestBody.section_ta = categoryNameTa;
         }
         
+        console.log('=== CREATING NEW SECTION ===');
+        console.log('Request body:', JSON.stringify(requestBody));
+        
         const createResponse = await fetch('/admin/api/categories/section', {
             method: 'POST',
             headers: {
@@ -3349,7 +3476,14 @@ async function handleAddCategory(event) {
             body: JSON.stringify(requestBody)
         });
         
+        console.log('Response status:', createResponse.status);
+        console.log('Response ok:', createResponse.ok);
+        
+        const responseData = await createResponse.json();
+        console.log('Response data:', responseData);
+        
         if (createResponse.ok) {
+            console.log('✓ Section created successfully');
             showToast('Category created successfully', 'success');
             
             // Reload categories and mobile preview
@@ -3360,10 +3494,13 @@ async function handleAddCategory(event) {
             closeAddCategoryModal();
         } else if (createResponse.status === 401) {
             showToast('Session expired. Please refresh the page and login again.', 'error');
+        } else {
+            console.error('✗ Failed to create section:', responseData);
+            showToast(responseData.detail || 'Failed to create category', 'error');
         }
     } catch (error) {
         console.error('Error creating category:', error);
-        showToast('Failed to create category', 'error');
+        showToast('Failed to create category: ' + error.message, 'error');
     }
 }
 
@@ -3408,13 +3545,19 @@ async function handleCategoryImageUpload(event) {
         
         const data = await response.json();
         
+        // Handle both local (url) and Cloudinary (image_url) response formats
+        const imageUrl = data.url || data.image_url;
+        if (!imageUrl) {
+            throw new Error('Invalid response format - missing image URL');
+        }
+        
         // Set the image URL in the form
-        document.getElementById('editCategoryImageUrl').value = data.url;
+        document.getElementById('editCategoryImageUrl').value = imageUrl;
         
         // Show preview
         const preview = document.getElementById('editCategoryImagePreview');
         const previewImg = document.getElementById('editCategoryPreviewImg');
-        previewImg.src = data.url;
+        previewImg.src = imageUrl;
         preview.style.display = 'block';
         
         showToast('Image uploaded successfully', 'success');

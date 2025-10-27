@@ -8,6 +8,10 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from bson import ObjectId
+from database.mongodb_client import get_mongo_db
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/orders", tags=["Admin Orders"])
 
@@ -19,8 +23,7 @@ class UpdateOrderStatusRequest(BaseModel):
 async def get_all_orders(request: Request):
     """Get all orders with user details and product information"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         users_collection = db['users']
         products_collection = db['products']
@@ -65,11 +68,14 @@ async def get_all_orders(request: Request):
             order['items'] = enriched_items
             enriched_orders.append(order)
         
+        logger.info(f"Retrieved {len(enriched_orders)} orders for admin dashboard")
+        
         return {
             "success": True,
             "orders": enriched_orders
         }
     except Exception as e:
+        logger.error(f"Error fetching all orders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get single order details
@@ -77,14 +83,18 @@ async def get_all_orders(request: Request):
 async def get_order_by_id(order_id: str, request: Request):
     """Get detailed information for a specific order"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         users_collection = db['users']
         products_collection = db['products']
         
-        # Find the order
-        order = orders_collection.find_one({"order_id": order_id})
+        # Find the order by ObjectId (MongoDB _id)
+        try:
+            order_obj_id = ObjectId(order_id)
+            order = orders_collection.find_one({"_id": order_obj_id})
+        except:
+            # If not a valid ObjectId, try finding by order_id string field
+            order = orders_collection.find_one({"order_id": order_id})
         
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
@@ -131,6 +141,8 @@ async def get_order_by_id(order_id: str, request: Request):
         
         order['items'] = enriched_items
         
+        logger.info(f"Retrieved order details: {order_id}")
+        
         return {
             "success": True,
             "order": order
@@ -138,6 +150,7 @@ async def get_order_by_id(order_id: str, request: Request):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error fetching order {order_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Update order status
@@ -145,13 +158,17 @@ async def get_order_by_id(order_id: str, request: Request):
 async def update_order_status(order_id: str, status_update: UpdateOrderStatusRequest, request: Request):
     """Update order status and manage stock accordingly"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         products_collection = db['products']
         
         # Find the order
-        order = orders_collection.find_one({"order_id": order_id})
+        try:
+            order_obj_id = ObjectId(order_id)
+            order = orders_collection.find_one({"_id": order_obj_id})
+        except:
+            order = orders_collection.find_one({"order_id": order_id})
+        
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         
@@ -162,7 +179,7 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
         if new_status == 'delivered' and old_status != 'delivered':
             for item in order.get('items', []):
                 # Log the item details for debugging
-                print(f"Processing item for stock reduction: {item}")
+                logger.info(f"Processing item for stock reduction: {item}")
                 
                 # Try to find product by item_id first (most reliable)
                 item_id = item.get('item_id')
@@ -171,7 +188,7 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
                         {"item_id": item_id},
                         {"$inc": {"stock": -item.get('quantity', 0)}}
                     )
-                    print(f"Stock reduction by item_id - matched: {result.matched_count}, modified: {result.modified_count}")
+                    logger.info(f"Stock reduction by item_id - matched: {result.matched_count}, modified: {result.modified_count}")
                     
                     if result.matched_count > 0:
                         continue
@@ -191,9 +208,9 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
                         },
                         {"$inc": {"stock": -item.get('quantity', 0)}}
                     )
-                    print(f"Stock reduction by category fields - matched: {result.matched_count}, modified: {result.modified_count}")
+                    logger.info(f"Stock reduction by category fields - matched: {result.matched_count}, modified: {result.modified_count}")
                 else:
-                    print(f"WARNING: Cannot update stock - insufficient product identification info: {item}")
+                    logger.warning(f"Cannot update stock - insufficient product identification info: {item}")
         
         # If cancelling an order that was previously delivered, restore stock
         elif new_status == 'cancelled' and old_status == 'delivered':
@@ -205,7 +222,7 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
                         {"item_id": item_id},
                         {"$inc": {"stock": item.get('quantity', 0)}}
                     )
-                    print(f"Stock restored by item_id for: {item.get('product_name')}")
+                    logger.info(f"Stock restored by item_id for: {item.get('product_name')}")
                     
                     if result.matched_count > 0:
                         continue
@@ -225,13 +242,13 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
                         },
                         {"$inc": {"stock": item.get('quantity', 0)}}
                     )
-                    print(f"Stock restored by category fields for: {item.get('product_name')}")
+                    logger.info(f"Stock restored by category fields for: {item.get('product_name')}")
                 else:
-                    print(f"WARNING: Cannot restore stock - insufficient product identification info: {item}")
+                    logger.warning(f"Cannot restore stock - insufficient product identification info: {item}")
         
         # Update order status
         orders_collection.update_one(
-            {"order_id": order_id},
+            {"_id": ObjectId(order['_id']) if isinstance(order['_id'], str) else order['_id']},
             {
                 "$set": {
                     "status": new_status,
@@ -239,6 +256,8 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
                 }
             }
         )
+        
+        logger.info(f"Order {order_id} status updated from {old_status} to {new_status}")
         
         return {
             "success": True,
@@ -249,6 +268,7 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error updating order status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get order statistics
@@ -256,8 +276,7 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
 async def get_order_statistics(request: Request):
     """Get order statistics for dashboard"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         
         # Count orders by status
@@ -270,6 +289,8 @@ async def get_order_statistics(request: Request):
         delivered_orders_list = list(orders_collection.find({"status": "delivered"}))
         total_revenue = sum(order.get('total_amount', 0) for order in delivered_orders_list)
         
+        logger.info(f"Order statistics: Total={total_orders}, Pending={pending_orders}, Delivered={delivered_orders}, Cancelled={cancelled_orders}")
+        
         return {
             "success": True,
             "stats": {
@@ -281,4 +302,5 @@ async def get_order_statistics(request: Request):
             }
         }
     except Exception as e:
+        logger.error(f"Error fetching order statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))

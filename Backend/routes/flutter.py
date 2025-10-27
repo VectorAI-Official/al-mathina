@@ -17,12 +17,17 @@ def make_absolute(request: Request, path: str) -> str:
     """Normalize image paths to absolute URLs using request.base_url.
 
     - If path is empty, return empty string
-    - If path already starts with http/https, replace host with current request host
+    - If path is a Cloudinary URL (https://res.cloudinary.com), return as-is
+    - If path already starts with http/https (non-Cloudinary), extract path part and prefix with current base
     - Otherwise prefix with request.base_url
     """
     if not path:
         return ""
     p = path.strip()
+    
+    # If it's a Cloudinary URL, return it as-is (it's absolute and CDN-hosted)
+    if 'cloudinary.com' in p:
+        return p
     
     # Get current request's base URL
     base = str(request.base_url).rstrip('/')
@@ -526,3 +531,325 @@ async def search_products(
     except Exception as e:
         logger.error(f"Error searching products: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to search products: {str(e)}")
+
+
+@router.get("/favorites/{user_id}")
+async def get_user_favorites(
+    request: Request,
+    user_id: str,
+    lang: str = Query("en", description="Language code (en or ta)")
+):
+    """
+    Get user's favorite products.
+    
+    Args:
+    - user_id: Unique user identifier
+    - lang: Language code ("en" for English, "ta" for Tamil). Default: "en"
+    
+    Returns:
+    - List of favorite products with details
+    """
+    try:
+        db = get_mongo_db()
+        favorites_collection = db["user_favorites"]
+        products_collection = db["products"]
+        
+        # Get user's favorites
+        favorites_doc = favorites_collection.find_one({"user_id": user_id})
+        
+        if not favorites_doc:
+            return {
+                "user_id": user_id,
+                "favorites": [],
+                "total_count": 0
+            }
+        
+        favorite_items = favorites_doc.get("items", [])
+        
+        results = []
+        for item_id in favorite_items:
+            product = products_collection.find_one({"item_id": item_id, "active": True})
+            if product:
+                product_name = product.get("product_name")
+                if lang == "ta" and product.get("product_name_ta"):
+                    product_name = product.get("product_name_ta")
+                
+                results.append({
+                    "item_id": product.get("item_id"),
+                    "product_name": product.get("product_name"),
+                    "product_name_display": product_name,
+                    "product_name_ta": product.get("product_name_ta", ""),
+                    "weight": product.get("weight", ""),
+                    "price": float(product.get("price", 0.0)),
+                    "image_url": make_absolute(request, product.get("image_url", product.get("image", ""))),
+                    "category": {
+                        "section": product.get("category_section"),
+                        "main_category": product.get("category_main"),
+                        "subcategory": product.get("category_sub")
+                    },
+                    "in_stock": product.get("stock", 0) > 0,
+                    "stock": product.get("stock", 0)
+                })
+        
+        logger.info(f"Retrieved {len(results)} favorites for user {user_id}")
+        
+        return {
+            "user_id": user_id,
+            "favorites": results,
+            "total_count": len(results)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching favorites for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch favorites: {str(e)}")
+
+
+@router.post("/favorites/{user_id}/{item_id}")
+async def add_to_favorites(user_id: str, item_id: str):
+    """
+    Add product to user's favorites.
+    
+    Args:
+    - user_id: Unique user identifier
+    - item_id: Product item ID
+    
+    Returns:
+    - Success message
+    """
+    try:
+        db = get_mongo_db()
+        favorites_collection = db["user_favorites"]
+        products_collection = db["products"]
+        
+        # Verify product exists
+        product = products_collection.find_one({"item_id": item_id, "active": True})
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product not found: {item_id}")
+        
+        # Add to favorites (avoid duplicates)
+        result = favorites_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$addToSet": {"items": item_id},
+                "$set": {"updated_at": __import__("datetime").datetime.utcnow()}
+            },
+            upsert=True
+        )
+        
+        logger.info(f"Added product {item_id} to favorites for user {user_id}")
+        
+        return {
+            "success": True,
+            "message": "Product added to favorites",
+            "item_id": item_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding to favorites: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add to favorites: {str(e)}")
+
+
+@router.delete("/favorites/{user_id}/{item_id}")
+async def remove_from_favorites(user_id: str, item_id: str):
+    """
+    Remove product from user's favorites.
+    
+    Args:
+    - user_id: Unique user identifier
+    - item_id: Product item ID
+    
+    Returns:
+    - Success message
+    """
+    try:
+        db = get_mongo_db()
+        favorites_collection = db["user_favorites"]
+        
+        result = favorites_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$pull": {"items": item_id},
+                "$set": {"updated_at": __import__("datetime").datetime.utcnow()}
+            }
+        )
+        
+        logger.info(f"Removed product {item_id} from favorites for user {user_id}")
+        
+        return {
+            "success": True,
+            "message": "Product removed from favorites",
+            "item_id": item_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error removing from favorites: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove from favorites: {str(e)}")
+
+
+@router.get("/orders/{user_id}")
+async def get_user_orders(
+    request: Request,
+    user_id: str,
+    status: Optional[str] = Query(None, description="Filter by order status (pending, completed, cancelled)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=50, description="Orders per page"),
+    lang: str = Query("en", description="Language code (en or ta)")
+):
+    """
+    Get user's orders with optional status filter and pagination.
+    
+    Args:
+    - user_id: Unique user identifier
+    - status: Optional filter by order status
+    - page: Page number (default: 1)
+    - limit: Orders per page (default: 10, max: 50)
+    - lang: Language code ("en" for English, "ta" for Tamil). Default: "en"
+    
+    Returns:
+    - Paginated list of user's orders with details
+    """
+    try:
+        db = get_mongo_db()
+        orders_collection = db["orders"]
+        products_collection = db["products"]
+        
+        # Build query
+        query = {"user_id": user_id}
+        if status:
+            query["status"] = status
+        
+        # Calculate pagination
+        skip = (page - 1) * limit
+        
+        # Get total count
+        total_orders = orders_collection.count_documents(query)
+        total_pages = (total_orders + limit - 1) // limit
+        
+        # Fetch orders
+        orders_cursor = orders_collection.find(query).skip(skip).limit(limit).sort("created_at", -1)
+        
+        results = []
+        for order in orders_cursor:
+            # Get order items with product details
+            items = []
+            for item in order.get("items", []):
+                product = products_collection.find_one({"item_id": item.get("item_id")})
+                if product:
+                    product_name = product.get("product_name")
+                    if lang == "ta" and product.get("product_name_ta"):
+                        product_name = product.get("product_name_ta")
+                    
+                    items.append({
+                        "item_id": product.get("item_id"),
+                        "product_name": product.get("product_name"),
+                        "product_name_display": product_name,
+                        "quantity": item.get("quantity", 1),
+                        "price": float(item.get("price", 0.0)),
+                        "total": float(item.get("quantity", 1)) * float(item.get("price", 0.0)),
+                        "image_url": make_absolute(request, product.get("image_url", product.get("image", "")))
+                    })
+            
+            results.append({
+                "order_id": str(order.get("_id")),
+                "user_id": order.get("user_id"),
+                "status": order.get("status", "pending"),
+                "total_amount": float(order.get("total_amount", 0.0)),
+                "items_count": len(items),
+                "items": items,
+                "delivery_address": order.get("delivery_address", ""),
+                "payment_method": order.get("payment_method", ""),
+                "created_at": order.get("created_at", "").isoformat() if order.get("created_at") else "",
+                "updated_at": order.get("updated_at", "").isoformat() if order.get("updated_at") else "",
+                "estimated_delivery": order.get("estimated_delivery", "")
+            })
+        
+        response = {
+            "user_id": user_id,
+            "orders": results,
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "total_orders": total_orders,
+                "per_page": limit,
+                "has_next": page < total_pages,
+                "has_prev": page > 1
+            }
+        }
+        
+        logger.info(f"Retrieved {len(results)} orders for user {user_id} (page {page})")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error fetching orders for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch orders: {str(e)}")
+
+
+@router.post("/orders")
+async def create_order(request: Request):
+    """
+    Create a new order.
+    
+    Request body:
+    {
+        "user_id": "user_123",
+        "items": [
+            {"item_id": "PROD001", "quantity": 2, "price": 100.0},
+            {"item_id": "PROD002", "quantity": 1, "price": 50.0}
+        ],
+        "delivery_address": "123 Main St, City",
+        "payment_method": "card|upi|cod",
+        "total_amount": 250.0
+    }
+    
+    Returns:
+    - Created order details
+    """
+    try:
+        db = get_mongo_db()
+        orders_collection = db["orders"]
+        data = await request.json()
+        
+        user_id = data.get("user_id")
+        items = data.get("items", [])
+        delivery_address = data.get("delivery_address")
+        payment_method = data.get("payment_method")
+        total_amount = data.get("total_amount", 0.0)
+        
+        if not user_id or not items or not delivery_address:
+            raise HTTPException(status_code=400, detail="Missing required fields: user_id, items, delivery_address")
+        
+        from datetime import datetime, timedelta
+        
+        order_doc = {
+            "user_id": user_id,
+            "items": items,
+            "delivery_address": delivery_address,
+            "payment_method": payment_method or "cod",
+            "total_amount": float(total_amount),
+            "status": "pending",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "estimated_delivery": (datetime.utcnow() + timedelta(days=3)).isoformat()
+        }
+        
+        result = orders_collection.insert_one(order_doc)
+        
+        logger.info(f"Created order {result.inserted_id} for user {user_id}")
+        
+        return {
+            "success": True,
+            "message": "Order created successfully",
+            "order_id": str(result.inserted_id),
+            "status": "pending",
+            "created_at": order_doc["created_at"].isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating order: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
+

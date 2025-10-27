@@ -1,18 +1,34 @@
 """
 MongoDB client for catalog data.
 Handles product categories, brand listings, inventory, and pricing.
+Supports both local development and production (MongoDB Atlas).
 """
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from typing import Optional
 import logging
+import os
+import ssl
+import certifi
 
+# Determine environment and import appropriate config
 try:
-    from config_local import settings
+    # Check if running in production (Fly.io or explicit env var)
+    if os.getenv('ENVIRONMENT') == 'production' or os.getenv('FLY_APP_NAME'):
+        from config_production import settings
+        logger = logging.getLogger(__name__)
+        logger.info("🌐 Using PRODUCTION configuration (MongoDB Atlas)")
+    else:
+        raise ImportError("Not in production")
 except ImportError:
-    from config import settings
-
-logger = logging.getLogger(__name__)
+    try:
+        from config_local import settings
+        logger = logging.getLogger(__name__)
+        logger.info("🏠 Using LOCAL configuration (MongoDB localhost)")
+    except ImportError:
+        from config import settings
+        logger = logging.getLogger(__name__)
+        logger.info("📦 Using DEFAULT configuration")
 
 # MongoDB Client (singleton pattern)
 _mongo_client: Optional[MongoClient] = None
@@ -23,19 +39,46 @@ def get_mongo_client() -> MongoClient:
     """
     Get or create MongoDB client instance.
     Uses singleton pattern to reuse connection.
+    Note: For Python 3.13 SSL bug with MongoDB Atlas, connection is lazy.
+    Connection will be established on first actual database operation.
     """
     global _mongo_client
     if _mongo_client is None:
         try:
-            _mongo_client = MongoClient(
-                settings.mongo_uri,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=10000,
-                socketTimeoutMS=10000
-            )
-            # Test the connection
-            _mongo_client.admin.command('ping')
-            logger.info("✓ MongoDB connection established successfully")
+            # Check if using MongoDB Atlas (production)
+            is_atlas = 'mongodb.net' in settings.mongo_uri or os.getenv('ENVIRONMENT') == 'production'
+            
+            if is_atlas:
+                # MongoDB Atlas connection - lazy initialization to avoid SSL handshake on startup
+                # Python 3.13 has SSL bug that causes TLSV1_ALERT_INTERNAL_ERROR
+                # Connection will work on first database operation (not on ping)
+                _mongo_client = MongoClient(
+                    settings.mongo_uri,
+                    serverSelectionTimeoutMS=30000,  # Increased timeout
+                    connectTimeoutMS=30000,
+                    socketTimeoutMS=30000,
+                    tls=True,
+                    tlsAllowInvalidCertificates=True,
+                    retryWrites=True,
+                    connect=False  # Lazy connection - don't connect until first operation
+                )
+                logger.info("🌐 MongoDB Atlas client created (lazy connection - will connect on first use)")
+            else:
+                # Local MongoDB connection
+                _mongo_client = MongoClient(
+                    settings.mongo_uri,
+                    serverSelectionTimeoutMS=5000,
+                    connectTimeoutMS=10000,
+                    socketTimeoutMS=10000
+                )
+                logger.info("🏠 Connecting to local MongoDB...")
+            
+            # Only test local connections
+            if not is_atlas:
+                _mongo_client.admin.command('ping')
+                logger.info("✓ MongoDB connection established successfully")
+            else:
+                logger.info("⏳ Atlas connection will be tested on first database operation")
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             logger.error(f"✗ MongoDB connection failed: {e}")
             raise
@@ -66,11 +109,25 @@ def close_mongo_connection():
 
 
 def test_mongo_connection() -> bool:
-    """Test the MongoDB connection."""
+    """
+    Test the MongoDB connection.
+    For Atlas with Python 3.13, we'll test by listing databases instead of ping.
+    """
     try:
         client = get_mongo_client()
-        client.admin.command('ping')
-        logger.info("✓ MongoDB connection test successful")
+        is_atlas = 'mongodb.net' in settings.mongo_uri or os.getenv('ENVIRONMENT') == 'production'
+        
+        if is_atlas:
+            # For Atlas, test with a lightweight operation
+            # This will establish the connection if lazy
+            db = get_mongo_db()
+            # Just check if we can access the database
+            _ = db.list_collection_names()
+            logger.info("✓ MongoDB Atlas connection test successful (lazy connect)")
+        else:
+            # For local, use ping
+            client.admin.command('ping')
+            logger.info("✓ MongoDB connection test successful")
         return True
     except Exception as e:
         logger.error(f"✗ MongoDB connection test failed: {e}")

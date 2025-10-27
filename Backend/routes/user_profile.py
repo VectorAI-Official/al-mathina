@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from bson import ObjectId
+from database.mongodb_client import get_mongo_db
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/flutter/user", tags=["User Profile"])
 
@@ -71,8 +75,7 @@ class Order(BaseModel):
 async def get_user_profile(phone: str, request: Request):
     """Get user profile by phone number, create if doesn't exist"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # Find existing user
@@ -106,8 +109,7 @@ async def get_user_profile(phone: str, request: Request):
 async def update_user_profile(phone: str, profile: UpdateProfileRequest, request: Request):
     """Update user profile information"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         update_data = {
@@ -146,8 +148,7 @@ async def update_user_profile(phone: str, profile: UpdateProfileRequest, request
 async def add_address(phone: str, address: AddAddressRequest, request: Request):
     """Add a new delivery address"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # If this is default address, unset other defaults
@@ -184,8 +185,7 @@ async def add_address(phone: str, address: AddAddressRequest, request: Request):
 async def update_address(phone: str, address_index: int, address: AddAddressRequest, request: Request):
     """Update an existing address"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # Get user to check if address exists
@@ -226,8 +226,7 @@ async def update_address(phone: str, address_index: int, address: AddAddressRequ
 async def delete_address(phone: str, address_index: int, request: Request):
     """Delete an address"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # Get user to check if address exists
@@ -266,8 +265,7 @@ async def delete_address(phone: str, address_index: int, request: Request):
 async def get_user_orders(phone: str, request: Request):
     """Get all orders for a user"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         
         # Find all orders for user
@@ -289,48 +287,64 @@ async def get_user_orders(phone: str, request: Request):
 async def create_order(request: Request):
     """Create a new order"""
     try:
-        from config_local import get_database
+        from datetime import datetime, timedelta
         import uuid
         
         # Get request body
         order_data = await request.json()
         
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         
-        # Generate order ID
+        user_phone = order_data.get('user_phone')
+        items = order_data.get('items', [])
+        delivery_address = order_data.get('delivery_address', {})
+        payment_method = order_data.get('payment_method', 'cod')
+        total_amount = order_data.get('total_amount', 0)
+        
+        if not user_phone or not items or not delivery_address:
+            raise HTTPException(status_code=400, detail="Missing required fields: user_phone, items, delivery_address")
+        
+        # Generate a human-readable order ID
         order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
         
         # Prepare order document
         order_doc = {
-            'order_id': order_id,
-            'user_phone': order_data.get('user_phone'),
-            'items': order_data.get('items', []),
-            'total_amount': order_data.get('total_amount', 0),
-            'status': order_data.get('status', 'pending'),
-            'payment_method': order_data.get('payment_method', 'Cash on Delivery'),
-            'delivery_address': order_data.get('delivery_address', {}),
+            'order_id': order_id,  # ✅ Store the generated order_id
+            'user_phone': user_phone,
+            'items': items,
+            'total_amount': float(total_amount),
+            'status': 'pending',
+            'payment_method': payment_method,
+            'delivery_address': delivery_address,
             'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.utcnow(),
+            'estimated_delivery': (datetime.utcnow() + timedelta(days=3)).isoformat()
         }
         
         result = orders_collection.insert_one(order_doc)
         
+        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_phone}")
+        
         return {
             "success": True,
             "message": "Order created successfully",
-            "order_id": order_id
+            "order_id": order_id,  # ✅ Return the generated order_id
+            "status": "pending",
+            "created_at": order_doc["created_at"].isoformat()
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error creating order: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
 
 # Get single order details by order_id
 @router.get("/orders/{phone}/{order_id}")
 async def get_order_details(phone: str, order_id: str, request: Request):
     """Get detailed information for a specific order"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         orders_collection = db['orders']
         users_collection = db['users']
         products_collection = db['products']
@@ -402,8 +416,7 @@ async def get_order_details(phone: str, order_id: str, request: Request):
 async def get_store_details(phone: str, request: Request):
     """Get store details for a user"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # Find user
@@ -436,8 +449,7 @@ async def get_store_details(phone: str, request: Request):
 async def update_store_details(phone: str, store_details: StoreDetails, request: Request):
     """Update store details for a user"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # Check if user exists
@@ -480,8 +492,7 @@ class AddFavoriteRequest(BaseModel):
 async def get_favorites(phone: str, request: Request):
     """Get user's favorite products"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         products_collection = db['products']
         
@@ -539,8 +550,7 @@ async def get_favorites(phone: str, request: Request):
 async def add_favorite(phone: str, request_body: AddFavoriteRequest):
     """Add a product to user's favorites"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         products_collection = db['products']
         
@@ -587,8 +597,7 @@ async def add_favorite(phone: str, request_body: AddFavoriteRequest):
 async def remove_favorite(phone: str, item_id: str):
     """Remove a product from user's favorites"""
     try:
-        from config_local import get_database
-        db = get_database()
+        db = get_mongo_db()
         users_collection = db['users']
         
         # Remove from favorites

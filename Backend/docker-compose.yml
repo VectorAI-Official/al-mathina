@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8080"
+    env_file:
+      - .env.production
+    environment:
+      # These can override .env.production if needed
+      - ENVIRONMENT=production
+      - RELOAD=true
+    volumes:
+      # Mount the entire Backend directory for hot-reload
+      - .:/app
+      # Don't mount Python cache and dependencies
+      - /app/__pycache__
+      - /app/.pytest_cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

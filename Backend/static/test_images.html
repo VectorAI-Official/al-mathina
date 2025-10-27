@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .product { margin: 20px 0; padding: 10px; border: 1px solid #ddd; }
+        img { max-width: 200px; height: auto; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Product Image Test</h1>
+    <div id="results">Loading products...</div>
+
+    <script>
+        async function testImages() {
+            try {
+                const response = await fetch('/admin/api/products/all');
+                const data = await response.json();
+                const products = data.products || [];
+                
+                const container = document.getElementById('results');
+                container.innerHTML = `<p class="success">✅ Loaded ${products.length} products</p>`;
+                
+                products.slice(0, 5).forEach(product => {
+                    const div = document.createElement('div');
+                    div.className = 'product';
+                    div.innerHTML = `
+                        <h3>${product.product_name} (${product.item_id})</h3>
+                        <p><strong>Image URL:</strong> <code>${product.image_url || 'No image'}</code></p>
+                        ${product.image_url ? 
+                            `<img src="${product.image_url}" 
+                                  alt="${product.product_name}" 
+                                  onload="this.nextElementSibling.innerHTML='✅ Image loaded successfully'" 
+                                  onerror="this.nextElementSibling.innerHTML='❌ Image failed to load'">
+                             <p class="error">Loading...</p>` 
+                            : '<p class="error">❌ No image URL</p>'}
+                    `;
+                    container.appendChild(div);
+                });
+                
+            } catch (error) {
+                document.getElementById('results').innerHTML = `<p class="error">❌ Error: ${error}</p>`;
+            }
+        }
+        
+        testImages();
+    </script>
+</body>
+</html>

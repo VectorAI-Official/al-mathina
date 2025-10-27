@@ -12,23 +12,30 @@ import ssl
 import certifi
 
 # Determine environment and import appropriate config
+import sys
+
+# Try to detect environment
 try:
-    # Check if running in production (Fly.io or explicit env var)
-    if os.getenv('ENVIRONMENT') == 'production' or os.getenv('FLY_APP_NAME'):
+    # Check if config_production was already imported (set ENVIRONMENT in main_production.py)
+    if 'config_production' in sys.modules or os.getenv('ENVIRONMENT') == 'production' or os.getenv('RENDER'):
         from config_production import settings
         logger = logging.getLogger(__name__)
-        logger.info("🌐 Using PRODUCTION configuration (MongoDB Atlas)")
+        logger.info("🌐 Using PRODUCTION configuration (Render/MongoDB Atlas)")
     else:
-        raise ImportError("Not in production")
-except ImportError:
+        raise ImportError("Not in production, try local")
+except Exception as e:
     try:
         from config_local import settings
         logger = logging.getLogger(__name__)
         logger.info("🏠 Using LOCAL configuration (MongoDB localhost)")
-    except ImportError:
-        from config import settings
-        logger = logging.getLogger(__name__)
-        logger.info("📦 Using DEFAULT configuration")
+    except Exception:
+        try:
+            from config_production import settings
+            logger = logging.getLogger(__name__)
+            logger.info("🌐 Using PRODUCTION configuration (fallback)")
+        except Exception:
+            logger.error("❌ Failed to import any config - this should not happen")
+            raise
 
 # MongoDB Client (singleton pattern)
 _mongo_client: Optional[MongoClient] = None

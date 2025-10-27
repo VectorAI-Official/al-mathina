@@ -8,8 +8,16 @@ from sqlalchemy.orm import sessionmaker
 from supabase import create_client, Client
 from typing import Generator
 import logging
+import os
 
-from config import settings
+# Try to import production config first, then local, then default
+try:
+    from config_production import settings
+except ImportError:
+    try:
+        from config_local import settings
+    except ImportError:
+        from config import settings
 
 logger = logging.getLogger(__name__)
 

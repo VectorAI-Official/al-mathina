@@ -13,11 +13,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from config_production import settings
 from database.mongodb_client import test_mongo_connection, init_mongo_collections, get_mongo_db, close_mongo_connection
 from utils.cloudinary_helper import get_cloudinary_manager
-from admin_auth import verify_credentials, create_session, delete_session
+import uuid
+from datetime import datetime
 
 # Import routes
 from routes import flutter, user_profile, admin_orders
 from routes import admin_production as admin  # Production admin routes with Cloudinary
+
+# Simple session storage (in production, use Redis or database)
+_sessions = {}
+
+def verify_credentials(username: str, password: str) -> bool:
+    """Verify admin credentials. Hardcoded for production."""
+    return username == "admin" and password == "admin123"
+
+def create_session(username: str) -> str:
+    """Create a session token for authenticated admin."""
+    session_id = str(uuid.uuid4())
+    _sessions[session_id] = {
+        "username": username,
+        "created_at": datetime.now().isoformat()
+    }
+    return session_id
+
+def delete_session(session_id: str) -> None:
+    """Delete a session token."""
+    _sessions.pop(session_id, None)
 
 # Set environment variable to ensure production config is used
 os.environ['ENVIRONMENT'] = 'production'

@@ -54,10 +54,10 @@ async def login(
             detail="Invalid username or password"
         )
     
-    # Create session
+    # Create session token
     session_token = create_session(username)
     
-    # Set session cookie
+    # Set session cookie and redirect to dashboard
     response = RedirectResponse(url="/admin/dashboard", status_code=303)
     response.set_cookie(
         key="admin_session",

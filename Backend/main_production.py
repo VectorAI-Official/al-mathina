@@ -5,14 +5,15 @@ Uses MongoDB Atlas and Cloudinary for cloud deployment
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, Form, HTTPException, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from config_production import settings
 from database.mongodb_client import test_mongo_connection, init_mongo_collections, get_mongo_db, close_mongo_connection
 from utils.cloudinary_helper import get_cloudinary_manager
+from admin_auth import verify_credentials, create_session, delete_session
 
 # Import routes
 from routes import flutter, user_profile, admin_orders
@@ -51,7 +52,7 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info(f"✅ Backend Ready - http://localhost:8080")
     logger.info(f"📖 API Docs: http://localhost:8080/docs")
-    logger.info(f"🎨 Admin Dashboard: http://localhost:8080/admin/login")
+    logger.info(f"🎨 Admin Dashboard: http://localhost:8080/admin/dashboard")
     logger.info("=" * 60)
     
     yield
@@ -112,6 +113,38 @@ async def admin_login(request: Request):
     """Serve admin login page"""
     return templates.TemplateResponse("admin_login.html", {"request": request})
 
+@app.post("/admin/login")
+async def admin_login_post(
+    response: Response,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    """
+    Authenticate admin user and create session.
+    Credentials: admin / admin123
+    """
+    if not verify_credentials(username, password):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+    
+    # Create session token
+    session_token = create_session(username)
+    
+    # Set session cookie and redirect to dashboard ✅
+    response = RedirectResponse(url="/admin/dashboard", status_code=303)
+    response.set_cookie(
+        key="admin_session",
+        value=session_token,
+        httponly=True,
+        max_age=28800,  # 8 hours
+        samesite="lax"
+    )
+    
+    logger.info(f"Admin logged in: {username}")
+    return response
+
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Serve admin dashboard page"""
@@ -122,6 +155,20 @@ async def admin_orders_page(request: Request):
     """Serve admin orders page"""
     with open("static/admin/orders.html", "r") as f:
         return HTMLResponse(content=f.read())
+
+@app.post("/admin/logout")
+async def admin_logout(request: Request, response: Response):
+    """Logout admin user and delete session."""
+    session_token = request.cookies.get("admin_session")
+    
+    if session_token:
+        delete_session(session_token)
+    
+    response = RedirectResponse(url="/admin/login", status_code=303)
+    response.delete_cookie("admin_session")
+    
+    logger.info("Admin logged out")
+    return response
 
 # Test endpoint to verify hot-reload
 @app.get("/test-hot-reload")

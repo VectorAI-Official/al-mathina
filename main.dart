@@ -101,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen> {
               style: TextStyle(
                 fontSize: 36,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF004D40),
+                color: Color(0xFF6CC51D),
               ),
             ),
             const SizedBox(height: 24),
@@ -203,7 +203,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF004D40),
+                      color: Color(0xFF6CC51D),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -232,7 +232,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF004D40),
+                                color: Color(0xFF6CC51D),
                               ),
                             ),
                             const SizedBox(height: 8),

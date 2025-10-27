@@ -25,7 +25,7 @@ const Map<String, Map<String, String>> translations = {
     'profile': 'Profile',
     'search': 'Search Products...',
     'brands': 'Brands',
-    'total': 'Grand Total:',
+    'total': 'Grand Total',
     'empty_cart': 'Your cart is empty!',
     'payment_upi': 'Pay via UPI/Apps',
     'cod': 'Cash on Delivery',

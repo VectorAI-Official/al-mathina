@@ -2,7 +2,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-const String BASE_URL = "http://127.0.0.1:8000";
+// Use computer's IP address for backend
+// For physical Android devices, localhost:8000 refers to the device itself, not your computer
+// Update this to your computer's IP address on the network
+// Current computer IP: 192.168.1.6
+const String BASE_URL = "http://192.168.1.6:8000";
 const String API_BASE = "$BASE_URL/api/flutter";
 
 class MainCategory {
@@ -101,13 +105,15 @@ class HomeData {
 }
 
 class Subcategory {
-  final String name;
+  final String name;  // English name for API queries
+  final String nameDisplay;  // Localized name for display
   final int productCount;
   final String icon;
   final String imageUrl;
 
   Subcategory({
     required this.name,
+    required this.nameDisplay,
     required this.productCount,
     required this.icon,
     required this.imageUrl,
@@ -116,6 +122,7 @@ class Subcategory {
   factory Subcategory.fromJson(Map<String, dynamic> json) {
     return Subcategory(
       name: json['name'],
+      nameDisplay: json['name_display'] ?? json['name'],  // Fallback to name if no display name
       productCount: json['product_count'],
       icon: json['icon'],
       imageUrl: json['image_url'] ?? '',
@@ -129,6 +136,7 @@ class Product {
   final String? mainCategory;
   final String? subcategory;
   final String productName;
+  final String? productNameTa;
   final String weight;
   final double price;
   final String imageUrl;
@@ -146,6 +154,7 @@ class Product {
     this.mainCategory,
     this.subcategory,
     required this.productName,
+    this.productNameTa,
     required this.weight,
     required this.price,
     required this.imageUrl,
@@ -165,6 +174,7 @@ class Product {
       mainCategory: json['main_category']?.toString(),
       subcategory: json['subcategory']?.toString(),
       productName: json['product_name'] ?? 'Unknown Product',
+      productNameTa: json['product_name_ta'],
       weight: json['weight'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image_url'] ?? '',
@@ -176,6 +186,14 @@ class Product {
       categoryMain: json['category_main'],
       categoryBreadcrumb: json['category_breadcrumb'],
     );
+  }
+
+  // Get localized product name based on current language
+  String getLocalizedName(String currentLanguage) {
+    if (currentLanguage == 'ta' && productNameTa != null && productNameTa!.isNotEmpty) {
+      return productNameTa!;
+    }
+    return productName;
   }
 }
 
@@ -206,9 +224,16 @@ class PaginationInfo {
 }
 
 class ApiService {
-  static Future<HomeData> getHomeData() async {
+  static Future<HomeData> getHomeData({String lang = 'en'}) async {
     try {
-      final response = await http.get(Uri.parse('$API_BASE/home'));
+      final response = await http.get(
+        Uri.parse('$API_BASE/home?lang=$lang&t=${DateTime.now().millisecondsSinceEpoch}'),
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return HomeData.fromJson(data);
@@ -223,10 +248,11 @@ class ApiService {
   static Future<List<Subcategory>> getSubcategories({
     required String section,
     required String mainCategory,
+    String lang = 'en',
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$API_BASE/main-category/$section/$mainCategory/subcategories'),
+        Uri.parse('$API_BASE/main-category/$section/$mainCategory/subcategories?lang=$lang'),
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -252,13 +278,21 @@ class ApiService {
       final queryParams = <String, String>{
         'page': page.toString(),
         'limit': limit.toString(),
+        't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
       if (section != null) queryParams['section'] = section;
       if (mainCategory != null) queryParams['main_category'] = mainCategory;
       if (subcategory != null) queryParams['subcategory'] = subcategory;
 
       final uri = Uri.parse('$API_BASE/products').replace(queryParameters: queryParams);
-      final response = await http.get(uri);
+      final response = await http.get(
+        uri,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return {
@@ -277,7 +311,14 @@ class ApiService {
 
   static Future<Product> getProductDetails(String itemId) async {
     try {
-      final response = await http.get(Uri.parse('$API_BASE/product/$itemId'));
+      final response = await http.get(
+        Uri.parse('$API_BASE/product/$itemId?t=${DateTime.now().millisecondsSinceEpoch}'),
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return Product.fromJson(data);
@@ -301,9 +342,17 @@ class ApiService {
         'q': query,
         'page': page.toString(),
         'limit': limit.toString(),
+        't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
       final uri = Uri.parse('$API_BASE/search').replace(queryParameters: queryParams);
-      final response = await http.get(uri);
+      final response = await http.get(
+        uri,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return {
@@ -318,33 +367,6 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Error searching products: $e');
-    }
-  }
-
-  static Future<Map<String, dynamic>> getBestSellers({
-    int page = 1,
-    int limit = 50,
-  }) async {
-    try {
-      final queryParams = {
-        'page': page.toString(),
-        'limit': limit.toString(),
-      };
-      final uri = Uri.parse('$API_BASE/best-sellers').replace(queryParameters: queryParams);
-      final response = await http.get(uri);
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return {
-          'products': (data['products'] as List)
-              .map((item) => Product.fromJson(item))
-              .toList(),
-          'pagination': PaginationInfo.fromJson(data['pagination']),
-        };
-      } else {
-        throw Exception('Failed to load best sellers: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Error loading best sellers: $e');
     }
   }
 

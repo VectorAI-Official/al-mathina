@@ -2,11 +2,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-// Use computer's IP address for backend
-// For physical Android devices, localhost:8000 refers to the device itself, not your computer
-// Update this to your computer's IP address on the network
-// Current computer IP: 192.168.1.6
-const String BASE_URL = "http://192.168.1.6:8000";
+// Production backend URL on Render
+const String BASE_URL = "https://al-mathina.onrender.com";
 const String API_BASE = "$BASE_URL/api/flutter";
 
 class MainCategory {

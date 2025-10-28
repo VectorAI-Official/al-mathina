@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Outer circle -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="#2d6a4f" stroke-width="8"/>
+  <circle cx="100" cy="100" r="85" fill="none" stroke="#95d5b2" stroke-width="4"/>
+  
+  <!-- Kaaba (cubic structure) -->
+  <g transform="translate(100, 100)">
+    <!-- Left side of Kaaba (darker) -->
+    <polygon points="-30,-15 -30,25 0,40 0,0" fill="#2d6a4f"/>
+    
+    <!-- Right side of Kaaba (darker) -->
+    <polygon points="30,-15 30,25 0,40 0,0" fill="#40916c"/>
+    
+    <!-- Top of Kaaba (roof) -->
+    <polygon points="-30,-15 30,-15 0,-35" fill="#52b788"/>
+    
+    <!-- Door outline -->
+    <rect x="-12" y="5" width="24" height="18" fill="none" stroke="#2d6a4f" stroke-width="1.5"/>
+    
+    <!-- Door handle -->
+    <circle cx="0" cy="14" r="2" fill="#2d6a4f"/>
+  </g>
+</svg>

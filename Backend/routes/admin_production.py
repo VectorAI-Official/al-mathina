@@ -1146,6 +1146,11 @@ async def update_subcategory_compat(subcategory_name: str, data: dict):
         name_ta = data.get("name_ta")
         image_url = data.get("image_url")
         
+        logger.info(f"🔄 Updating subcategory: {subcategory_name} (section: {section}, main_category: {main_category})")
+        logger.info(f"   - new_name: {new_name}")
+        logger.info(f"   - name_ta: {name_ta}")
+        logger.info(f"   - image_url: {image_url if not image_url else image_url[:80]}")
+        
         # Update metadata
         update_doc = {"updated_at": datetime.utcnow()}
         if name_ta is not None:
@@ -1155,15 +1160,23 @@ async def update_subcategory_compat(subcategory_name: str, data: dict):
         if new_name != subcategory_name:
             update_doc["name"] = new_name
         
-        db.category_metadata.update_one(
-            {
-                "section": section,
-                "main_category": main_category,
-                "name": subcategory_name,
-                "type": "subcategory"
-            },
-            {"$set": update_doc}
-        )
+        # Query filter - must match exactly
+        filter_query = {
+            "section": section,
+            "main_category": main_category,
+            "name": subcategory_name,
+            "type": "subcategory"
+        }
+        
+        logger.info(f"   - Filter query: {filter_query}")
+        logger.info(f"   - Update doc: {update_doc}")
+        
+        result = db.category_metadata.update_one(filter_query, {"$set": update_doc})
+        
+        logger.info(f"   ✓ Matched: {result.matched_count}, Modified: {result.modified_count}")
+        
+        if result.matched_count == 0:
+            logger.warning(f"   ⚠️  No document found matching filter: {filter_query}")
         
         return {"success": True, "message": "Subcategory updated"}
     except Exception as e:

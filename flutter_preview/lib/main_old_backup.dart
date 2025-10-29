@@ -42,7 +42,7 @@ const Map<String, Map<String, String>> translations = {
   },
   'ta': {
     'home': 'முகப்பு',
-    'cart': 'வண்டி',
+    'cart': 'வாங்கு',
     'profile': 'சுயவிவரம்',
     'search': 'பொருட்களை தேடுக...',
     'brands': 'பிராண்டுகள்',

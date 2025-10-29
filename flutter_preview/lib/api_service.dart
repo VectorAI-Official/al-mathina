@@ -270,11 +270,13 @@ class ApiService {
     String? subcategory,
     int page = 1,
     int limit = 50,
+    String lang = 'en',
   }) async {
     try {
       final queryParams = <String, String>{
         'page': page.toString(),
         'limit': limit.toString(),
+        'lang': lang,
         't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
       if (section != null) queryParams['section'] = section;

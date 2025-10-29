@@ -3161,6 +3161,14 @@ function openEditSubCategoryModal(section, mainCategory, subCategoryName, event)
     const modal = document.getElementById('editSubCategoryModal');
     const metadata = categoryMetadata[subCategoryName] || {};
     
+    console.log('📋 Opening edit subcategory modal:', {
+        section: section,
+        mainCategory: mainCategory,
+        subCategoryName: subCategoryName,
+        metadata: metadata,
+        name_ta: metadata.name_ta || '(not set)'
+    });
+    
     // Set hidden fields
     document.getElementById('editSubCategoryOldName').value = subCategoryName;
     document.getElementById('editSubCategorySection').value = section;
@@ -3174,7 +3182,9 @@ function openEditSubCategoryModal(section, mainCategory, subCategoryName, event)
     document.getElementById('editSubCategoryName').value = subCategoryName;
     
     // Load Tamil name from metadata
-    document.getElementById('editSubCategoryNameTa').value = metadata.name_ta || '';
+    const tamilInput = document.getElementById('editSubCategoryNameTa');
+    tamilInput.value = metadata.name_ta || '';
+    console.log('📝 Set Tamil input to:', tamilInput.value);
     
     // Show existing image if available
     const preview = document.getElementById('editSubCategoryImagePreview');
@@ -3188,7 +3198,6 @@ function openEditSubCategoryModal(section, mainCategory, subCategoryName, event)
     }
     
     modal.style.display = 'flex';
-    console.log('Opened edit subcategory modal for:', subCategoryName);
 }
 
 // Close edit subcategory modal
@@ -3246,13 +3255,21 @@ async function handleSubCategoryEdit(event) {
         const requestBody = {
             section: section,
             main_category: mainCategory,
-            image_url: imageUrl
+            image_url: imageUrl,
+            name_ta: newNameTa  // Backend expects 'name_ta' field
         };
         if (newName !== oldName) {
             requestBody.new_name = newName;
         }
-        // Always include subcategory_ta
-        requestBody.subcategory_ta = newNameTa;
+        
+        console.log('📤 Sending subcategory update request:', {
+            oldName: oldName,
+            newName: newName,
+            section: section,
+            mainCategory: mainCategory,
+            newNameTa: newNameTa,
+            requestBody: requestBody
+        });
         
         const response = await fetch(`/admin/api/categories/sub/${encodeURIComponent(oldName)}`, {
             method: 'PUT',

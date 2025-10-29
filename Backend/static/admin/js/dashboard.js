@@ -154,7 +154,15 @@ async function loadCategoryMetadata() {
         if (data && data.metadata) {
             // Convert array to object for easy lookup
             categoryMetadata = {};
+            
+            console.log('📥 Loading metadata from server:', data.metadata.length, 'documents');
+            
             data.metadata.forEach(item => {
+                // Log main category metadata specifically
+                if (item.type === 'main_category') {
+                    console.log(`  📂 Main Category: ${item.name} (section: ${item.section}, name_ta: ${item.name_ta || '(not set)'})`);
+                }
+                
                 // Store by section name (for Level 1)
                 if (item.type === 'section' && item.section) {
                     categoryMetadata[item.section] = item;
@@ -164,7 +172,7 @@ async function loadCategoryMetadata() {
                     categoryMetadata[item.name] = item;
                 }
             });
-            console.log('Category metadata loaded:', categoryMetadata);
+            console.log('✅ Category metadata loaded:', Object.keys(categoryMetadata).length, 'items');
         }
     } catch (error) {
         console.error('Error loading category metadata:', error);
@@ -2923,6 +2931,13 @@ function openEditMainCategoryModal(section, mainCategoryName, event) {
     const modal = document.getElementById('editMainCategoryModal');
     const metadata = categoryMetadata[mainCategoryName] || {};
     
+    console.log('📋 Opening edit modal for main category:', {
+        section: section,
+        mainCategoryName: mainCategoryName,
+        metadata: metadata,
+        name_ta: metadata.name_ta || '(not set)'
+    });
+    
     // Set form values
     document.getElementById('editMainCategoryOldName').value = mainCategoryName;
     document.getElementById('editMainCategorySection').value = section;
@@ -2930,7 +2945,9 @@ function openEditMainCategoryModal(section, mainCategoryName, event) {
     document.getElementById('editMainCategoryName').value = mainCategoryName;
     
     // Load Tamil name from metadata
-    document.getElementById('editMainCategoryNameTa').value = metadata.name_ta || '';
+    const tamilInput = document.getElementById('editMainCategoryNameTa');
+    tamilInput.value = metadata.name_ta || '';
+    console.log('📝 Set Tamil input to:', tamilInput.value);
     
     // Show existing image if available
     const preview = document.getElementById('editMainCategoryImagePreview');
@@ -2994,13 +3011,20 @@ async function handleMainCategoryEdit(event) {
         // Update main category with Tamil name
         const requestBody = {
             section: section,
-            image_url: imageUrl
+            image_url: imageUrl,
+            name_ta: newNameTa  // Backend expects 'name_ta' field
         };
         if (newName !== oldName) {
             requestBody.new_name = newName;
         }
-        // Always include main_category_ta
-        requestBody.main_category_ta = newNameTa;
+        
+        console.log('📤 Sending update request for main category:', {
+            oldName: oldName,
+            newName: newName,
+            section: section,
+            newNameTa: newNameTa,
+            requestBody: requestBody
+        });
         
         const response = await fetch(`/admin/api/categories/main/${encodeURIComponent(oldName)}`, {
             method: 'PUT',
@@ -3009,12 +3033,14 @@ async function handleMainCategoryEdit(event) {
         });
         
         if (response.ok) {
+            console.log('✅ Main category updated successfully');
             showToast('Main category updated successfully', 'success');
             await loadCategories();
             closeEditMainCategoryModal();
             showMainCategoryCards(section);
         } else {
             const error = await response.json();
+            console.error('❌ Failed to update:', error);
             showToast(error.detail || 'Failed to update main category', 'error');
         }
     } catch (error) {

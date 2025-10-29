@@ -60,6 +60,10 @@ const Map<String, Map<String, String>> translations = {
     'cod': 'Cash on Delivery',
     'select_payment': 'Select Payment',
     'order_success': 'Order Placed via',
+    'order_success_title': 'Order Success',
+    'order_success_message': 'Your order was\nsuccessfull !',
+    'order_success_subtitle': 'You will get a response within\na few minutes.',
+    'order_placed_button': 'Order Placed',
     'proceed': 'Proceed to Checkout',
     'available_apps': 'Available Apps:',
     'order_summary': 'Order Summary',
@@ -222,6 +226,10 @@ const Map<String, Map<String, String>> translations = {
     'available_apps': 'கிடைக்கும் பயன்பாடுகள்:',
     'order_summary': 'ஆர்டர் சுருக்கம்',
     'place_order': 'ஆர்டர் செய்',
+    'order_success_title': 'ஆர்டர் வெற்றிகரமாக',
+    'order_success_message': 'உங்கள் ஆர்டர் வெற்றிகரமாக\nசரிசெய்யப்பட்டது!',
+    'order_success_subtitle': 'சில நிமிடங்களில் பதிலைப்\nபெறுவீர்கள்.',
+    'order_placed_button': 'ஆர்டர் செய்யப்பட்டது',
     
     // Favorites
     'my_favorites': 'எனது விருப்பங்கள்',
@@ -925,7 +933,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
           ),
           // Global floating cart (hidden on Cart, Favorites and Profile)
           if (currentIndex != 1 && currentIndex != 2 && currentIndex != 3)
-            const FloatingCartButton(bottomPosition: kBottomNavigationBarHeight + 15),
+            const FloatingCartButton(bottomPosition: kBottomNavigationBarHeight + 30),
           // Scroll to top button (above navbar)
           if (_showScrollToTop && currentIndex == 0)
             Positioned(
@@ -2625,14 +2633,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                             ],
                           ),
                         )
-                      : GridView.builder(
+                      : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), // Added bottom padding for floating button
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 4, // Minimal spacing between columns
-                            mainAxisSpacing: 6, // Minimal spacing between rows
-                            childAspectRatio: 0.50, // Reduced card height
-                          ),
                           itemCount: _results.length,
                           itemBuilder: (context, index) {
                             final product = _results[index];
@@ -2652,274 +2654,200 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         '${product.productName}_${product.weight}'.replaceAll(' ', '_').toLowerCase();
     final bool isFavorited = provider.isFavorite(productId);
     
-    // Clean white card with full-fit image and centered controls - FULLY RESPONSIVE (matching Subcategory)
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Dynamic sizing based on card width
-        final cardWidth = constraints.maxWidth;
-        final fontSize = (cardWidth * 0.10).clamp(10.0, 14.0);
-        final weightFontSize = (cardWidth * 0.07).clamp(7.0, 10.0);
-        final priceFontSize = (cardWidth * 0.10).clamp(10.0, 14.0);
-        final iconSize = (cardWidth * 0.12).clamp(12.0, 16.0);
-        final padding = (cardWidth * 0.05).clamp(4.0, 8.0);
-        final buttonFontSize = (cardWidth * 0.085).clamp(8.0, 11.0);
-        final buttonIconSize = (cardWidth * 0.12).clamp(12.0, 16.0);
-        
-        return Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 0, // No shadow
-          color: Colors.transparent, // Transparent background
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Image (top) - Full fit without cropping sides - Clickable to show details
-              Expanded(
-                flex: 3,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
-                    );
-                  },
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white, // White background for image
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(12),
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        // Product Image
-                        ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            topRight: Radius.circular(12),
-                          ),
-                          child: SizedBox.expand(
-                            child: product.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    ApiService.getImageUrl(product.imageUrl),
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stack) => Container(
-                                      color: Colors.grey[50],
-                                      padding: EdgeInsets.all(padding),
-                                      child: Icon(Icons.inventory_2, size: iconSize * 2, color: Colors.grey[400]),
-                                    ),
-                                  )
-                                : Container(
-                                    color: Colors.grey[50],
-                                    child: Icon(Icons.inventory_2, size: iconSize * 2, color: Colors.grey[400]),
-                                  ),
-                          ),
-                        ),
-                        // Heart Icon (top right)
-                        Positioned(
-                          top: padding,
-                          right: padding,
-                          child: GestureDetector(
-                            onTap: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              final phone = prefs.getString('userPhone');
-                              if (phone != null && phone.isNotEmpty) {
-                                await provider.toggleFavorite(phone, productId);
-                              }
-                            },
-                            child: Container(
-                              padding: EdgeInsets.all(padding * 0.6),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                isFavorited ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorited ? Colors.red : Colors.grey[600],
-                                size: iconSize,
-                              ),
+    // Horizontal card layout matching Cart page and Favorites style
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.white,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18.0),
+        child: Row(
+          children: [
+            // Product Image (Left) - Fixed size like Cart page
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
+                );
+              },
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: product.imageUrl.isNotEmpty
+                        ? Image.network(
+                            ApiService.getImageUrl(product.imageUrl),
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stack) => Container(
+                              width: 80,
+                              height: 80,
+                              color: Colors.grey[200],
+                              child: Icon(Icons.inventory_2, color: Colors.grey[400]),
                             ),
+                          )
+                        : Container(
+                            width: 80,
+                            height: 80,
+                            color: Colors.grey[200],
+                            child: Icon(Icons.inventory_2, color: Colors.grey[400]),
                           ),
+                  ),
+                  // Heart Icon (top right of image)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        final phone = prefs.getString('userPhone');
+                        if (phone != null && phone.isNotEmpty) {
+                          await provider.toggleFavorite(phone, productId);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
+                        child: Icon(
+                          isFavorited ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorited ? Colors.red : Colors.grey[600],
+                          size: 14,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
+            ),
+            const SizedBox(width: 14),
+            // Product Info (Middle) - Expanded
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    product.getLocalizedName(provider.currentLanguage),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    product.weight,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '₹${product.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Bottom Control Section (Right) - Add to cart or +/- controls
+            Builder(builder: (context) {
+              final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
+              final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
+              final int qty = cartItem?.quantity ?? 0;
 
-              // Content - Use Flexible with tight fit to prevent overflow
-              Flexible(
-                flex: 2,
-                fit: FlexFit.tight,
-                child: Container(
-                  color: Colors.white, // White background for content
-                  padding: EdgeInsets.zero, // No padding - stick to card edges
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    mainAxisSize: MainAxisSize.max,
+              // Show "Add to cart" button when qty is 0
+              if (qty == 0) {
+                return SizedBox(
+                  width: 100,
+                  child: ElevatedButton.icon(
+                    onPressed: product.inStock
+                        ? () {
+                            provider.addToCart(product);
+                          }
+                        : null,
+                    icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                    label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // Show quantity controls when qty > 0 (matching Cart page style)
+              return Column(
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Product name - constrained to exactly 2 lines with ellipsis
-                      Expanded(
-                        flex: 3,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            product.getLocalizedName(provider.currentLanguage),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: fontSize, 
-                              fontWeight: FontWeight.w600, 
-                              color: Colors.black87, 
-                              height: 1.2,
-                            ),
-                          ),
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: kPrimaryColor,
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () {
+                          provider.updateCartQuantity(cartItem!, qty - 1);
+                        },
+                      ),
+                      Text(
+                        '$qty',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      // Weight
-                      Text(
-                        product.weight,
-                        style: TextStyle(fontSize: weightFontSize, color: Colors.grey[600]),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      // Price
-                      Text(
-                        '₹${product.price.toStringAsFixed(2)}',
-                        style: TextStyle(fontSize: priceFontSize, fontWeight: FontWeight.bold, color: Colors.black87),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        color: kPrimaryColor,
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: product.inStock
+                            ? () {
+                                provider.addToCart(product);
+                              }
+                            : null,
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // Bottom quantity control bar - Centered (minimal spacing)
-              Container(
-                  padding: EdgeInsets.zero, // No padding - stick to card edges
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                  Text(
+                    '₹${(product.price * qty).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: Builder(builder: (context) {
-                    final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
-                    final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
-                    final int qty = cartItem?.quantity ?? 0;
-
-                    // Show "Add to cart" button when qty is 0
-                    if (qty == 0) {
-                      return SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: product.inStock
-                              ? () {
-                                  provider.addToCart(product);
-                                }
-                              : null,
-                          icon: Icon(Icons.shopping_bag_outlined, size: buttonIconSize),
-                          label: Text('Add to cart', style: TextStyle(fontSize: buttonFontSize, fontWeight: FontWeight.w600)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4CAF50),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: padding * 0.25, horizontal: padding * 0.5),
-                            elevation: 0,
-                            minimumSize: Size(0, cardWidth * 0.22),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    // Show quantity controls when qty > 0
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        // Decrement button - Light green
-                        Container(
-                          width: cardWidth * 0.22,
-                          height: cardWidth * 0.22,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFC8E6C9),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            onPressed: () {
-                              provider.updateCartQuantity(cartItem!, qty - 1);
-                            },
-                            icon: Icon(Icons.remove, size: (cardWidth * 0.11).clamp(10.0, 14.0), color: const Color(0xFF2E7D32)),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ),
-                        
-                        // Quantity input field
-                        Container(
-                          width: cardWidth * 0.3,
-                          height: cardWidth * 0.22,
-                          margin: EdgeInsets.symmetric(horizontal: padding * 0.6),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!, width: 0.5),
-                            borderRadius: BorderRadius.circular(4),
-                            color: Colors.white,
-                          ),
-                          alignment: Alignment.center,
-                          child: TextField(
-                            textAlign: TextAlign.center,
-                            textAlignVertical: TextAlignVertical.center,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(fontSize: (cardWidth * 0.095).clamp(9.0, 12.0), fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: padding * 0.6),
-                              isDense: true,
-                            ),
-                            controller: TextEditingController(text: '$qty')..selection = TextSelection.fromPosition(TextPosition(offset: '$qty'.length)),
-                            onChanged: (value) {
-                              final newQty = int.tryParse(value);
-                              if (newQty != null && newQty >= 0) {
-                                provider.updateCartQuantity(cartItem!, newQty);
-                              }
-                            },
-                          ),
-                        ),
-
-                        // Increment button - Green
-                        Container(
-                          width: cardWidth * 0.22,
-                          height: cardWidth * 0.22,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF4CAF50),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            onPressed: product.inStock
-                                ? () {
-                                    provider.addToCart(product);
-                                  }
-                                : null,
-                            icon: Icon(Icons.add, size: (cardWidth * 0.11).clamp(10.0, 14.0), color: Colors.white),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ),
-                      ],
-                    );
-                  }),
-              ),
-            ],
-          ),
-        );
-      },
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3102,6 +3030,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                     // Main message
                     Text(
                       provider.text('empty_cart'),
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -3144,6 +3073,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                         ),
                         child: Text(
                           provider.text('start_shopping'),
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -3667,10 +3597,12 @@ class OrderSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<AppProvider>(context);
+    
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Order Success', style: TextStyle(color: kPrimaryColor)),
+        title: Text(provider.text('order_success_title'), style: const TextStyle(color: kPrimaryColor)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -3703,10 +3635,10 @@ class OrderSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 40),
               // Success message
-              const Text(
-                'Your order was\nsuccessfull !',
+              Text(
+                provider.text('order_success_message'),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
@@ -3716,7 +3648,7 @@ class OrderSuccessScreen extends StatelessWidget {
               const SizedBox(height: 16),
               // Subtitle
               Text(
-                'You will get a response within\na few minutes.',
+                provider.text('order_success_subtitle'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
@@ -3742,9 +3674,9 @@ class OrderSuccessScreen extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
-                  child: const Text(
-                    'Order Placed',
-                    style: TextStyle(
+                  child: Text(
+                    provider.text('order_placed_button'),
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -4009,11 +3941,23 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   bool _isLoadingSubcategories = true;
   bool _isLoadingProducts = false;
   String? _error;
+  String? _lastLanguage;
 
   @override
   void initState() {
     super.initState();
     _loadSubcategories();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload subcategories and products when language changes
+    final provider = Provider.of<AppProvider>(context, listen: false);
+    if (_lastLanguage != null && _lastLanguage != provider.currentLanguage) {
+      _loadSubcategories();
+    }
+    _lastLanguage = provider.currentLanguage;
   }
 
   Future<void> _loadSubcategories() async {
@@ -4055,10 +3999,12 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
     });
 
     try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
       final result = await ApiService.getProducts(
         section: widget.section,
         mainCategory: widget.mainCategory,
         subcategory: subcategory,
+        lang: provider.currentLanguage,
       );
       
       setState(() {
@@ -4081,7 +4027,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
       appBar: AppBar(
         title: Text(
           widget.title,
-          style: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold, fontSize: 22),
         ),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: kPrimaryColor),
@@ -4552,7 +4498,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                 }
                               : null,
                           icon: Icon(Icons.shopping_bag_outlined, size: buttonIconSize),
-                          label: Text('Add to cart', style: TextStyle(fontSize: buttonFontSize, fontWeight: FontWeight.w600)),
+                          label: Text(provider.text('add_to_cart'), style: TextStyle(fontSize: buttonFontSize, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4CAF50),
                             foregroundColor: Colors.white,
@@ -5008,38 +4954,28 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   // Skeleton loading widget
   Widget _buildSkeletonCard() {
     return Card(
+      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 2,
       color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Flexible(
-            flex: 3,
-            child: Container(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            // Image skeleton (left)
+            Container(
+              width: 70,
+              height: 70,
               decoration: BoxDecoration(
                 color: Colors.grey[200],
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
-              child: Center(
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    shape: BoxShape.circle,
-                  ),
-                ),
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
-          ),
-          Flexible(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            const SizedBox(width: 12),
+            // Content skeleton (middle)
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     height: 12,
@@ -5049,7 +4985,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Container(
                     height: 10,
                     width: 60,
@@ -5070,28 +5006,18 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 ],
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.grey[300]!, width: 1),
-                ),
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Container(
-              height: 30,
+            const SizedBox(width: 12),
+            // Controls skeleton (right)
+            Container(
+              width: 100,
+              height: 40,
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(6),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -5108,7 +5034,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           provider.text('my_favorites'),
           style: const TextStyle(
             color: kPrimaryColor,
-            fontSize: 20,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -5117,119 +5043,107 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       body: Stack(
         children: [
           _isLoading
-              ? GridView.builder(
+              ? ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, kBottomNavigationBarHeight + 20),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 4, // Minimal spacing between columns
-                    mainAxisSpacing: 6, // Minimal spacing between rows
-                    childAspectRatio: 0.50, // Reduced card height
-                  ),
-                  itemCount: 9, // Show 9 skeleton cards while loading
+                  itemCount: 5, // Show 5 skeleton cards while loading
                   itemBuilder: (context, index) => _buildSkeletonCard(),
                 )
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text('${provider.text('error')}: $_error'),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadFavorites,
-                        child: Text(provider.text('retry')),
-                      ),
-                    ],
-                  ),
-                )
-              : _favoriteProducts.isEmpty
+              : _error != null
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[200],
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.favorite_border,
-                              size: 60,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            provider.text('no_favorites'),
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            provider.text('no_favorites_message'),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          SizedBox(
-                            width: 200,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                // Navigate to home tab
-                                final mainScreen = context.findAncestorStateOfType<_MainScreenState>();
-                                mainScreen?.setState(() {
-                                  mainScreen.currentIndex = 0;
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4CAF50),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: Text(
-                                provider.text('browse_products'),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
+                          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                          const SizedBox(height: 16),
+                          Text('${provider.text('error')}: $_error'),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _loadFavorites,
+                            child: Text(provider.text('retry')),
                           ),
                         ],
                       ),
                     )
-                  : GridView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, kBottomNavigationBarHeight + 20),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 4, // Minimal spacing between columns
-                        mainAxisSpacing: 6, // Minimal spacing between rows
-                        childAspectRatio: 0.50, // Reduced card height
-                      ),
-                      itemCount: _favoriteProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = _favoriteProducts[index];
-                        return _buildProductCard(product, provider);
-                      },
-                    ),
-          
-          // Floating cart button
-          const FloatingCartButton(),
+                  : _favoriteProducts.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 120,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.favorite_border,
+                                  size: 60,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                provider.text('no_favorites'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                provider.text('no_favorites_message'),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              SizedBox(
+                                width: 200,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    // Navigate to home tab
+                                    final mainScreen = context.findAncestorStateOfType<_MainScreenState>();
+                                    mainScreen?.setState(() {
+                                      mainScreen.currentIndex = 0;
+                                    });
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF4CAF50),
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    provider.text('browse_products'),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, kBottomNavigationBarHeight + 20),
+                          itemCount: _favoriteProducts.length,
+                          itemBuilder: (context, index) {
+                            final product = _favoriteProducts[index];
+                            return _buildProductCard(product, provider);
+                          },
+                        ),          // Floating cart button - positioned above nav bar
+          const FloatingCartButton(bottomPosition: kBottomNavigationBarHeight + 30),
         ],
       ),
     );
@@ -5240,280 +5154,204 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         '${product.productName}_${product.weight}'.replaceAll(' ', '_').toLowerCase();
     final bool isFavorited = provider.isFavorite(productId);
     
-    // Clean white card with full-fit image and centered controls - FULLY RESPONSIVE (matching Subcategory)
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Dynamic sizing based on card width
-        final cardWidth = constraints.maxWidth;
-        final fontSize = (cardWidth * 0.10).clamp(10.0, 14.0);
-        final weightFontSize = (cardWidth * 0.07).clamp(7.0, 10.0);
-        final priceFontSize = (cardWidth * 0.10).clamp(10.0, 14.0);
-        final iconSize = (cardWidth * 0.12).clamp(12.0, 16.0);
-        final padding = (cardWidth * 0.05).clamp(4.0, 8.0);
-        final buttonFontSize = (cardWidth * 0.085).clamp(8.0, 11.0);
-        final buttonIconSize = (cardWidth * 0.12).clamp(12.0, 16.0);
-        
-        return Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 0, // No shadow
-          color: Colors.transparent, // Transparent background
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Image (top) - Full fit without cropping sides - Clickable to show details
-              Expanded(
-                flex: 3,
-                child: GestureDetector(
-                  onTap: () {
-                    // Open full product page when image is clicked
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
-                    );
-                  },
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white, // White background for image
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(12),
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        // Product Image
-                        ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            topRight: Radius.circular(12),
-                          ),
-                          child: SizedBox.expand(
-                            child: product.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    ApiService.getImageUrl(product.imageUrl),
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stack) => Container(
-                                      color: Colors.grey[50],
-                                      padding: EdgeInsets.all(padding),
-                                      child: Icon(Icons.inventory_2, size: iconSize * 2, color: Colors.grey[400]),
-                                    ),
-                                  )
-                                : Container(
-                                    color: Colors.grey[50],
-                                    child: Icon(Icons.inventory_2, size: iconSize * 2, color: Colors.grey[400]),
-                                  ),
-                          ),
-                        ),
-                        // Heart Icon (top right)
-                        Positioned(
-                          top: padding,
-                          right: padding,
-                          child: GestureDetector(
-                            onTap: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              final phone = prefs.getString('userPhone');
-                              if (phone != null && phone.isNotEmpty) {
-                                // Toggle favorite - provider will update immediately
-                                await provider.toggleFavorite(phone, productId);
-                                // Reload the favorites list from API
-                                if (mounted) {
-                                  await _loadFavorites();
-                                }
-                              }
-                            },
-                            child: Container(
-                              padding: EdgeInsets.all(padding * 0.6),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                isFavorited ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorited ? Colors.red : Colors.grey[600],
-                                size: iconSize,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Content - Use Flexible with tight fit to prevent overflow
-              Flexible(
-            flex: 2,
-            fit: FlexFit.tight,
-            child: Container(
-              color: Colors.white, // White background for content
-              padding: EdgeInsets.zero, // No padding - stick to card edges
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                mainAxisSize: MainAxisSize.max,
+    // Horizontal card layout matching Cart page style
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.white,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            // Product Image (Left) - Fixed size like Cart page
+            GestureDetector(
+              onTap: () {
+                // Open full product page when image is clicked
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
+                );
+              },
+              child: Stack(
                 children: [
-                  // Product name - constrained to exactly 2 lines with ellipsis
-                  Expanded(
-                    flex: 3,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        product.productName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: fontSize,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                          height: 1.2,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: product.imageUrl.isNotEmpty
+                        ? Image.network(
+                            ApiService.getImageUrl(product.imageUrl),
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stack) => Container(
+                              width: 70,
+                              height: 70,
+                              color: Colors.grey[200],
+                              child: Icon(Icons.inventory_2, color: Colors.grey[400]),
+                            ),
+                          )
+                        : Container(
+                            width: 70,
+                            height: 70,
+                            color: Colors.grey[200],
+                            child: Icon(Icons.inventory_2, color: Colors.grey[400]),
+                          ),
+                  ),
+                  // Heart Icon (top right of image)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        final phone = prefs.getString('userPhone');
+                        if (phone != null && phone.isNotEmpty) {
+                          // Toggle favorite - provider will update immediately
+                          await provider.toggleFavorite(phone, productId);
+                          // Reload the favorites list from API
+                          if (mounted) {
+                            await _loadFavorites();
+                          }
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          isFavorited ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorited ? Colors.red : Colors.grey[600],
+                          size: 14,
                         ),
                       ),
                     ),
-                  ),
-                  // Weight
-                  Text(
-                    product.weight,
-                    style: TextStyle(fontSize: weightFontSize, color: Colors.grey[600]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  // Price
-                  Text(
-                    '₹${product.price.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: priceFontSize, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                 ],
               ),
             ),
-          ),
-
-          // Bottom quantity control bar - Centered (minimal spacing)
-          Container(
-              padding: EdgeInsets.zero, // No padding - stick to card edges
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+            const SizedBox(width: 12),
+            // Product Info (Middle) - Expanded
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    product.productName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    product.weight,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '₹${product.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                ],
               ),
-              child: Builder(builder: (context) {
-                final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
-                final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
-                final int qty = cartItem?.quantity ?? 0;
+            ),
+            // Bottom Control Section (Right) - Add to cart or +/- controls
+            Builder(builder: (context) {
+              final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
+              final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
+              final int qty = cartItem?.quantity ?? 0;
 
-                // Show "Add to cart" button when qty is 0
-                if (qty == 0) {
-                  return SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: product.inStock
-                          ? () {
-                              provider.addToCart(product);
-                            }
-                          : null,
-                      icon: Icon(Icons.shopping_bag_outlined, size: buttonIconSize),
-                      label: Text('Add to cart', style: TextStyle(fontSize: buttonFontSize, fontWeight: FontWeight.w600)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: padding * 0.25, horizontal: padding * 0.5),
-                        elevation: 0,
-                        minimumSize: Size(0, cardWidth * 0.22),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+              // Show "Add to cart" button when qty is 0
+              if (qty == 0) {
+                return SizedBox(
+                  width: 100,
+                  child: ElevatedButton.icon(
+                    onPressed: product.inStock
+                        ? () {
+                            provider.addToCart(product);
+                          }
+                        : null,
+                    icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                    label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                  );
-                }
+                  ),
+                );
+              }
 
-                // Show quantity controls when qty > 0
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    // Decrement button - Light green
-                    Container(
-                      width: cardWidth * 0.22,
-                      height: cardWidth * 0.22,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFC8E6C9),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
+              // Show quantity controls when qty > 0 (matching Cart page style)
+              return Column(
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: kPrimaryColor,
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                         onPressed: () {
                           provider.updateCartQuantity(cartItem!, qty - 1);
                         },
-                        icon: Icon(Icons.remove, size: (cardWidth * 0.11).clamp(10.0, 14.0), color: const Color(0xFF2E7D32)),
+                      ),
+                      Text(
+                        '$qty',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        color: kPrimaryColor,
+                        iconSize: 20,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
-                      ),
-                    ),
-                    
-                    // Quantity input field
-                    Container(
-                      width: cardWidth * 0.3,
-                      height: cardWidth * 0.22,
-                      margin: EdgeInsets.symmetric(horizontal: padding * 0.6),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[300]!, width: 0.5),
-                        borderRadius: BorderRadius.circular(4),
-                        color: Colors.white,
-                      ),
-                      alignment: Alignment.center,
-                      child: TextField(
-                        textAlign: TextAlign.center,
-                        textAlignVertical: TextAlignVertical.center,
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(fontSize: (cardWidth * 0.095).clamp(9.0, 12.0), fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: padding * 0.6),
-                          isDense: true,
-                        ),
-                        controller: TextEditingController(text: '$qty')..selection = TextSelection.fromPosition(TextPosition(offset: '$qty'.length)),
-                        onChanged: (value) {
-                          final newQty = int.tryParse(value);
-                          if (newQty != null && newQty >= 0) {
-                            provider.updateCartQuantity(cartItem!, newQty);
-                          }
-                        },
-                      ),
-                    ),
-
-                    // Increment button - Green
-                    Container(
-                      width: cardWidth * 0.22,
-                      height: cardWidth * 0.22,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF4CAF50),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
                         onPressed: product.inStock
                             ? () {
                                 provider.addToCart(product);
                               }
                             : null,
-                        icon: Icon(Icons.add, size: (cardWidth * 0.11).clamp(10.0, 14.0), color: Colors.white),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
                       ),
+                    ],
+                  ),
+                  Text(
+                    '₹${(product.price * qty).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
-                );
-              }),
-          ),
-        ],
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
       ),
-        );
-      },
     );
   }
 }
@@ -5606,7 +5444,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(provider.text('profile'), style: const TextStyle(color: kPrimaryColor)),
+          title: Text(provider.text('my_profile'), style: const TextStyle(color: kPrimaryColor, fontSize: 26, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
         ),
         body: const Center(child: CircularProgressIndicator(color: kPrimaryColor)),
@@ -5616,7 +5454,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(provider.text('profile'), style: const TextStyle(color: kPrimaryColor)),
+          title: Text(provider.text('my_profile'), style: const TextStyle(color: kPrimaryColor, fontSize: 26, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
         ),
         body: Center(
@@ -5676,7 +5514,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(provider.text('profile'), style: const TextStyle(color: kPrimaryColor)),
+        title: Text(provider.text('my_profile'), style: const TextStyle(color: kPrimaryColor, fontSize: 24, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
       ),
       body: RefreshIndicator(
@@ -6245,10 +6083,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 // Order details
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: provider.currentLanguage == 'ta' ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                     children: [
                       Text(
                         '${provider.text('order_id')} #$orderId',
+                        textAlign: provider.currentLanguage == 'ta' ? TextAlign.center : TextAlign.start,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.normal,
@@ -6258,49 +6097,75 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                       const SizedBox(height: 6),
                       Text(
                         formattedDate,
+                        textAlign: provider.currentLanguage == 'ta' ? TextAlign.center : TextAlign.start,
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[700],
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Text(
-                            '${provider.text('items')}: ',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w500,
+                      provider.currentLanguage == 'ta'
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '${provider.text('items')}: ${items.length}',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[800],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${provider.text('total')}: ₹${totalAmount.toStringAsFixed(2)}',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Text(
+                                  '${provider.text('items')}: ',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[800],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '${items.length}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(width: 24),
+                                Text(
+                                  '${provider.text('total')}: ',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[800],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '₹${totalAmount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Text(
-                            '${items.length}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Text(
-                            '${provider.text('total')}: ',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            '₹${totalAmount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -6309,7 +6174,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             // Status and Cancel button at bottom
             const SizedBox(height: 12),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: provider.currentLanguage == 'ta' ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
               children: [
                 // Cancel button for pending orders (left side)
                 if (status == 'pending')
@@ -6318,6 +6183,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     icon: const Icon(Icons.close, color: Colors.red, size: 18),
                     label: Text(
                       provider.text('cancel'),
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.red,
                         fontWeight: FontWeight.w600,
@@ -6335,7 +6201,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   )
                 else
                   const SizedBox.shrink(),
-                // Status badge (right side)
+                if (provider.currentLanguage == 'ta' && status == 'pending')
+                  const SizedBox(width: 16),
+                // Status badge (right side or center for Tamil)
                 if (status == 'delivered')
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -6346,6 +6214,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     ),
                     child: Text(
                       provider.text('status_delivered'),
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.green,
                         fontWeight: FontWeight.bold,
@@ -6434,9 +6303,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         ),
       );
 
-      // Call API to cancel order
+      // Call API to cancel order using production backend URL
+      const String backendUrl = 'https://al-mathina.onrender.com';
       final response = await http.put(
-        Uri.parse('http://127.0.0.1:8000/api/admin/orders/$orderId/status'),
+        Uri.parse('$backendUrl/api/admin/orders/$orderId/status'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'status': 'cancelled'}),
       );
@@ -6547,11 +6417,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     ],
                   ),
                 )
-              : _buildOrderDetails(),
+              : _buildOrderDetails(provider),
     );
   }
 
-  Widget _buildOrderDetails() {
+  Widget _buildOrderDetails(AppProvider provider) {
     if (_order == null) return const SizedBox.shrink();
 
     final orderId = _order!['order_id'] ?? '';
@@ -6599,10 +6469,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Order Status',
+                    Text(
+                      provider.text('order_status'),
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: provider.currentLanguage == 'ta' ? 14 : 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
@@ -6617,7 +6487,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         status.toUpperCase(),
                         style: TextStyle(
                           color: statusColor,
-                          fontSize: 13,
+                          fontSize: provider.currentLanguage == 'ta' ? 11 : 13,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -6630,8 +6500,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     Icon(Icons.calendar_today_outlined, size: 18, color: Colors.grey[600]),
                     const SizedBox(width: 8),
                     Text(
-                      'Placed on $formattedDate',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      '${provider.text('placed_on')} $formattedDate',
+                      style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 12 : 14, color: Colors.grey[700]),
                     ),
                   ],
                 ),
@@ -6657,10 +6527,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Order Items',
+                Text(
+                  provider.text('items'),
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: provider.currentLanguage == 'ta' ? 14 : 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
                   ),
@@ -6700,8 +6570,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                           children: [
                             Text(
                               item['product_name'] ?? 'Product',
-                              style: const TextStyle(
-                                fontSize: 15,
+                              style: TextStyle(
+                                fontSize: provider.currentLanguage == 'ta' ? 13 : 15,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -6758,9 +6628,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Payment Information',
-                  style: TextStyle(
+                Text(
+                  provider.text('payment_method'),
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
@@ -6771,12 +6641,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Payment Method',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      provider.text('payment_method'),
+                      style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 12 : 14, color: Colors.grey[700]),
                     ),
-                    Text(
-                      paymentMethod,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    Expanded(
+                      child: Text(
+                        _getLocalizedPaymentMethod(paymentMethod, provider),
+                        textAlign: TextAlign.end,
+                        style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 12 : 14, fontWeight: FontWeight.w500),
+                      ),
                     ),
                   ],
                 ),
@@ -6784,14 +6657,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Total Amount',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    Text(
+                      provider.text('total'),
+                      style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 14 : 16, fontWeight: FontWeight.bold),
                     ),
                     Text(
                       '₹${totalAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 20,
+                      style: TextStyle(
+                        fontSize: provider.currentLanguage == 'ta' ? 18 : 20,
                         fontWeight: FontWeight.bold,
                         color: kPrimaryColor,
                       ),
@@ -6825,10 +6698,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     children: [
                       Icon(Icons.location_on_outlined, size: 20, color: kPrimaryColor),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Delivery Address',
+                      Text(
+                        provider.text('delivery_address'),
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: provider.currentLanguage == 'ta' ? 14 : 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
                         ),
@@ -6838,16 +6711,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   const SizedBox(height: 12),
                   Text(
                     deliveryAddress['street'] ?? '',
-                    style: const TextStyle(fontSize: 14, height: 1.5),
+                    style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 12 : 14, height: 1.5),
                   ),
                   Text(
                     '${deliveryAddress['city']}, ${deliveryAddress['state']} - ${deliveryAddress['pincode']}',
-                    style: const TextStyle(fontSize: 14, height: 1.5),
+                    style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 12 : 14, height: 1.5),
                   ),
                   if (deliveryAddress['landmark'] != null && deliveryAddress['landmark'].toString().isNotEmpty)
                     Text(
                       'Landmark: ${deliveryAddress['landmark']}',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.5),
+                      style: TextStyle(fontSize: provider.currentLanguage == 'ta' ? 11 : 13, color: Colors.grey[600], height: 1.5),
                     ),
                 ],
               ),
@@ -6855,6 +6728,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ],
       ),
     );
+  }
+
+  // Helper method to get localized payment method
+  String _getLocalizedPaymentMethod(String paymentMethod, AppProvider provider) {
+    if (paymentMethod.toLowerCase() == 'upi' || paymentMethod.toLowerCase() == 'pay via upi/apps') {
+      return provider.text('payment_upi');
+    } else if (paymentMethod.toLowerCase() == 'cash on delivery' || paymentMethod.toLowerCase().contains('cash')) {
+      return provider.text('cod');
+    }
+    return paymentMethod;
   }
 }
 

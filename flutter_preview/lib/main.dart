@@ -178,6 +178,7 @@ const Map<String, Map<String, String>> translations = {
     'qty': 'Qty',
     'no_orders': 'No Orders Yet!',
     'no_orders_message': 'You haven\'t placed any orders yet.\nStart shopping to see your orders here.',
+    'checkout': 'Checkout',
   },
   'ta': {
     // Bottom Navigation
@@ -340,6 +341,7 @@ const Map<String, Map<String, String>> translations = {
     'qty': 'அளவு',
     'no_orders': 'இன்னும் ஆர்டர்கள் இல்லை!',
     'no_orders_message': 'நீங்கள் இன்னும் எந்த ஆர்டரும் செய்யவில்லை.\nஉங்கள் ஆர்டர்களை இங்கே பார்க்க ஷாப்பிங் தொடங்குங்கள்.',
+    'checkout': 'செக்அவுட்',
   }
 };
 
@@ -370,6 +372,7 @@ class CartItem {
   final String? mainCategory;
   final String? subcategory;
   final String productName;
+  final String? productNameTa;
   final String weight;
   int quantity;
   final double price;
@@ -381,6 +384,7 @@ class CartItem {
     this.mainCategory,
     this.subcategory,
     required this.productName,
+    this.productNameTa,
     required this.weight,
     this.quantity = 1,
     required this.price,
@@ -388,6 +392,13 @@ class CartItem {
   });
 
   double get subtotal => quantity * price;
+  
+  String getLocalizedName(String language) {
+    if (language == 'ta' && productNameTa != null && productNameTa!.isNotEmpty) {
+      return productNameTa!;
+    }
+    return productName;
+  }
 }
 
 class AppProvider with ChangeNotifier {
@@ -403,10 +414,36 @@ class AppProvider with ChangeNotifier {
 
   String text(String key) => translations[_currentLanguage]![key] ?? key;
 
+  // Load saved language preference from SharedPreferences
+  Future<void> loadLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedLanguage = prefs.getString('userLanguage');
+      if (savedLanguage != null && translations.containsKey(savedLanguage)) {
+        _currentLanguage = savedLanguage;
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error loading language preference: $e');
+    }
+  }
+
   void setLanguage(String lang) {
     if (translations.containsKey(lang)) {
       _currentLanguage = lang;
+      // Save language preference to SharedPreferences
+      _saveLanguage(lang);
       notifyListeners();
+    }
+  }
+
+  // Save language preference to SharedPreferences
+  Future<void> _saveLanguage(String lang) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userLanguage', lang);
+    } catch (e) {
+      print('Error saving language preference: $e');
     }
   }
 
@@ -468,6 +505,7 @@ class AppProvider with ChangeNotifier {
         mainCategory: product.mainCategory,
         subcategory: product.subcategory,
         productName: product.productName,
+        productNameTa: product.productNameTa,
         weight: product.weight,
         price: product.price,
         imageUrl: product.imageUrl,
@@ -491,9 +529,19 @@ class AppProvider with ChangeNotifier {
   }
 }
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(ChangeNotifierProvider(create: (context) => AppProvider(), child: const MyApp()));
+  
+  // Create AppProvider and load saved language preference
+  final appProvider = AppProvider();
+  await appProvider.loadLanguage();
+  
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => appProvider,
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -2391,7 +2439,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
 }
 
 // PRODUCT DETAILS SHEET
-class ProductDetailsSheet extends StatelessWidget {
+class ProductDetailsSheet extends StatefulWidget {
   final Product product;
   final ScrollController scrollController;
 
@@ -2402,64 +2450,111 @@ class ProductDetailsSheet extends StatelessWidget {
   });
 
   @override
+  State<ProductDetailsSheet> createState() => _ProductDetailsSheetState();
+}
+
+class _ProductDetailsSheetState extends State<ProductDetailsSheet> {
+  Product? _fetchedProduct;
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProductDetails();
+  }
+
+  Future<void> _loadProductDetails() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      // Fetch fresh product data from backend
+      if (widget.product.itemId != null && widget.product.itemId!.isNotEmpty) {
+        final fetchedProduct = await ApiService.getProductDetails(widget.product.itemId!);
+        setState(() {
+          _fetchedProduct = fetchedProduct;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AppProvider>(context);
+    final product = _fetchedProduct ?? widget.product;
 
     return Container(
       padding: const EdgeInsets.all(20),
-      child: ListView(
-        controller: scrollController,
-        children: [
-          // Product Image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: product.imageUrl.isNotEmpty
-                ? Image.network(
-                    ApiService.getImageUrl(product.imageUrl),
-                    height: 250,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stack) => Container(
-                      height: 250,
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.inventory_2, size: 80, color: Colors.grey),
+      child: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: kPrimaryColor),
+            )
+          : ListView(
+              controller: widget.scrollController,
+              children: [
+                // Product Image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: product.imageUrl.isNotEmpty
+                      ? Image.network(
+                          ApiService.getImageUrl(product.imageUrl),
+                          height: 250,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stack) => Container(
+                            height: 250,
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.inventory_2, size: 80, color: Colors.grey),
+                          ),
+                        )
+                      : Container(
+                          height: 250,
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.inventory_2, size: 80, color: Colors.grey),
+                        ),
+                ),
+                const SizedBox(height: 16),
+
+                // Best Seller Badge
+                if (product.isBestSeller)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  )
-                : Container(
-                    height: 250,
-                    color: Colors.grey[200],
-                    child: const Icon(Icons.inventory_2, size: 80, color: Colors.grey),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('⭐', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Text(
+                          Provider.of<AppProvider>(context, listen: false).text('best_seller'),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
-          ),
-          const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-          // Best Seller Badge
-          if (product.isBestSeller)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.amber,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('⭐', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                  Text(
-                    Provider.of<AppProvider>(context, listen: false).text('best_seller'),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 12),
-
-          // Product Name
-          Text(
-            product.getLocalizedName(provider.currentLanguage),
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
+                // Product Name (with Tamil support)
+                Text(
+                  product.getLocalizedName(provider.currentLanguage),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
 
           // Weight
           Text(
@@ -2864,12 +2959,15 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   bool _isNameIncomplete = true;
   bool _isStoreIncomplete = true;
   bool _isLoading = true;
+  Map<String, Product> _refreshedProducts = {}; // Store fetched products by itemId
+  bool _isLoadingProducts = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkProfileCompleteness();
+    _loadCartProducts();
   }
 
   @override
@@ -2890,6 +2988,38 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
     super.didChangeDependencies();
     // Re-check when dependencies change (e.g., when navigating back to this screen)
     _checkProfileCompleteness();
+  }
+
+  Future<void> _loadCartProducts() async {
+    setState(() => _isLoadingProducts = true);
+    
+    try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      final cartItems = provider.cartItems;
+      
+      Map<String, Product> fetchedProducts = {};
+      
+      // Fetch fresh product details for each cart item
+      for (var cartItem in cartItems) {
+        if (cartItem.itemId.isNotEmpty) {
+          try {
+            final product = await ApiService.getProductDetails(cartItem.itemId);
+            fetchedProducts[cartItem.itemId] = product;
+          } catch (e) {
+            print('Error fetching product ${cartItem.itemId}: $e');
+            // Continue with other products even if one fails
+          }
+        }
+      }
+      
+      setState(() {
+        _refreshedProducts = fetchedProducts;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      print('Error loading cart products: $e');
+      setState(() => _isLoadingProducts = false);
+    }
   }
 
   Future<void> _checkProfileCompleteness() async {
@@ -3109,10 +3239,14 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                         onDismissed: (direction) {
                           final removedItem = item;
                           final removedQuantity = item.quantity;
+                          final displayName = _refreshedProducts.containsKey(item.itemId)
+                              ? _refreshedProducts[item.itemId]!.getLocalizedName(provider.currentLanguage)
+                              : item.getLocalizedName(provider.currentLanguage);
+                          
                           provider.updateCartQuantity(item, 0);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${item.productName} removed from cart'),
+                              content: Text('$displayName removed from cart'),
                               duration: const Duration(seconds: 2),
                               action: SnackBarAction(
                                 label: 'UNDO',
@@ -3176,7 +3310,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      item.productName,
+                                      _refreshedProducts.containsKey(item.itemId)
+                                          ? _refreshedProducts[item.itemId]!.getLocalizedName(provider.currentLanguage)
+                                          : item.getLocalizedName(provider.currentLanguage),
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -3358,6 +3494,46 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPayment = 'upi';
+  Map<String, Product> _refreshedProducts = {}; // Store fetched products by itemId
+  bool _isLoadingProducts = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCheckoutProducts();
+  }
+
+  Future<void> _loadCheckoutProducts() async {
+    setState(() => _isLoadingProducts = true);
+    
+    try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      final cartItems = provider.cartItems;
+      
+      Map<String, Product> fetchedProducts = {};
+      
+      // Fetch fresh product details for each cart item
+      for (var cartItem in cartItems) {
+        if (cartItem.itemId.isNotEmpty) {
+          try {
+            final product = await ApiService.getProductDetails(cartItem.itemId);
+            fetchedProducts[cartItem.itemId] = product;
+          } catch (e) {
+            print('Error fetching product ${cartItem.itemId}: $e');
+            // Continue with other products even if one fails
+          }
+        }
+      }
+      
+      setState(() {
+        _refreshedProducts = fetchedProducts;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      print('Error loading checkout products: $e');
+      setState(() => _isLoadingProducts = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3365,7 +3541,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Checkout', style: TextStyle(color: kPrimaryColor)),
+        title: Text(provider.text('checkout'), style: const TextStyle(color: kPrimaryColor)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: kPrimaryColor),
       ),
@@ -3384,6 +3560,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   const SizedBox(height: 16),
                   ...provider.cartItems.map((item) {
+                    final displayName = _refreshedProducts.containsKey(item.itemId)
+                        ? _refreshedProducts[item.itemId]!.getLocalizedName(provider.currentLanguage)
+                        : item.getLocalizedName(provider.currentLanguage);
+                    
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
@@ -3391,7 +3571,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              '${item.productName} x${item.quantity}',
+                              '$displayName x${item.quantity}',
                               style: const TextStyle(fontSize: 16),
                             ),
                           ),
@@ -4775,73 +4955,154 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
 }
 
 // Full page product details route (push navigation)
-class ProductDetailsPage extends StatelessWidget {
+class ProductDetailsPage extends StatefulWidget {
   final Product product;
 
   const ProductDetailsPage({super.key, required this.product});
 
   @override
+  State<ProductDetailsPage> createState() => _ProductDetailsPageState();
+}
+
+class _ProductDetailsPageState extends State<ProductDetailsPage> {
+  Product? _fetchedProduct;
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProductDetails();
+  }
+
+  Future<void> _loadProductDetails() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      // Fetch fresh product data from backend
+      if (widget.product.itemId != null && widget.product.itemId!.isNotEmpty) {
+        final fetchedProduct = await ApiService.getProductDetails(widget.product.itemId!);
+        setState(() {
+          _fetchedProduct = fetchedProduct;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AppProvider>(context);
+    final product = _fetchedProduct ?? widget.product;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(product.getLocalizedName(provider.currentLanguage), style: const TextStyle(color: kPrimaryColor)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: kPrimaryColor),
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Added bottom padding for floating button
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: product.imageUrl.isNotEmpty
-                      ? Image.network(ApiService.getImageUrl(product.imageUrl), height: 260, width: double.infinity, fit: BoxFit.cover)
-                      : Container(height: 260, color: Colors.grey[200]),
-                ),
-                const SizedBox(height: 12),
-                Text(product.productName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(product.weight, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: kPrimaryColor),
+            )
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('${provider.text('error')}: $_error'),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadProductDetails,
+                        child: Text(provider.text('retry')),
+                      ),
+                    ],
+                  ),
+                )
+              : Stack(
                   children: [
-                    Text('₹${product.price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kPrimaryColor)),
-                    Text(product.inStock ? 'Stock: ${product.stock}' : 'Out of Stock', style: TextStyle(color: product.inStock ? Colors.grey[700] : Colors.red[700])),
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: product.imageUrl.isNotEmpty
+                                ? Image.network(
+                                    ApiService.getImageUrl(product.imageUrl),
+                                    height: 260,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stack) => Container(
+                                      height: 260,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.inventory_2, size: 80, color: Colors.grey),
+                                    ),
+                                  )
+                                : Container(
+                                    height: 260,
+                                    color: Colors.grey[200],
+                                    child: const Icon(Icons.inventory_2, size: 80, color: Colors.grey),
+                                  ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            product.getLocalizedName(provider.currentLanguage),
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(product.weight, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('₹${product.price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kPrimaryColor)),
+                              Text(product.inStock ? 'Stock: ${product.stock}' : 'Out of Stock', style: TextStyle(color: product.inStock ? Colors.grey[700] : Colors.red[700])),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (product.description != null && product.description!.isNotEmpty) ...[
+                            Text(provider.text('description'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            Text(product.description!, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                            const SizedBox(height: 16),
+                          ],
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: product.inStock
+                                  ? () {
+                                      provider.addToCart(product);
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${product.getLocalizedName(provider.currentLanguage)} ${provider.text('added_to_cart')}')));
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                              child: Text(product.inStock ? provider.text('buy') : provider.text('out_of_stock'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Floating cart button moved to MainScreen
                   ],
                 ),
-                const SizedBox(height: 16),
-                if (product.description != null && product.description!.isNotEmpty) ...[
-                  Text(provider.text('description'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(product.description!, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
-                  const SizedBox(height: 16),
-                ],
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: product.inStock
-                        ? () {
-                            provider.addToCart(product);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${product.productName} ${provider.text('added_to_cart')}')));
-                          }
-                        : null,
-                    style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: Text(product.inStock ? provider.text('buy') : provider.text('out_of_stock'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Floating cart button moved to MainScreen
-        ],
-      ),
     );
   }
 }
@@ -4939,8 +5200,24 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       }
 
       final favorites = await ApiService.getFavorites(phone);
+      
+      // Fetch fresh product details for each favorite to get Tamil names
+      List<Product> refreshedProducts = [];
+      for (var product in favorites) {
+        try {
+          if (product.itemId != null && product.itemId!.isNotEmpty) {
+            final freshProduct = await ApiService.getProductDetails(product.itemId!);
+            refreshedProducts.add(freshProduct);
+          } else {
+            refreshedProducts.add(product); // Fallback to original
+          }
+        } catch (e) {
+          refreshedProducts.add(product); // Fallback if fetch fails
+        }
+      }
+      
       setState(() {
-        _favoriteProducts = favorites;
+        _favoriteProducts = refreshedProducts;
         _isLoading = false;
       });
     } catch (e) {
@@ -5154,7 +5431,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         '${product.productName}_${product.weight}'.replaceAll(' ', '_').toLowerCase();
     final bool isFavorited = provider.isFavorite(productId);
     
-    // Horizontal card layout matching Cart page style
+    // Horizontal card layout matching Cart page style with clickable card and left alignment
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Colors.white,
@@ -5162,20 +5439,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          children: [
-            // Product Image (Left) - Fixed size like Cart page
-            GestureDetector(
-              onTap: () {
-                // Open full product page when image is clicked
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
-                );
-              },
-              child: Stack(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          // Navigate to full product details page when card is tapped
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              // Product Image (Left) - Fixed size like Cart page
+              Stack(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
@@ -5239,117 +5517,120 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            // Product Info (Middle) - Expanded
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    product.productName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    product.weight,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '₹${product.price.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: kPrimaryColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Bottom Control Section (Right) - Add to cart or +/- controls
-            Builder(builder: (context) {
-              final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
-              final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
-              final int qty = cartItem?.quantity ?? 0;
-
-              // Show "Add to cart" button when qty is 0
-              if (qty == 0) {
-                return SizedBox(
-                  width: 100,
-                  child: ElevatedButton.icon(
-                    onPressed: product.inStock
-                        ? () {
-                            provider.addToCart(product);
-                          }
-                        : null,
-                    icon: const Icon(Icons.shopping_bag_outlined, size: 16),
-                    label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF50),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+              const SizedBox(width: 12),
+              // Product Info (Middle) - Expanded with LEFT alignment
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, // Changed to start for left alignment
+                  children: [
+                    Text(
+                      product.getLocalizedName(provider.currentLanguage), // Use localized name
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left, // Explicit left alignment
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                );
-              }
-
-              // Show quantity controls when qty > 0 (matching Cart page style)
-              return Column(
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
+                    Text(
+                      product.weight,
+                      textAlign: TextAlign.left, // Explicit left alignment
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹${product.price.toStringAsFixed(2)}',
+                      textAlign: TextAlign.left, // Explicit left alignment
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                         color: kPrimaryColor,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () {
-                          provider.updateCartQuantity(cartItem!, qty - 1);
-                        },
                       ),
-                      Text(
-                        '$qty',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                    ),
+                  ],
+                ),
+              ),
+              // Bottom Control Section (Right) - Add to cart or +/- controls
+              Builder(builder: (context) {
+                final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
+                final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
+                final int qty = cartItem?.quantity ?? 0;
+
+                // Show "Add to cart" button when qty is 0
+                if (qty == 0) {
+                  return SizedBox(
+                    width: 100,
+                    child: ElevatedButton.icon(
+                      onPressed: product.inStock
+                          ? () {
+                              provider.addToCart(product);
+                            }
+                          : null,
+                      icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                      label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF50),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        color: kPrimaryColor,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: product.inStock
-                            ? () {
-                                provider.addToCart(product);
-                              }
-                            : null,
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '₹${(product.price * qty).toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                ],
-              );
-            }),
-          ],
+                  );
+                }
+
+                // Show quantity controls when qty > 0 (matching Cart page style)
+                return Column(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          color: kPrimaryColor,
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () {
+                            provider.updateCartQuantity(cartItem!, qty - 1);
+                          },
+                        ),
+                        Text(
+                          '$qty',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          color: kPrimaryColor,
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: product.inStock
+                              ? () {
+                                  provider.addToCart(product);
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '₹${(product.price * qty).toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ],
+          ),
         ),
       ),
     );
@@ -5635,10 +5916,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? provider.text('please_fill_store') 
                   : provider.text('manage_store'),
               showWarning: _isStoreIncomplete,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => StoreDetailsScreen(userPhone: userPhone)),
-              ),
+              onTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => StoreDetailsScreen(userPhone: userPhone)),
+                );
+                // If store details were saved, refresh the profile
+                if (result == true) {
+                  _loadUserProfile();
+                }
+              },
             ),
             
             const Divider(height: 1),
@@ -6364,6 +6651,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   Map<String, dynamic>? _order;
   bool _isLoading = true;
   String? _error;
+  Map<String, Product> _refreshedProducts = {}; // Store fetched products by itemId
+  bool _isLoadingProducts = false;
 
   @override
   void initState() {
@@ -6378,11 +6667,47 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         _order = response['order'];
         _isLoading = false;
       });
+      
+      // After loading order details, fetch product details for Tamil names
+      if (_order != null) {
+        await _loadOrderProducts();
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadOrderProducts() async {
+    setState(() => _isLoadingProducts = true);
+    
+    try {
+      final items = _order!['items'] as List? ?? [];
+      Map<String, Product> fetchedProducts = {};
+      
+      // Fetch fresh product details for each order item
+      for (var item in items) {
+        final itemId = item['item_id'];
+        if (itemId != null && itemId.toString().isNotEmpty) {
+          try {
+            final product = await ApiService.getProductDetails(itemId.toString());
+            fetchedProducts[itemId.toString()] = product;
+          } catch (e) {
+            print('Error fetching product $itemId: $e');
+            // Continue with other products even if one fails
+          }
+        }
+      }
+      
+      setState(() {
+        _refreshedProducts = fetchedProducts;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      print('Error loading order products: $e');
+      setState(() => _isLoadingProducts = false);
     }
   }
 
@@ -6536,76 +6861,83 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                ...items.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product Image
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[200]!),
+                ...items.map((item) {
+                  final itemId = item['item_id']?.toString() ?? '';
+                  final displayName = _refreshedProducts.containsKey(itemId)
+                      ? _refreshedProducts[itemId]!.getLocalizedName(provider.currentLanguage)
+                      : (item['product_name'] ?? 'Product');
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Product Image
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[200]!),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: item['image_url'] != null && item['image_url'].toString().isNotEmpty
+                                ? Image.network(
+                                    ApiService.getImageUrl(item['image_url']),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(Icons.shopping_bag_outlined, color: kPrimaryColor);
+                                    },
+                                  )
+                                : const Icon(Icons.shopping_bag_outlined, color: kPrimaryColor),
+                          ),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: item['image_url'] != null && item['image_url'].toString().isNotEmpty
-                              ? Image.network(
-                                  ApiService.getImageUrl(item['image_url']),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(Icons.shopping_bag_outlined, color: kPrimaryColor);
-                                  },
-                                )
-                              : const Icon(Icons.shopping_bag_outlined, color: kPrimaryColor),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item['product_name'] ?? 'Product',
-                              style: TextStyle(
-                                fontSize: provider.currentLanguage == 'ta' ? 13 : 15,
-                                fontWeight: FontWeight.w500,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                style: TextStyle(
+                                  fontSize: provider.currentLanguage == 'ta' ? 13 : 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              item['weight'] ?? '',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[600],
+                              const SizedBox(height: 4),
+                              Text(
+                                item['weight'] ?? '',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Qty: ${item['quantity']}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[700],
-                                fontWeight: FontWeight.w500,
+                              const SizedBox(height: 4),
+                              Text(
+                                'Qty: ${item['quantity']}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        '₹${(item['price'] ?? 0).toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: kPrimaryColor,
+                        Text(
+                          '₹${(item['price'] ?? 0).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: kPrimaryColor,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                )),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ],
             ),
           ),
@@ -7191,7 +7523,7 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
             backgroundColor: kPrimaryColor,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Return true to indicate save was successful
       }
     } catch (e) {
       if (mounted) {

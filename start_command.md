@@ -14,3 +14,6 @@ cd "c:\Users\faisa\AndroidStudioProjects\AlMathina\Backend" ; & ".\venv\Scripts\
 
 # Terminal 2: Run Flutter on physical device (RZ8NA1WCLWL)
 Set-Location -LiteralPath 'C:\Users\faisa\AndroidStudioProjects\AlMathina\flutter_preview'; flutter run -d RZ8NA1WCLWL    
+
+# Terminal 2: Run Flutter on physical device (103223138K111296)
+Set-Location -LiteralPath 'D:\AlMathina\flutter_preview'; flutter run -d 103223138K111296

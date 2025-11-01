@@ -37,42 +37,17 @@ function setupEventListeners() {
     // Section dropdown change - enable main category
     document.getElementById('productSection').addEventListener('change', async function(e) {
         const section = e.target.value;
-        const newSectionInput = document.getElementById('newSectionInput');
-        const newMainInput = document.getElementById('newMainInput');
-        const newSubInput = document.getElementById('newSubInput');
         const mainCategorySelect = document.getElementById('productMainCategory');
         const subCategorySelect = document.getElementById('productSubCategory');
         
-        if (section === '__ADD_NEW__') {
-            // User wants to add new section - show text inputs for all levels
-            newSectionInput.style.display = 'block';
-            newSectionInput.focus();
-            
-            // Replace main category dropdown with text input
-            mainCategorySelect.style.display = 'none';
-            newMainInput.style.display = 'block';
-            newMainInput.placeholder = 'Enter new main category name';
-            
-            // Replace subcategory dropdown with text input
-            subCategorySelect.style.display = 'none';
-            newSubInput.style.display = 'block';
-            newSubInput.placeholder = 'Enter new subcategory name';
-        } else if (section) {
-            // Normal section selected - show dropdowns
-            newSectionInput.style.display = 'none';
-            newMainInput.style.display = 'none';
-            newSubInput.style.display = 'none';
-            
+        if (section) {
+            // Normal section selected - populate main categories
             mainCategorySelect.style.display = 'block';
             subCategorySelect.style.display = 'block';
             
             populateMainCategoryDropdown(section);
         } else {
-            // No section selected - reset everything
-            newSectionInput.style.display = 'none';
-            newMainInput.style.display = 'none';
-            newSubInput.style.display = 'none';
-            
+            // No section selected - reset dropdowns
             mainCategorySelect.style.display = 'block';
             subCategorySelect.style.display = 'block';
             mainCategorySelect.disabled = true;
@@ -86,47 +61,21 @@ function setupEventListeners() {
     document.getElementById('productMainCategory').addEventListener('change', function(e) {
         const mainCategory = e.target.value;
         const section = document.getElementById('productSection').value;
-        const newMainInput = document.getElementById('newMainInput');
-        const newSubInput = document.getElementById('newSubInput');
         const subCategorySelect = document.getElementById('productSubCategory');
         
-        if (mainCategory === '__ADD_NEW__') {
-            // User wants to add new main category - show text inputs
-            newMainInput.style.display = 'block';
-            newMainInput.focus();
-            
-            // Replace subcategory dropdown with text input
-            subCategorySelect.style.display = 'none';
-            newSubInput.style.display = 'block';
-            newSubInput.placeholder = 'Enter new subcategory name';
-        } else if (mainCategory && section) {
+        if (mainCategory && section) {
             // Normal main category selected - show dropdown
-            newMainInput.style.display = 'none';
-            newSubInput.style.display = 'none';
             subCategorySelect.style.display = 'block';
             populateSubCategoryDropdown(section, mainCategory);
         } else {
             // No main category selected - reset
-            newMainInput.style.display = 'none';
-            newSubInput.style.display = 'none';
             subCategorySelect.style.display = 'block';
             subCategorySelect.disabled = true;
             subCategorySelect.innerHTML = '<option value="">Select Main Category First</option>';
         }
     });
     
-    // Subcategory dropdown change - show "Add New" input if needed
-    document.getElementById('productSubCategory').addEventListener('change', function(e) {
-        const subcategory = e.target.value;
-        const newSubInput = document.getElementById('newSubInput');
-        
-        if (subcategory === '__ADD_NEW__') {
-            newSubInput.style.display = 'block';
-            newSubInput.focus();
-        } else {
-            newSubInput.style.display = 'none';
-        }
-    });
+    // Subcategory dropdown change handler removed - no more "Add New" option
     
     // Close modals on outside click
     window.addEventListener('click', function(event) {
@@ -357,11 +306,7 @@ function populateSectionDropdown() {
         productSection.appendChild(option);
     });
     
-    // Add "Add New" option
-    const addNewOption = document.createElement('option');
-    addNewOption.value = '__ADD_NEW__';
-    addNewOption.textContent = '➕ Add New Section';
-    productSection.appendChild(addNewOption);
+    // Note: "Add New Section" option removed - users should use mobile view to add sections
 }
 
 // Populate Main Category dropdown based on selected section
@@ -374,7 +319,6 @@ function populateMainCategoryDropdown(section) {
     const productSubCategory = document.getElementById('productSubCategory');
     productSubCategory.innerHTML = '<option value="">Select Main Category First</option>';
     productSubCategory.disabled = true;
-    document.getElementById('newSubInput').style.display = 'none';
     
     const sectionData = categoryHierarchy.find(item => item.section === section);
     if (!sectionData || !sectionData.main_categories) {
@@ -394,11 +338,7 @@ function populateMainCategoryDropdown(section) {
     // Show subcategory field (Level 3)
     productSubCategory.parentElement.style.display = 'block';
     
-    // Add "Add New" option
-    const addNewOption = document.createElement('option');
-    addNewOption.value = '__ADD_NEW__';
-    addNewOption.textContent = '➕ Add New Main Category';
-    productMainCategory.appendChild(addNewOption);
+    // Note: "Add New Main Category" option removed - use Mobile View for category management
 }
 
 // Populate Subcategory dropdown based on selected section and main category
@@ -417,11 +357,7 @@ function populateSubCategoryDropdown(section, mainCategory) {
         });
     }
     
-    // Add "Add New" option
-    const addNewOption = document.createElement('option');
-    addNewOption.value = '__ADD_NEW__';
-    addNewOption.textContent = '➕ Add New Subcategory';
-    productSubCategory.appendChild(addNewOption);
+    // Note: "Add New Subcategory" option removed - use Mobile View for category management
 }
 
 // Load all products
@@ -600,10 +536,7 @@ async function openCreateModal() {
     subcategorySelect.disabled = true;
     subcategorySelect.innerHTML = '<option value="">Select Main Category First</option>';
     
-    // Hide all "add new" inputs
-    document.getElementById('newSectionInput').style.display = 'none';
-    document.getElementById('newMainInput').style.display = 'none';
-    document.getElementById('newSubInput').style.display = 'none';
+    // Hide all "add new" inputs (section input removed)
     
     document.getElementById('productModal').style.display = 'block';
 }
@@ -636,10 +569,7 @@ async function openAddProductFromMobile(section, mainCategory, subCategory) {
         itemIdInput.value = 'prod_' + Date.now();
     }
     
-    // Hide all "add new" inputs
-    document.getElementById('newSectionInput').style.display = 'none';
-    document.getElementById('newMainInput').style.display = 'none';
-    document.getElementById('newSubInput').style.display = 'none';
+    // Hide all "add new" inputs (section input removed)
     
     // Pre-fill and disable Section dropdown
     const sectionSelect = document.getElementById('productSection');
@@ -746,10 +676,6 @@ function editProduct(productId) {
     mainCategorySelect.style.display = 'block';
     subcategorySelect.style.display = 'block';
     
-    document.getElementById('newSectionInput').style.display = 'none';
-    document.getElementById('newMainInput').style.display = 'none';
-    document.getElementById('newSubInput').style.display = 'none';
-    
     // Show current image if exists
     const imagePreview = document.getElementById('productImagePreview');
     const previewImg = document.getElementById('productPreviewImg');
@@ -782,16 +708,11 @@ async function handleProductSubmit(e) {
     
     try {
         console.log('%c📋 STEP 1: Form Elements Check', 'color: #00ffff; font-weight: bold; font-size: 13px; background: #003333; padding: 3px;');
-        console.log('%c📋 STEP 1: Form Elements Check', 'color: #00ffff; font-weight: bold; font-size: 13px; background: #003333; padding: 3px;');
         
         // Temporarily enable disabled fields to get their values (they might be disabled if pre-filled from mobile)
         const sectionSelect = document.getElementById('productSection');
         const mainCategorySelect = document.getElementById('productMainCategory');
         const subcategorySelect = document.getElementById('productSubCategory');
-        
-        const newSectionInput = document.getElementById('newSectionInput');
-        const newMainInput = document.getElementById('newMainInput');
-        const newSubInput = document.getElementById('newSubInput');
         
         console.log('   🔍 Dropdown Elements:', {
             sectionSelect: !!sectionSelect,
@@ -799,13 +720,7 @@ async function handleProductSubmit(e) {
             subcategorySelect: !!subcategorySelect
         });
         
-        console.log('   🔍 Text Input Elements:', {
-            newSectionInput: !!newSectionInput,
-            newMainInput: !!newMainInput,
-            newSubInput: !!newSubInput
-        });
-        
-        console.log('   📊 Dropdown States:', {
+        console.log('    Dropdown States:', {
             section: {
                 value: sectionSelect?.value,
                 disabled: sectionSelect?.disabled,
@@ -823,52 +738,7 @@ async function handleProductSubmit(e) {
             }
         });
         
-        console.log('   📊 Text Input States:', {
-            newSection: {
-                value: newSectionInput?.value,
-                display: newSectionInput?.style.display,
-                required: newSectionInput?.required
-            },
-            newMain: {
-                value: newMainInput?.value,
-                display: newMainInput?.style.display,
-                required: newMainInput?.required
-            },
-            newSub: {
-                value: newSubInput?.value,
-                display: newSubInput?.style.display,
-                required: newSubInput?.required
-            }
-        });
-        
-        console.log('%c🔧 STEP 2: Disabling Required Attribute on Hidden Inputs', 'color: #ffff00; font-weight: bold; font-size: 13px; background: #333300; padding: 3px;');
-        
-        // CRITICAL FIX: Disable required attribute on hidden text inputs
-        if (newSectionInput.style.display === 'none') {
-            newSectionInput.required = false;
-            console.log('   ✅ newSectionInput required = false');
-        } else {
-            newSectionInput.required = true;
-            console.log('   ⚠️ newSectionInput required = true (visible)');
-        }
-        
-        if (newMainInput.style.display === 'none') {
-            newMainInput.required = false;
-            console.log('   ✅ newMainInput required = false');
-        } else {
-            newMainInput.required = true;
-            console.log('   ⚠️ newMainInput required = true (visible)');
-        }
-        
-        if (newSubInput.style.display === 'none') {
-            newSubInput.required = false;
-            console.log('   ✅ newSubInput required = false');
-        } else {
-            newSubInput.required = true;
-            console.log('   ⚠️ newSubInput required = true (visible)');
-        }
-        
-        console.log('%c🔓 STEP 3: Enabling Disabled Dropdowns Temporarily', 'color: #00ff00; font-weight: bold; font-size: 13px; background: #003300; padding: 3px;');
+        console.log('%c� STEP 2: Enabling Disabled Dropdowns Temporarily', 'color: #00ff00; font-weight: bold; font-size: 13px; background: #003300; padding: 3px;');
         
         const sectionWasDisabled = sectionSelect.disabled;
         const mainWasDisabled = mainCategorySelect.disabled;
@@ -899,90 +769,23 @@ async function handleProductSubmit(e) {
             subcategory: subcategory
         });
         
-        console.log('   📊 Text Input Values:', {
-            newSection: newSectionInput.value,
-            newMain: newMainInput.value,
-            newSub: newSubInput.value
-        });
-        
         console.log('%c🔀 STEP 5: Category Creation Logic', 'color: #ff00ff; font-weight: bold; font-size: 13px; background: #330033; padding: 3px;');
         
-        // Handle new section
-        if (section === '__ADD_NEW__' || (newSectionInput.style.display !== 'none' && newSectionInput.value.trim())) {
-            console.log('   🆕 Creating NEW SECTION');
-            const newSection = newSectionInput.value.trim();
-            console.log('   📝 New section name:', newSection);
-            
-            if (!newSection) {
-                console.error('   ❌ ERROR: Section name is empty!');
-                sectionSelect.disabled = sectionWasDisabled;
-                mainCategorySelect.disabled = mainWasDisabled;
-                subcategorySelect.disabled = subWasDisabled;
-                submitButton.disabled = false;
-                submitButton.textContent = 'Save Product';
-                showToast('Please enter a section name', 'error');
-                return;
-            }
-            
-            console.log('   🚀 Calling createNewSection()...');
-            await createNewSection(newSection);
-            section = newSection;
-            console.log('   ✅ Section created:', section);
-        } else {
-            console.log('   ℹ️ Using existing section:', section);
-        }
+        // Section is now always from dropdown - no new section creation
+        console.log('   ℹ️ Using existing section:', section);
+        console.log('   ℹ️ Using existing main category:', mainCategory);
+        console.log('   ℹ️ Using existing subcategory:', subcategory);
         
-        // Handle new main category
-        if (mainCategory === '__ADD_NEW__' || (newMainInput.style.display !== 'none' && newMainInput.value.trim())) {
-            console.log('   🆕 Creating NEW MAIN CATEGORY');
-            const newMain = newMainInput.value.trim();
-            console.log('   📝 New main category name:', newMain);
-            console.log('   📝 Under section:', section);
-            
-            if (!newMain) {
-                console.error('   ❌ ERROR: Main category name is empty!');
-                sectionSelect.disabled = sectionWasDisabled;
-                mainCategorySelect.disabled = mainWasDisabled;
-                subcategorySelect.disabled = subWasDisabled;
-                submitButton.disabled = false;
-                submitButton.textContent = 'Save Product';
-                showToast('Please enter a main category name', 'error');
-                return;
-            }
-            
-            console.log('   🚀 Calling createNewMainCategory()...');
-            await createNewMainCategory(section, newMain);
-            mainCategory = newMain;
-            console.log('   ✅ Main category created:', mainCategory);
-        } else {
-            console.log('   ℹ️ Using existing main category:', mainCategory);
-        }
-        
-        // Handle new subcategory
-        if (subcategory === '__ADD_NEW__' || (newSubInput.style.display !== 'none' && newSubInput.value.trim())) {
-            console.log('   🆕 Creating NEW SUBCATEGORY');
-            const newSub = newSubInput.value.trim();
-            console.log('   📝 New subcategory name:', newSub);
-            console.log('   📝 Under section:', section);
-            console.log('   📝 Under main category:', mainCategory);
-            
-            if (!newSub) {
-                console.error('   ❌ ERROR: Subcategory name is empty!');
-                sectionSelect.disabled = sectionWasDisabled;
-                mainCategorySelect.disabled = mainWasDisabled;
-                subcategorySelect.disabled = subWasDisabled;
-                submitButton.disabled = false;
-                submitButton.textContent = 'Save Product';
-                showToast('Please enter a subcategory name', 'error');
-                return;
-            }
-            
-            console.log('   🚀 Calling createNewSubcategory()...');
-            await createNewSubcategory(section, mainCategory, newSub);
-            subcategory = newSub;
-            console.log('   ✅ Subcategory created:', subcategory);
-        } else {
-            console.log('   ℹ️ Using existing subcategory:', subcategory);
+        // Validate all category values are selected
+        if (!section || !mainCategory || !subcategory) {
+            console.error('   ❌ ERROR: All categories must be selected!');
+            sectionSelect.disabled = sectionWasDisabled;
+            mainCategorySelect.disabled = mainWasDisabled;
+            subcategorySelect.disabled = subWasDisabled;
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save Product';
+            showToast('Please select all categories', 'error');
+            return;
         }
         
         console.log('%c📊 STEP 6: Final Category Values', 'color: #00ff00; font-weight: bold; font-size: 13px; background: #003300; padding: 3px;');
@@ -3195,9 +2998,17 @@ function openEditMobileProduct(productId, event) {
 
 // Confirm delete section (Level 1)
 function confirmDeleteSection(section, event) {
+    console.log('%c🗑️ DELETE SECTION CALLED', 'color: #ff0000; font-weight: bold; font-size: 14px; background: #ffe0e0; padding: 5px;');
+    console.log('   Section:', section);
+    console.log('   Event:', event);
+    
     // Stop propagation to prevent card click
     if (event) {
+        console.log('   ✅ Stopping event propagation');
         event.stopPropagation();
+        event.preventDefault();
+    } else {
+        console.warn('   ⚠️  No event object provided!');
     }
     
     // Show confirmation modal
@@ -3248,31 +3059,43 @@ function closeDeleteSectionModal() {
 
 // Delete section
 async function deleteSection(section) {
+    console.log('%c🗑️ DELETE SECTION FUNCTION CALLED', 'color: #ff0000; font-weight: bold; font-size: 14px; background: #ffe0e0; padding: 5px;');
+    console.log('   Section to delete:', section);
+    
     try {
         showToast('Deleting section...', 'info');
+        
+        console.log('   📡 Making DELETE request to:', `/admin/api/categories/section/${encodeURIComponent(section)}`);
         
         // Call backend API to delete section
         const response = await fetch(`/admin/api/categories/section/${encodeURIComponent(section)}`, {
             method: 'DELETE'
         });
         
+        console.log('   📥 Response status:', response.status);
+        console.log('   📥 Response ok:', response.ok);
+        
         if (!response.ok) {
             const error = await response.json();
+            console.error('   ❌ Delete failed:', error);
             throw new Error(error.detail || 'Failed to delete section');
         }
         
         const data = await response.json();
+        console.log('   ✅ Delete successful:', data);
         showToast(data.message || 'Section deleted successfully!', 'success');
         
         // Reload categories from database
+        console.log('   🔄 Reloading categories...');
         await loadCategories();
         
         // Close modal and refresh mobile view
+        console.log('   🔄 Refreshing mobile view...');
         closeDeleteSectionModal();
         loadMobileCategorySections();
         
     } catch (error) {
-        console.error('Error deleting section:', error);
+        console.error('❌ Error deleting section:', error);
         showToast(error.message || 'Error deleting section', 'error');
     }
 }

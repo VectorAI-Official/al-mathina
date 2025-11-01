@@ -4,6 +4,7 @@ Handles category management, product CRUD, and image uploads via Cloudinary
 """
 import logging
 import os
+import json
 from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, Form, UploadFile, File
@@ -582,9 +583,14 @@ async def get_products(
         # Fetch products
         products = list(products_collection.find(filter_dict).limit(limit))
         
-        # Convert ObjectId to string
+        # Convert ObjectId and datetime to string for JSON serialization
         for product in products:
             product["_id"] = str(product["_id"])
+            # Convert datetime objects to ISO format strings
+            if "created_at" in product and isinstance(product["created_at"], datetime):
+                product["created_at"] = product["created_at"].isoformat()
+            if "updated_at" in product and isinstance(product["updated_at"], datetime):
+                product["updated_at"] = product["updated_at"].isoformat()
         
         return {"products": products, "count": len(products)}
     
@@ -1020,43 +1026,125 @@ async def upload_image_compat(file: UploadFile = File(...), category_type: str =
 async def add_product_compat(request: Request):
     """Add product (compatibility endpoint) - matches local admin format"""
     try:
+        logger.info("=" * 100)
+        logger.info("🚀🚀🚀 PRODUCT CREATION REQUEST RECEIVED 🚀🚀🚀")
+        logger.info("=" * 100)
+        
         db = get_mongo_db()
         data = await request.json()
         
-        logger.info(f"=== ADDING NEW PRODUCT (PRODUCTION) ===")
-        logger.info(f"Received data: {data}")
+        logger.info("📦 STEP 1: REQUEST DATA PARSING")
+        logger.info(f"   📊 Raw request data: {json.dumps(data, indent=2, default=str)}")
+        logger.info(f"   ✅ JSON parsing successful")
         
+        logger.info("📦 STEP 2: EXTRACTING PRODUCT FIELDS")
+        logger.info(f"   📝 product_name: {data.get('product_name')}")
+        logger.info(f"   📝 product_name_ta: {data.get('product_name_ta')}")
+        logger.info(f"   📝 item_id: {data.get('item_id')}")
+        logger.info(f"   📝 category_section: {data.get('category_section')}")
+        logger.info(f"   📝 category_main: {data.get('category_main')}")
+        logger.info(f"   📝 category_sub: {data.get('category_sub')}")
+        logger.info(f"   📝 weight: {data.get('weight')}")
+        logger.info(f"   📝 price: {data.get('price')}")
+        logger.info(f"   📝 stock: {data.get('stock')}")
+        logger.info(f"   📝 description: {data.get('description')}")
+        logger.info(f"   📝 active: {data.get('active')}")
+        logger.info(f"   📝 image_url: {data.get('image_url')}")
+        
+        logger.info("📦 STEP 3: ADDING METADATA")
         # Add metadata
         data["created_at"] = datetime.utcnow()
         data["updated_at"] = datetime.utcnow()
         data["created_by"] = "admin"
+        logger.info(f"   ✅ created_at: {data['created_at']}")
+        logger.info(f"   ✅ updated_at: {data['updated_at']}")
+        logger.info(f"   ✅ created_by: {data['created_by']}")
         
+        logger.info("📦 STEP 4: IMAGE VALIDATION")
         # Set default image if not provided
         if "image_url" not in data or not data["image_url"]:
             data["image_url"] = ""
+            logger.info(f"   ⚠️  No image URL provided, setting to empty string")
+        else:
+            logger.info(f"   ✅ Image URL present: {data['image_url'][:100]}...")
         
+        logger.info("📦 STEP 5: CLEANING LEGACY FIELDS")
         # Remove legacy fields to avoid duplicate key errors
-        data.pop("category", None)
-        data.pop("brand", None)
+        removed_category = data.pop("category", None)
+        removed_brand = data.pop("brand", None)
+        logger.info(f"   ✅ Removed 'category': {removed_category}")
+        logger.info(f"   ✅ Removed 'brand': {removed_brand}")
         
-        logger.info(f"Inserting product into MongoDB Atlas...")
-        logger.info(f"Section: {data.get('category_section')}, Main: {data.get('category_main')}, Sub: {data.get('category_sub')}")
+        logger.info("📦 STEP 6: MONGODB CONNECTION CHECK")
+        logger.info(f"   📊 Database: {db.name}")
+        logger.info(f"   📊 Collection: products")
+        
+        # Check if collection exists and count
+        try:
+            existing_count = db.products.count_documents({})
+            logger.info(f"   ✅ Connection successful - Existing products: {existing_count}")
+        except Exception as count_error:
+            logger.error(f"   ❌ Failed to count existing products: {count_error}")
+        
+        logger.info("📦 STEP 7: PREPARING TO INSERT INTO MONGODB")
+        logger.info(f"   📊 Final product data structure:")
+        logger.info(f"   {json.dumps(data, indent=6, default=str)}")
+        
+        logger.info("📦 STEP 8: INSERTING INTO MONGODB ATLAS")
+        logger.info(f"   🎯 Target: MongoDB Atlas -> {db.name} -> products collection")
+        logger.info(f"   📤 Executing insert_one()...")
         
         # Insert into MongoDB
         result = db.products.insert_one(data)
         
-        logger.info(f"✓ Product inserted with ID: {result.inserted_id}")
+        logger.info("📦 STEP 9: INSERT RESULT")
+        logger.info(f"   ✅✅✅ Product inserted successfully!")
+        logger.info(f"   📝 MongoDB ObjectId: {result.inserted_id}")
+        logger.info(f"   📝 Acknowledged: {result.acknowledged}")
         
+        logger.info("📦 STEP 10: FETCHING INSERTED PRODUCT")
         # Get the inserted product
         product = db.products.find_one({"_id": result.inserted_id})
-        product["_id"] = str(product["_id"])
+        logger.info(f"   ✅ Product retrieved from database")
         
-        logger.info(f"✓ Product created successfully: {product.get('item_id')}")
-        return {"message": "Product added successfully", "product": product}
+        logger.info("📦 STEP 11: CONVERTING OBJECTID AND DATETIME TO STRING")
+        # Convert ObjectId to string
+        product["_id"] = str(product["_id"])
+        logger.info(f"   ✅ _id converted: {product['_id']}")
+        
+        # Convert datetime objects to ISO format strings for JSON serialization
+        if "created_at" in product and isinstance(product["created_at"], datetime):
+            product["created_at"] = product["created_at"].isoformat()
+            logger.info(f"   ✅ created_at converted to ISO string: {product['created_at']}")
+        
+        if "updated_at" in product and isinstance(product["updated_at"], datetime):
+            product["updated_at"] = product["updated_at"].isoformat()
+            logger.info(f"   ✅ updated_at converted to ISO string: {product['updated_at']}")
+        
+        logger.info(f"   📊 Final product data: {json.dumps(product, indent=6, default=str)}")
+        
+        logger.info("📦 STEP 12: PREPARING RESPONSE")
+        response_data = {
+            "message": "Product added successfully",
+            "product": product
+        }
+        logger.info(f"   📊 Response: {json.dumps(response_data, indent=6, default=str)}")
+        
+        logger.info("=" * 100)
+        logger.info(f"✅✅✅ PRODUCT CREATION COMPLETED SUCCESSFULLY: {product.get('item_id')} ✅✅✅")
+        logger.info("=" * 100)
+        
+        return response_data
         
     except Exception as e:
-        logger.error(f"✗ ERROR ADDING PRODUCT ===")
-        logger.error(f"Exception: {str(e)}", exc_info=True)
+        logger.error("=" * 100)
+        logger.error("❌❌❌ PRODUCT CREATION FAILED ❌❌❌")
+        logger.error("=" * 100)
+        logger.error(f"💥 Exception Type: {type(e).__name__}")
+        logger.error(f"💥 Exception Message: {str(e)}")
+        logger.error(f"💥 Full Traceback:")
+        logger.error("", exc_info=True)
+        logger.error("=" * 100)
         raise HTTPException(status_code=500, detail=f"Failed to add product: {str(e)}")
 
 
@@ -1527,6 +1615,12 @@ async def update_product_compat(product_id: str, request: Request):
         # Get updated product
         product = db.products.find_one({"_id": ObjectId(product_id)})
         product["_id"] = str(product["_id"])
+        
+        # Convert datetime objects to ISO format strings for JSON serialization
+        if "created_at" in product and isinstance(product["created_at"], datetime):
+            product["created_at"] = product["created_at"].isoformat()
+        if "updated_at" in product and isinstance(product["updated_at"], datetime):
+            product["updated_at"] = product["updated_at"].isoformat()
         
         logger.info(f"✓ Product updated successfully: {product.get('item_id')}")
         return {"message": "Product updated successfully", "product": product}

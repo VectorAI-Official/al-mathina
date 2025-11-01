@@ -772,38 +772,149 @@ function editProduct(productId) {
 async function handleProductSubmit(e) {
     e.preventDefault();
     
+    console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ff00ff; font-weight: bold; font-size: 14px;');
+    console.log('%c🚀 PRODUCT SUBMIT STARTED', 'color: #ff00ff; font-weight: bold; font-size: 16px; background: #000; padding: 5px;');
+    console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ff00ff; font-weight: bold; font-size: 14px;');
+    
     const submitButton = document.getElementById('submitButton');
     submitButton.disabled = true;
     submitButton.textContent = 'Saving...';
     
     try {
+        console.log('%c📋 STEP 1: Form Elements Check', 'color: #00ffff; font-weight: bold; font-size: 13px; background: #003333; padding: 3px;');
+        console.log('%c📋 STEP 1: Form Elements Check', 'color: #00ffff; font-weight: bold; font-size: 13px; background: #003333; padding: 3px;');
+        
         // Temporarily enable disabled fields to get their values (they might be disabled if pre-filled from mobile)
         const sectionSelect = document.getElementById('productSection');
         const mainCategorySelect = document.getElementById('productMainCategory');
         const subcategorySelect = document.getElementById('productSubCategory');
         
+        const newSectionInput = document.getElementById('newSectionInput');
+        const newMainInput = document.getElementById('newMainInput');
+        const newSubInput = document.getElementById('newSubInput');
+        
+        console.log('   🔍 Dropdown Elements:', {
+            sectionSelect: !!sectionSelect,
+            mainCategorySelect: !!mainCategorySelect,
+            subcategorySelect: !!subcategorySelect
+        });
+        
+        console.log('   🔍 Text Input Elements:', {
+            newSectionInput: !!newSectionInput,
+            newMainInput: !!newMainInput,
+            newSubInput: !!newSubInput
+        });
+        
+        console.log('   📊 Dropdown States:', {
+            section: {
+                value: sectionSelect?.value,
+                disabled: sectionSelect?.disabled,
+                display: sectionSelect?.style.display
+            },
+            mainCategory: {
+                value: mainCategorySelect?.value,
+                disabled: mainCategorySelect?.disabled,
+                display: mainCategorySelect?.style.display
+            },
+            subcategory: {
+                value: subcategorySelect?.value,
+                disabled: subcategorySelect?.disabled,
+                display: subcategorySelect?.style.display
+            }
+        });
+        
+        console.log('   📊 Text Input States:', {
+            newSection: {
+                value: newSectionInput?.value,
+                display: newSectionInput?.style.display,
+                required: newSectionInput?.required
+            },
+            newMain: {
+                value: newMainInput?.value,
+                display: newMainInput?.style.display,
+                required: newMainInput?.required
+            },
+            newSub: {
+                value: newSubInput?.value,
+                display: newSubInput?.style.display,
+                required: newSubInput?.required
+            }
+        });
+        
+        console.log('%c🔧 STEP 2: Disabling Required Attribute on Hidden Inputs', 'color: #ffff00; font-weight: bold; font-size: 13px; background: #333300; padding: 3px;');
+        
+        // CRITICAL FIX: Disable required attribute on hidden text inputs
+        if (newSectionInput.style.display === 'none') {
+            newSectionInput.required = false;
+            console.log('   ✅ newSectionInput required = false');
+        } else {
+            newSectionInput.required = true;
+            console.log('   ⚠️ newSectionInput required = true (visible)');
+        }
+        
+        if (newMainInput.style.display === 'none') {
+            newMainInput.required = false;
+            console.log('   ✅ newMainInput required = false');
+        } else {
+            newMainInput.required = true;
+            console.log('   ⚠️ newMainInput required = true (visible)');
+        }
+        
+        if (newSubInput.style.display === 'none') {
+            newSubInput.required = false;
+            console.log('   ✅ newSubInput required = false');
+        } else {
+            newSubInput.required = true;
+            console.log('   ⚠️ newSubInput required = true (visible)');
+        }
+        
+        console.log('%c🔓 STEP 3: Enabling Disabled Dropdowns Temporarily', 'color: #00ff00; font-weight: bold; font-size: 13px; background: #003300; padding: 3px;');
+        
         const sectionWasDisabled = sectionSelect.disabled;
         const mainWasDisabled = mainCategorySelect.disabled;
         const subWasDisabled = subcategorySelect.disabled;
         
+        console.log('   📝 Original Disabled States:', {
+            section: sectionWasDisabled,
+            mainCategory: mainWasDisabled,
+            subcategory: subWasDisabled
+        });
+        
         sectionSelect.disabled = false;
         mainCategorySelect.disabled = false;
         subcategorySelect.disabled = false;
+        
+        console.log('   ✅ All dropdowns temporarily enabled');
+        
+        console.log('%c📝 STEP 4: Reading Category Values', 'color: #ff8800; font-weight: bold; font-size: 13px; background: #332200; padding: 3px;');
         
         // Handle new category creation if needed
         let section = sectionSelect.value;
         let mainCategory = mainCategorySelect.value;
         let subcategory = subcategorySelect.value;
         
-        // Check if "Add New" was selected OR if text input is visible (cascading creation)
-        const newSectionInput = document.getElementById('newSectionInput');
-        const newMainInput = document.getElementById('newMainInput');
-        const newSubInput = document.getElementById('newSubInput');
+        console.log('   📊 Dropdown Values:', {
+            section: section,
+            mainCategory: mainCategory,
+            subcategory: subcategory
+        });
+        
+        console.log('   📊 Text Input Values:', {
+            newSection: newSectionInput.value,
+            newMain: newMainInput.value,
+            newSub: newSubInput.value
+        });
+        
+        console.log('%c🔀 STEP 5: Category Creation Logic', 'color: #ff00ff; font-weight: bold; font-size: 13px; background: #330033; padding: 3px;');
         
         // Handle new section
         if (section === '__ADD_NEW__' || (newSectionInput.style.display !== 'none' && newSectionInput.value.trim())) {
+            console.log('   🆕 Creating NEW SECTION');
             const newSection = newSectionInput.value.trim();
+            console.log('   📝 New section name:', newSection);
+            
             if (!newSection) {
+                console.error('   ❌ ERROR: Section name is empty!');
                 sectionSelect.disabled = sectionWasDisabled;
                 mainCategorySelect.disabled = mainWasDisabled;
                 subcategorySelect.disabled = subWasDisabled;
@@ -812,14 +923,24 @@ async function handleProductSubmit(e) {
                 showToast('Please enter a section name', 'error');
                 return;
             }
+            
+            console.log('   🚀 Calling createNewSection()...');
             await createNewSection(newSection);
             section = newSection;
+            console.log('   ✅ Section created:', section);
+        } else {
+            console.log('   ℹ️ Using existing section:', section);
         }
         
         // Handle new main category
         if (mainCategory === '__ADD_NEW__' || (newMainInput.style.display !== 'none' && newMainInput.value.trim())) {
+            console.log('   🆕 Creating NEW MAIN CATEGORY');
             const newMain = newMainInput.value.trim();
+            console.log('   📝 New main category name:', newMain);
+            console.log('   📝 Under section:', section);
+            
             if (!newMain) {
+                console.error('   ❌ ERROR: Main category name is empty!');
                 sectionSelect.disabled = sectionWasDisabled;
                 mainCategorySelect.disabled = mainWasDisabled;
                 subcategorySelect.disabled = subWasDisabled;
@@ -828,14 +949,25 @@ async function handleProductSubmit(e) {
                 showToast('Please enter a main category name', 'error');
                 return;
             }
+            
+            console.log('   🚀 Calling createNewMainCategory()...');
             await createNewMainCategory(section, newMain);
             mainCategory = newMain;
+            console.log('   ✅ Main category created:', mainCategory);
+        } else {
+            console.log('   ℹ️ Using existing main category:', mainCategory);
         }
         
         // Handle new subcategory
         if (subcategory === '__ADD_NEW__' || (newSubInput.style.display !== 'none' && newSubInput.value.trim())) {
+            console.log('   🆕 Creating NEW SUBCATEGORY');
             const newSub = newSubInput.value.trim();
+            console.log('   📝 New subcategory name:', newSub);
+            console.log('   📝 Under section:', section);
+            console.log('   📝 Under main category:', mainCategory);
+            
             if (!newSub) {
+                console.error('   ❌ ERROR: Subcategory name is empty!');
                 sectionSelect.disabled = sectionWasDisabled;
                 mainCategorySelect.disabled = mainWasDisabled;
                 subcategorySelect.disabled = subWasDisabled;
@@ -844,27 +976,51 @@ async function handleProductSubmit(e) {
                 showToast('Please enter a subcategory name', 'error');
                 return;
             }
+            
+            console.log('   🚀 Calling createNewSubcategory()...');
             await createNewSubcategory(section, mainCategory, newSub);
             subcategory = newSub;
+            console.log('   ✅ Subcategory created:', subcategory);
+        } else {
+            console.log('   ℹ️ Using existing subcategory:', subcategory);
         }
+        
+        console.log('%c📊 STEP 6: Final Category Values', 'color: #00ff00; font-weight: bold; font-size: 13px; background: #003300; padding: 3px;');
+        console.log('   ✅ Section:', section);
+        console.log('   ✅ Main Category:', mainCategory);
+        console.log('   ✅ Subcategory:', subcategory);
         
         // Restore disabled states after getting values
         sectionSelect.disabled = sectionWasDisabled;
         mainCategorySelect.disabled = mainWasDisabled;
         subcategorySelect.disabled = subWasDisabled;
         
+        console.log('%c🖼️ STEP 7: Image Validation', 'color: #ffff00; font-weight: bold; font-size: 13px; background: #333300; padding: 3px;');
+        console.log('   📝 currentProductId:', currentProductId);
+        console.log('   📝 Is New Product:', !currentProductId);
+        
         // ⚠️ MANDATORY IMAGE VALIDATION - Product image is required for new products
         if (!currentProductId) {  // Only validate for new products
+            console.log('   🔍 Checking for converted image...');
+            console.log('   📝 productConvertedFile:', productConvertedFile);
+            
             if (!productConvertedFile) {
-                console.error('=== VALIDATION FAILED ===');
-                console.error('Product image is REQUIRED but not selected');
+                console.error('   ❌ VALIDATION FAILED: Product image is REQUIRED but not selected');
                 showToast('❌ Product image is required! Please use Image Converter to select an image.', 'error');
                 submitButton.disabled = false;
                 submitButton.textContent = 'Save Product';
                 return;  // Stop form submission
             }
-            console.log('✅ Image validation passed:', productConvertedFile.name);
+            console.log('   ✅ Image validation passed:', {
+                fileName: productConvertedFile.name,
+                fileSize: productConvertedFile.size,
+                fileType: productConvertedFile.type
+            });
+        } else {
+            console.log('   ℹ️ Editing existing product - image validation skipped');
         }
+        
+        console.log('%c📦 STEP 8: Building Product Data Object', 'color: #00ffff; font-weight: bold; font-size: 13px; background: #003333; padding: 3px;');
         
         // Build product data object with proper 3-level structure
         // Section (Level 1 sections) -> Main Category (Level 2) -> Subcategory (Level 3)
@@ -884,22 +1040,31 @@ async function handleProductSubmit(e) {
         // Only include item_id for new products (when creating)
         if (!currentProductId) {
             productData.item_id = document.getElementById('productItemId').value;
+            console.log('   ✅ item_id added for new product:', productData.item_id);
+        } else {
+            console.log('   ℹ️ Editing existing product, item_id NOT included');
         }
         
-        // Log product data before sending
-        console.log('=== PRODUCT SUBMISSION DEBUG ===');
-        console.log('Current Product ID:', currentProductId);
-        console.log('Product Data:', JSON.stringify(productData, null, 2));
-        console.log('Section:', section);
-        console.log('Main Category:', mainCategory);
-        console.log('Subcategory:', subcategory);
+        console.log('%c📤 STEP 9: Product Data Prepared', 'color: #ff00ff; font-weight: bold; font-size: 13px; background: #330033; padding: 3px;');
+        console.log('   📝 Current Product ID:', currentProductId);
+        console.log('   📝 Operation:', currentProductId ? 'UPDATE' : 'CREATE');
+        console.log('   📊 Product Data:', JSON.stringify(productData, null, 2));
+        console.log('   ✅ All fields validated');
+        
+        console.log('%c🌐 STEP 10: Sending API Request', 'color: #ffff00; font-weight: bold; font-size: 13px; background: #333300; padding: 3px;');
         
         // Submit product data
         let response;
         
         if (currentProductId) {
             // Update existing product
-            response = await fetch(`/admin/api/products/${currentProductId}`, {
+            const apiUrl = `/admin/api/products/${currentProductId}`;
+            console.log('   🔄 UPDATE existing product');
+            console.log('   📍 API URL:', apiUrl);
+            console.log('   📝 Method: PUT');
+            console.log('   📤 Sending request...');
+            
+            response = await fetch(apiUrl, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -908,8 +1073,13 @@ async function handleProductSubmit(e) {
             });
         } else {
             // Create new product
-            console.log('Creating new product at: /admin/api/products/add');
-            response = await fetch('/admin/api/products/add', {
+            const apiUrl = '/admin/api/products/add';
+            console.log('   🆕 CREATE new product');
+            console.log('   📍 API URL:', apiUrl);
+            console.log('   📝 Method: POST');
+            console.log('   📤 Sending request...');
+            
+            response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -918,22 +1088,35 @@ async function handleProductSubmit(e) {
             });
         }
         
-        console.log('Response Status:', response.status);
-        console.log('Response OK:', response.ok);
+        console.log('%c📥 STEP 11: API Response Received', 'color: #00ff00; font-weight: bold; font-size: 13px; background: #003300; padding: 3px;');
+        console.log('   📊 Response Status:', response.status);
+        console.log('   📊 Response OK:', response.ok);
+        console.log('   📊 Response Headers:', {
+            contentType: response.headers.get('content-type'),
+            contentLength: response.headers.get('content-length')
+        });
         
         if (!response.ok) {
+            console.error('%c❌ STEP 11-ERROR: API Request Failed!', 'color: #ff0000; font-weight: bold; font-size: 14px; background: #330000; padding: 5px;');
+            
             const data = await response.json();
-            console.error('=== PRODUCT SAVE FAILED ===');
-            console.error('Status:', response.status);
-            console.error('Error Data:', data);
-            console.error('Error Detail:', data.detail);
+            console.error('   📊 Error Response:', JSON.stringify(data, null, 2));
+            console.error('   📊 Status Code:', response.status);
+            console.error('   📊 Status Text:', response.statusText);
+            console.error('   📊 Error Detail:', data.detail);
+            
             showToast(data.detail || 'Failed to save product', 'error');
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save Product';
             return;
         }
         
         const data = await response.json();
-        console.log('=== PRODUCT SAVED SUCCESSFULLY ===');
-        console.log('Response Data:', data);
+        console.log('%c✅ STEP 12: Product Saved Successfully!', 'color: #00ff00; font-weight: bold; font-size: 14px; background: #003300; padding: 5px;');
+        console.log('   📊 Success Response:', JSON.stringify(data, null, 2));
+        console.log('   📝 Message:', data.message);
+        console.log('   📝 Product ID:', data.product?._id);
+        console.log('   📝 Product Name:', data.product?.product_name);
         
         // Success - backend returns { message, product }
         showToast(data.message || 'Product saved successfully', 'success');
@@ -1751,6 +1934,13 @@ async function showMainCategoryCards(section) {
             <div class="mobile-empty-state">
                 <div class="icon">📦</div>
                 <div class="message">No categories configured for ${section}</div>
+                <div class="sub-message">Click "Add New" below to create your first main category</div>
+            </div>
+            <div class="mobile-category-list">
+                <div class="mobile-category-card mobile-category-add" onclick="openAddMainCategoryModal('${section.replace(/'/g, "\\'")}')">
+                    <div class="icon">➕</div>
+                    <div class="name">Add New</div>
+                </div>
             </div>
         `;
         return;
@@ -1905,6 +2095,13 @@ function showSubCategoryProducts(section, mainCategory) {
             <div class="mobile-empty-state">
                 <div class="icon">📦</div>
                 <div class="message">No subcategories found for ${mainCategory}</div>
+                <div class="sub-message">Click "Add New" below to create your first subcategory</div>
+            </div>
+            <div class="mobile-category-list">
+                <div class="mobile-category-card mobile-category-add" onclick="openAddSubCategory('${section.replace(/'/g, "\\'")}', '${mainCategory.replace(/'/g, "\\'")}')">
+                    <div class="icon">➕</div>
+                    <div class="name">Add New</div>
+                </div>
             </div>
         `;
         return;

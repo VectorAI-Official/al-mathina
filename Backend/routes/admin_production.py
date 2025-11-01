@@ -743,17 +743,28 @@ async def get_most_bought():
 async def add_most_bought(data: MostBoughtCreate):
     """Add a main category to Most Bought"""
     try:
+        logger.info("=" * 80)
+        logger.info("⭐ ADD TO MOST BOUGHT REQUEST RECEIVED")
+        logger.info(f"📦 Request Data: section='{data.section}', main_category='{data.main_category}'")
+        logger.info(f"   Section type: {type(data.section)}, length: {len(data.section) if data.section else 0}")
+        logger.info(f"   Main category type: {type(data.main_category)}, length: {len(data.main_category) if data.main_category else 0}")
+        
         db = get_mongo_db()
         most_bought_collection = db.most_bought
         
         # Check if already exists
+        logger.info(f"🔍 Checking if already exists in database...")
         existing = most_bought_collection.find_one({
             "section": data.section,
             "main_category": data.main_category
         })
         
         if existing:
+            logger.warning(f"⚠️  Category already exists in Most Bought!")
+            logger.info(f"   Existing document: {existing}")
             raise HTTPException(status_code=409, detail="Category already in Most Bought")
+        
+        logger.info(f"✅ No duplicate found - proceeding with insert")
         
         # Add to most_bought
         document = {
@@ -761,15 +772,21 @@ async def add_most_bought(data: MostBoughtCreate):
             "main_category": data.main_category,
             "starred_at": datetime.utcnow()
         }
-        most_bought_collection.insert_one(document)
+        logger.info(f"📝 Document to insert: {document}")
         
+        result = most_bought_collection.insert_one(document)
+        logger.info(f"✅ Insert successful - ID: {result.inserted_id}")
         logger.info(f"✓ Added to Most Bought: {data.section}/{data.main_category}")
+        logger.info("=" * 80)
+        
         return {"success": True, "message": "Added to Most Bought"}
     
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"✗ Failed to add most bought: {e}")
+        logger.error(f"   Exception type: {type(e)}")
+        logger.error(f"   Exception details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -777,24 +794,39 @@ async def add_most_bought(data: MostBoughtCreate):
 async def remove_most_bought(section: str, main_category: str):
     """Remove a main category from Most Bought"""
     try:
+        logger.info("=" * 80)
+        logger.info("🗑️ REMOVE FROM MOST BOUGHT REQUEST RECEIVED")
+        logger.info(f"📦 Request Params: section='{section}', main_category='{main_category}'")
+        logger.info(f"   Section type: {type(section)}, length: {len(section) if section else 0}")
+        logger.info(f"   Main category type: {type(main_category)}, length: {len(main_category) if main_category else 0}")
+        
         db = get_mongo_db()
         most_bought_collection = db.most_bought
         
+        logger.info(f"🔍 Attempting to delete from database...")
         result = most_bought_collection.delete_one({
             "section": section,
             "main_category": main_category
         })
         
+        logger.info(f"📊 Delete result: deleted_count={result.deleted_count}")
+        
         if result.deleted_count == 0:
+            logger.warning(f"⚠️  Category not found in Most Bought!")
             raise HTTPException(status_code=404, detail="Category not in Most Bought")
         
+        logger.info(f"✅ Delete successful")
         logger.info(f"✓ Removed from Most Bought: {section}/{main_category}")
+        logger.info("=" * 80)
+        
         return {"success": True, "message": "Removed from Most Bought"}
     
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"✗ Failed to remove most bought: {e}")
+        logger.error(f"   Exception type: {type(e)}")
+        logger.error(f"   Exception details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

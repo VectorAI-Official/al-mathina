@@ -3213,67 +3213,147 @@ async function deleteSection(section) {
 }
 
 // Toggle star main category (add/remove from Most Bought)
+// Debounce flag to prevent rapid star toggling
+let isTogglingMostBought = false;
+
 async function toggleStarMainCategory(section, mainCategory, isCurrentlyStarred, event) {
     // Stop propagation to prevent card click
     if (event) {
         event.stopPropagation();
     }
     
-    console.log('Toggle star clicked:', section, mainCategory, 'Currently starred:', isCurrentlyStarred);
+    // DEBOUNCE: Prevent rapid clicks
+    if (isTogglingMostBought) {
+        console.log('%c⚠️  DEBOUNCE: Already processing a star toggle, please wait...', 'color: #ff9900; font-weight: bold;');
+        showToast('Please wait...', 'warning');
+        return;
+    }
+    
+    isTogglingMostBought = true;
+    
+    console.log('%c⭐ TOGGLE STAR MAIN CATEGORY - START', 'color: #ff6600; font-weight: bold; font-size: 14px;');
+    console.log('%c1️⃣  Function Parameters:', 'color: #0066cc; font-weight: bold; font-size: 12px;', {
+        section: section,
+        sectionType: typeof section,
+        mainCategory: mainCategory,
+        mainCategoryType: typeof mainCategory,
+        isCurrentlyStarred: isCurrentlyStarred,
+        isCurrentlyStarredType: typeof isCurrentlyStarred
+    });
+    
+    // VALIDATION: Check if parameters are correct
+    if (!section || section === 'undefined' || section === 'null') {
+        console.error('%c❌ ERROR: Invalid section parameter!', 'color: #ff0000; font-weight: bold;', section);
+        showToast('Error: Invalid section', 'error');
+        isTogglingMostBought = false;
+        return;
+    }
+    
+    if (!mainCategory || mainCategory === 'undefined' || mainCategory === 'null') {
+        console.error('%c❌ ERROR: Invalid mainCategory parameter!', 'color: #ff0000; font-weight: bold;', mainCategory);
+        showToast('Error: Invalid main category', 'error');
+        isTogglingMostBought = false;
+        return;
+    }
     
     try {
         if (isCurrentlyStarred) {
             // Unstar - remove from Most Bought
+            console.log('%c2️⃣  ACTION: UNSTAR (Remove from Most Bought)', 'color: #ff9900; font-weight: bold; font-size: 12px;');
             showToast('Removing from Most Bought...', 'warning');
             
-            const response = await fetch(`/admin/api/most-bought?section=${encodeURIComponent(section)}&main_category=${encodeURIComponent(mainCategory)}`, {
-                method: 'DELETE'
+            const deleteUrl = `/admin/api/most-bought?section=${encodeURIComponent(section)}&main_category=${encodeURIComponent(mainCategory)}`;
+            console.log('%c3️⃣  DELETE Request URL:', 'color: #0066cc; font-size: 11px;', deleteUrl);
+            
+            const response = await fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
             });
             
+            console.log('%c4️⃣  Response Status:', 'color: #0066cc; font-size: 11px;', response.status);
             const data = await response.json();
+            console.log('%c5️⃣  Response Data:', 'color: #0066cc; font-size: 11px;', data);
             
             if (!response.ok) {
+                console.error('%c❌ DELETE Failed:', 'color: #ff0000; font-weight: bold;', {
+                    status: response.status,
+                    detail: data.detail
+                });
                 showToast(data.detail || 'Failed to remove from Most Bought', 'error');
+                isTogglingMostBought = false;
                 return;
             }
             
+            console.log('%c✅ Successfully removed from Most Bought', 'color: #00aa00; font-weight: bold;');
             showToast('Removed from Most Bought', 'success');
             
         } else {
             // Star - add to Most Bought
+            console.log('%c2️⃣  ACTION: STAR (Add to Most Bought)', 'color: #ff9900; font-weight: bold; font-size: 12px;');
             showToast('⭐ Adding to Most Bought...', 'warning');
+            
+            const requestBody = {
+                section: section,
+                main_category: mainCategory
+            };
+            console.log('%c3️⃣  POST Request Body:', 'color: #0066cc; font-size: 11px;', requestBody);
+            console.log('%c   Body as JSON:', 'color: #6666ff; font-size: 10px;', JSON.stringify(requestBody, null, 2));
             
             const response = await fetch('/admin/api/most-bought', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
                 },
-                body: JSON.stringify({
-                    section: section,
-                    main_category: mainCategory
-                })
+                body: JSON.stringify(requestBody)
             });
             
+            console.log('%c4️⃣  Response Status:', 'color: #0066cc; font-size: 11px;', response.status);
             const data = await response.json();
+            console.log('%c5️⃣  Response Data:', 'color: #0066cc; font-size: 11px;', data);
             
             if (!response.ok) {
                 if (response.status === 409) {
+                    console.warn('%c⚠️  409 Conflict: Already starred (possible race condition)', 'color: #ff9900; font-weight: bold;');
+                    console.log('%c   This can happen if button was clicked multiple times rapidly', 'color: #6666ff; font-size: 10px;');
+                    
+                    // Item already exists - just refresh the UI to show correct state
                     showToast('⭐ Already in Most Bought section', 'info');
+                    await showMainCategoryCards(section);
+                    isTogglingMostBought = false;
+                    return;
                 } else {
+                    console.error('%c❌ POST Failed:', 'color: #ff0000; font-weight: bold;', {
+                        status: response.status,
+                        detail: data.detail
+                    });
                     showToast(data.detail || 'Failed to add to Most Bought', 'error');
+                    isTogglingMostBought = false;
+                    return;
                 }
-                return;
             }
             
+            console.log('%c✅ Successfully added to Most Bought', 'color: #00aa00; font-weight: bold;');
             showToast('⭐ Added to Most Bought section!', 'success');
         }
         
         // Refresh the main category cards to update starred status
+        console.log('%c6️⃣  Refreshing main category cards...', 'color: #0066cc; font-weight: bold; font-size: 12px;');
         await showMainCategoryCards(section);
+        console.log('%c✅ TOGGLE STAR COMPLETED SUCCESSFULLY', 'color: #00aa00; font-weight: bold; font-size: 14px;');
         
     } catch (error) {
-        console.error('Error toggling star:', error);
+        console.error('%c❌ EXCEPTION in toggleStarMainCategory:', 'color: #ff0000; font-weight: bold; font-size: 14px;', error);
+        console.error('%c   Error details:', 'color: #ff0000; font-size: 11px;', {
+            message: error.message,
+            stack: error.stack
+        });
         showToast('Error updating Most Bought', 'error');
+    } finally {
+        // Always reset the debounce flag
+        isTogglingMostBought = false;
     }
 }
 

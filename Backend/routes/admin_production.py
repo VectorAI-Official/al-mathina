@@ -1497,17 +1497,25 @@ async def delete_section_compat(section_name: str):
     try:
         db = get_mongo_db()
         
-        # Remove from hierarchy
-        db.category_hierarchy.update_one(
-            {},
-            {"$pull": {"sections": section_name}}
-        )
+        logger.info(f"🗑️ Deleting section: {section_name}")
         
-        # Delete metadata
-        db.category_metadata.delete_many({"section": section_name})
+        # Delete the section document from hierarchy (each document IS a section)
+        hierarchy_result = db.category_hierarchy.delete_one({"section": section_name})
+        logger.info(f"   Hierarchy deleted: {hierarchy_result.deleted_count} document(s)")
         
-        # Delete products
-        db.products.delete_many({"section": section_name})
+        # Delete metadata for this section
+        metadata_result = db.category_metadata.delete_many({"section": section_name})
+        logger.info(f"   Metadata deleted: {metadata_result.deleted_count} document(s)")
+        
+        # Delete products in this section
+        products_result = db.products.delete_many({"category_section": section_name})
+        logger.info(f"   Products deleted: {products_result.deleted_count} document(s)")
+        
+        # Also delete from most_bought if any categories from this section were starred
+        most_bought_result = db.most_bought.delete_many({"section": section_name})
+        logger.info(f"   Most bought entries deleted: {most_bought_result.deleted_count} document(s)")
+        
+        logger.info(f"✅ Section '{section_name}' deleted successfully")
         
         return {"success": True, "message": "Section deleted"}
     except Exception as e:

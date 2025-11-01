@@ -1525,7 +1525,7 @@ async def delete_section_compat(section_name: str):
 
 @router.delete("/categories/main/{section_name}/{main_category}")
 async def delete_main_category_compat(section_name: str, main_category: str):
-    """Delete main category (compatibility endpoint)"""
+    """Delete main category and all its subcategories (cascading delete)"""
     try:
         db = get_mongo_db()
         
@@ -1533,28 +1533,46 @@ async def delete_main_category_compat(section_name: str, main_category: str):
         from urllib.parse import unquote
         main_category = unquote(main_category)
         
-        # Remove from hierarchy - use $unset to remove the field
+        logger.info(f"🗑️ Deleting main category: {section_name} → {main_category}")
+        
+        # Remove from hierarchy - use $unset to remove the main category field
         result = db.category_hierarchy.update_one(
             {"section": section_name},
             {"$unset": {f"main_categories.{main_category}": ""}}
         )
+        logger.info(f"   Hierarchy updated: matched={result.matched_count}, modified={result.modified_count}")
         
-        logger.info(f"Removed from hierarchy: matched={result.matched_count}, modified={result.modified_count}")
-        
-        # Delete metadata
-        db.category_metadata.delete_many({
+        # Delete main category metadata
+        main_metadata_result = db.category_metadata.delete_many({
             "section": section_name,
             "name": main_category,
             "type": "main_category"
         })
+        logger.info(f"   Main category metadata deleted: {main_metadata_result.deleted_count} document(s)")
         
-        # Delete products
-        db.products.delete_many({
+        # Delete ALL subcategory metadata under this main category (cascading)
+        sub_metadata_result = db.category_metadata.delete_many({
+            "section": section_name,
+            "main_category": main_category,
+            "type": "subcategory"
+        })
+        logger.info(f"   Subcategory metadata deleted (cascade): {sub_metadata_result.deleted_count} document(s)")
+        
+        # Delete all products under this main category (cascading)
+        products_result = db.products.delete_many({
             "category_section": section_name,
             "category_main": main_category
         })
+        logger.info(f"   Products deleted (cascade): {products_result.deleted_count} document(s)")
         
-        logger.info(f"✓ Main category deleted: {section_name} → {main_category}")
+        # Remove from most_bought if this main category was starred
+        most_bought_result = db.most_bought.delete_many({
+            "section": section_name,
+            "main_category": main_category
+        })
+        logger.info(f"   Most bought entries deleted: {most_bought_result.deleted_count} document(s)")
+        
+        logger.info(f"✅ Main category '{main_category}' and all children deleted successfully")
         return {"success": True, "message": "Main category deleted"}
     except Exception as e:
         logger.error(f"✗ Failed to delete main category: {e}")
@@ -1563,7 +1581,7 @@ async def delete_main_category_compat(section_name: str, main_category: str):
 
 @router.delete("/categories/sub/{section_name}/{main_category}/{subcategory}")
 async def delete_subcategory_compat(section_name: str, main_category: str, subcategory: str):
-    """Delete subcategory (compatibility endpoint)"""
+    """Delete subcategory and all its products (cascading delete)"""
     try:
         db = get_mongo_db()
         
@@ -1573,30 +1591,33 @@ async def delete_subcategory_compat(section_name: str, main_category: str, subca
         main_category = unquote(main_category)
         subcategory = unquote(subcategory)
         
+        logger.info(f"🗑️ Deleting subcategory: {section_name} → {main_category} → {subcategory}")
+        
         # Remove from hierarchy - $pull from the subcategory array
         result = db.category_hierarchy.update_one(
             {"section": section_name},  # Filter by section
             {"$pull": {f"main_categories.{main_category}": subcategory}}  # Remove subcategory from array
         )
+        logger.info(f"   Hierarchy updated: matched={result.matched_count}, modified={result.modified_count}")
         
-        logger.info(f"Removed from hierarchy: matched={result.matched_count}, modified={result.modified_count}")
-        
-        # Delete metadata
-        db.category_metadata.delete_many({
+        # Delete subcategory metadata
+        metadata_result = db.category_metadata.delete_many({
             "section": section_name,
             "main_category": main_category,
             "name": subcategory,
             "type": "subcategory"
         })
+        logger.info(f"   Subcategory metadata deleted: {metadata_result.deleted_count} document(s)")
         
-        # Delete products
-        db.products.delete_many({
+        # Delete all products in this subcategory (cascading)
+        products_result = db.products.delete_many({
             "category_section": section_name,
             "category_main": main_category,
             "category_sub": subcategory
         })
+        logger.info(f"   Products deleted (cascade): {products_result.deleted_count} document(s)")
         
-        logger.info(f"✓ Subcategory deleted: {section_name} → {main_category} → {subcategory}")
+        logger.info(f"✅ Subcategory '{subcategory}' and all products deleted successfully")
         return {"success": True, "message": "Subcategory deleted"}
     except Exception as e:
         logger.error(f"✗ Failed to delete subcategory: {e}")

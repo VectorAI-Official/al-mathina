@@ -3,24 +3,34 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: al-mathina-backend
     ports:
-      - "8000:8080"
+      - "8000:8080"  # localhost:8000 → container:8080
     env_file:
-      - .env.production
+      - .env.production  # Cloud database credentials
     environment:
-      # These can override .env.production if needed
+      # Configuration
       - ENVIRONMENT=production
       - RELOAD=true
+      - LOG_LEVEL=INFO
     volumes:
-      # Mount the entire Backend directory for hot-reload
+      # Mount Backend directory for hot-reload during development
       - .:/app
-      # Don't mount Python cache and dependencies
+      # Exclude cache and dependencies from mounting
       - /app/__pycache__
       - /app/.pytest_cache
+      - /app/venv
     restart: unless-stopped
+    # Health check to verify backend is running
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

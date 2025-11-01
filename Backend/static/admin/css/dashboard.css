@@ -2752,3 +2752,245 @@ body {
         transform: translateY(0) scale(1);
     }
 }
+
+
+/* ============================================
+   IMAGE CONVERTER MODAL STYLES
+   ============================================ */
+
+.image-converter-container {
+    padding: 20px 0;
+}
+
+.converter-section {
+    margin-bottom: 30px;
+}
+
+.converter-section h3 {
+    color: #333;
+    font-size: 18px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.file-upload-area {
+    border: 3px dashed #7B1FA2;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: #F3E5F5;
+    transition: all 0.3s ease;
+}
+
+.file-upload-area:hover {
+    background: #E1BEE7;
+    border-color: #6A1B9A;
+    transform: translateY(-2px);
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.upload-text {
+    font-size: 18px;
+    font-weight: 600;
+    color: #7B1FA2;
+    margin-bottom: 5px;
+}
+
+.upload-hint {
+    font-size: 14px;
+    color: #666;
+}
+
+/* Preview Grid */
+.converter-preview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.converter-preview-box {
+    border: 2px solid #E0E0E0;
+    border-radius: 12px;
+    padding: 15px;
+    background: #FAFAFA;
+}
+
+.converter-preview-box h4 {
+    color: #555;
+    font-size: 16px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.preview-container {
+    width: 100%;
+    height: 300px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #DDD;
+}
+
+.preview-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.preview-placeholder {
+    text-align: center;
+    color: #999;
+}
+
+.placeholder-icon {
+    font-size: 64px;
+    margin-bottom: 10px;
+    opacity: 0.5;
+}
+
+.placeholder-text {
+    font-size: 14px;
+    color: #999;
+}
+
+.preview-info {
+    margin-top: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #555;
+}
+
+.preview-info div {
+    margin: 3px 0;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #333;
+}
+
+.info-warning {
+    color: #F57C00;
+    font-weight: 600;
+}
+
+.info-success {
+    color: #388E3C;
+    font-weight: 600;
+}
+
+/* Converter Settings */
+.converter-settings {
+    background: #F5F5F5;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.converter-settings h3 {
+    color: #333;
+    font-size: 18px;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.setting-row {
+    margin-bottom: 15px;
+}
+
+.setting-row label {
+    display: block;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.setting-row input[type=\
+range\] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    background: #DDD;
+    border-radius: 5px;
+    outline: none;
+}
+
+.setting-row input[type=\range\]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #7B1FA2;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.setting-row input[type=\range\]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #7B1FA2;
+    cursor: pointer;
+    border-radius: 50%;
+    border: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .converter-preview-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .preview-container {
+        height: 250px;
+    }
+}
+
+
+/* Inline Converter Styles */
+.inline-converter-wrapper {
+    background: #f9f9f9;
+    border: 2px solid #7B1FA2;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 15px 0;
+}
+
+.inline-converter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #7B1FA2;
+}
+
+.inline-converter-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.inline-converter-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+    .inline-converter-wrapper {
+        padding: 15px;
+    }
+}

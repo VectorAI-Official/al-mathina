@@ -42,6 +42,9 @@
                 <button class="btn-secondary" onclick="window.location.href='/static/admin/orders.html'" style="background: #004D40; color: white;">
                     🛒 Orders
                 </button>
+                <button class="btn-secondary" onclick="openImageConverterModal()" style="background: #7B1FA2; color: white;">
+                    🖼️ Image Converter
+                </button>
                 <button class="btn-secondary" onclick="openMobileView()">
                     📱 Mobile View
                 </button>
@@ -139,7 +142,7 @@
                         <select id="productSection" required>
                             <option value="">Select Section</option>
                         </select>
-                        <input type="text" id="newSectionInput" placeholder="Or enter new section name" style="margin-top: 8px; display: none;">
+                        <input type="text" id="newSectionInput" placeholder="Enter new section name" style="display: none;" required>
                         <small class="form-hint">App home screen section</small>
                     </div>
                     <div class="form-group">
@@ -147,7 +150,7 @@
                         <select id="productMainCategory" required disabled>
                             <option value="">Select Section First</option>
                         </select>
-                        <input type="text" id="newMainInput" placeholder="Or enter new main category" style="margin-top: 8px; display: none;">
+                        <input type="text" id="newMainInput" placeholder="Enter new main category" style="display: none;" required>
                         <small class="form-hint">Category card display</small>
                     </div>
                 </div>
@@ -158,7 +161,7 @@
                         <select id="productSubCategory" required disabled>
                             <option value="">Select Main Category First</option>
                         </select>
-                        <input type="text" id="newSubInput" placeholder="Or enter new subcategory" style="margin-top: 8px; display: none;">
+                        <input type="text" id="newSubInput" placeholder="Enter new subcategory" style="display: none;" required>
                         <small class="form-hint">Drill-down filter</small>
                     </div>
                     <div class="form-group">
@@ -187,22 +190,20 @@
                 <input type="checkbox" id="productActive" checked style="display: none;">
 
                 <div class="form-group">
-                    <label for="productImage" style="color: #D32F2F; font-weight: bold;">
+                    <label style="color: #D32F2F; font-weight: bold;">
                         📸 Product Image <span style="color: #D32F2F;">*</span> (Required)
                     </label>
-                    <input type="file" id="productImage" accept="image/jpeg,image/jpg,image/png,image/webp" style="border: 2px solid #D32F2F; padding: 8px; border-radius: 4px;">
-                    <small class="form-hint" style="color: #D32F2F; font-weight: bold;">
-                        ⚠️ Please select a product image before saving
-                    </small>
-                    <small class="form-hint" style="display: block; margin-top: 4px;">
-                        Accepted formats: JPG, PNG, WEBP (Max 5MB)
-                    </small>
-                    <div id="imagePreview" class="image-preview">
-                        <div class="image-preview-content"></div>
-                        <button type="button" class="image-remove-btn" onclick="clearProductImagePreview()" style="display: none;">
-                            ✕ Remove Image
-                        </button>
-                    </div>
+                    <button type="button" class="btn-secondary" onclick="openInlineConverter('productConverterContainer', handleProductConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                        🖼️ Open Image Converter
+                    </button>
+                    <small class="form-hint">📷 Click to convert your image to 400×400px at 100% quality</small>
+                </div>
+                
+                <div id="productConverterContainer" style="display: none;"></div>
+                
+                <div id="productImagePreview" class="image-preview" style="display: none;">
+                    <img id="productPreviewImg" alt="Preview">
+                    <button type="button" class="remove-image-btn" onclick="clearProductImage()">✕ Remove</button>
                 </div>
 
                 <div class="modal-actions">
@@ -226,6 +227,95 @@
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" onclick="closeDeleteModal()">Cancel</button>
                 <button type="button" class="btn-danger" id="confirmDeleteButton">Delete Product</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Converter Modal -->
+    <div id="imageConverterModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2>🖼️ Image Converter - Resize to 400×400px</h2>
+                <span class="close" onclick="closeImageConverterModal()">&times;</span>
+            </div>
+            
+            <div class="image-converter-container">
+                <!-- Upload Section -->
+                <div class="converter-section">
+                    <h3>📤 Upload Image</h3>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                        Upload any image. It will be converted to 400×400px and compressed to ~1MB while maintaining quality.
+                    </p>
+                    
+                    <div class="file-upload-area" id="converterUploadArea" onclick="document.getElementById('converterImageInput').click()">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Click to select image</div>
+                        <div class="upload-hint">JPG, PNG, WEBP (any size)</div>
+                    </div>
+                    
+                    <input 
+                        type="file" 
+                        id="converterImageInput" 
+                        accept="image/jpeg,image/jpg,image/png,image/webp" 
+                        style="display: none;"
+                        onchange="handleConverterImageUpload(event)"
+                    >
+                </div>
+
+                <!-- Preview Section -->
+                <div class="converter-preview-grid">
+                    <!-- Original Preview -->
+                    <div class="converter-preview-box">
+                        <h4>Original Image</h4>
+                        <div class="preview-container" id="originalPreviewContainer">
+                            <div class="preview-placeholder">
+                                <div class="placeholder-icon">🖼️</div>
+                                <div class="placeholder-text">No image uploaded</div>
+                            </div>
+                        </div>
+                        <div class="preview-info" id="originalImageInfo"></div>
+                    </div>
+
+                    <!-- Converted Preview -->
+                    <div class="converter-preview-box">
+                        <h4>Converted (400×400px)</h4>
+                        <div class="preview-container" id="convertedPreviewContainer">
+                            <div class="preview-placeholder">
+                                <div class="placeholder-icon">✨</div>
+                                <div class="placeholder-text">Conversion result will appear here</div>
+                            </div>
+                        </div>
+                        <div class="preview-info" id="convertedImageInfo"></div>
+                    </div>
+                </div>
+
+                <!-- Conversion Settings -->
+                <div class="converter-settings" id="converterSettings" style="display: none;">
+                    <h3>⚙️ Compression Settings</h3>
+                    <div class="setting-row">
+                        <label for="qualitySlider">Quality: <span id="qualityValue">85</span>%</label>
+                        <input 
+                            type="range" 
+                            id="qualitySlider" 
+                            min="60" 
+                            max="100" 
+                            value="85" 
+                            oninput="updateQualityValue(this.value); reconvertImage()"
+                            style="width: 100%;"
+                        >
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            Higher quality = larger file size. Adjust until file is ~1MB or less.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="modal-actions" id="converterActions" style="display: none;">
+                    <button type="button" class="btn-secondary" onclick="closeImageConverterModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="downloadConvertedImage()" id="downloadBtn">
+                        ⬇️ Download Converted Image
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -323,12 +413,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="editMainCategoryImageFile">Change Image</label>
-                    <input type="file" id="editMainCategoryImageFile" 
-                           accept="image/jpeg,image/jpg,image/png,image/webp"
-                           onchange="handleEditMainCategoryImagePreview(event)">
-                    <span class="form-hint">📷 Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                    <label>Change Image</label>
+                    <button type="button" class="btn-secondary" onclick="openInlineConverter('editMainCategoryConverterContainer', handleEditMainCategoryConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                        🖼️ Open Image Converter
+                    </button>
+                    <span class="form-hint">📷 Click to convert your image to 400×400px automatically</span>
                 </div>
+                
+                <div id="editMainCategoryConverterContainer" style="display: none;"></div>
                 
                 <div id="editMainCategoryImagePreview" class="image-preview" style="display: none;">
                     <img id="editMainCategoryPreviewImg" alt="Preview">
@@ -383,12 +475,14 @@
 
                 <!-- IMAGE UPLOAD -->
                 <div class="form-group">
-                    <label for="editSubCategoryImageFile">Change Image</label>
-                    <input type="file" id="editSubCategoryImageFile" 
-                           accept="image/jpeg,image/jpg,image/png,image/webp"
-                           onchange="handleEditSubCategoryImagePreview(event)">
-                    <span class="form-hint">📷 Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                    <label>Change Image</label>
+                    <button type="button" class="btn-secondary" onclick="openInlineConverter('editSubcategoryConverterContainer', handleEditSubcategoryConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                        🖼️ Open Image Converter
+                    </button>
+                    <span class="form-hint">📷 Click to convert your image to 400×400px automatically</span>
                 </div>
+                
+                <div id="editSubcategoryConverterContainer" style="display: none;"></div>
                 
                 <!-- IMAGE PREVIEW -->
                 <div id="editSubCategoryImagePreview" class="image-preview" style="display: none;">
@@ -432,5 +526,6 @@
     </div>
 
     <script src="/static/admin/js/dashboard.js"></script>
+    <script src="/static/admin/js/imageConverter.js"></script>
 </body>
 </html>

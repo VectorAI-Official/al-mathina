@@ -7,6 +7,13 @@ let categoryMetadata = {}; // Stores category images and metadata
 let currentProductId = null;
 let deleteProductId = null;
 
+// Mobile view state tracking
+let mobileViewState = {
+    currentView: 'sections', // 'sections', 'main-categories', 'subcategories'
+    currentSection: null,
+    currentMainCategory: null
+};
+
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadCategories();
@@ -25,32 +32,54 @@ function setupEventListeners() {
     // Product form submit
     document.getElementById('productForm').addEventListener('submit', handleProductSubmit);
     
-    // Image preview
-    document.getElementById('productImage').addEventListener('change', handleImagePreview);
+    // Note: Image preview removed - using Image Converter instead
     
     // Section dropdown change - enable main category
     document.getElementById('productSection').addEventListener('change', async function(e) {
         const section = e.target.value;
         const newSectionInput = document.getElementById('newSectionInput');
+        const newMainInput = document.getElementById('newMainInput');
+        const newSubInput = document.getElementById('newSubInput');
+        const mainCategorySelect = document.getElementById('productMainCategory');
+        const subCategorySelect = document.getElementById('productSubCategory');
         
         if (section === '__ADD_NEW__') {
+            // User wants to add new section - show text inputs for all levels
             newSectionInput.style.display = 'block';
             newSectionInput.focus();
-            // Disable main and sub
-            document.getElementById('productMainCategory').disabled = true;
-            document.getElementById('productSubCategory').disabled = true;
+            
+            // Replace main category dropdown with text input
+            mainCategorySelect.style.display = 'none';
+            newMainInput.style.display = 'block';
+            newMainInput.placeholder = 'Enter new main category name';
+            
+            // Replace subcategory dropdown with text input
+            subCategorySelect.style.display = 'none';
+            newSubInput.style.display = 'block';
+            newSubInput.placeholder = 'Enter new subcategory name';
         } else if (section) {
+            // Normal section selected - show dropdowns
             newSectionInput.style.display = 'none';
+            newMainInput.style.display = 'none';
+            newSubInput.style.display = 'none';
+            
+            mainCategorySelect.style.display = 'block';
+            subCategorySelect.style.display = 'block';
+            
             populateMainCategoryDropdown(section);
         } else {
+            // No section selected - reset everything
             newSectionInput.style.display = 'none';
-            document.getElementById('productMainCategory').disabled = true;
-            document.getElementById('productMainCategory').innerHTML = '<option value="">Select Section First</option>';
-            document.getElementById('productSubCategory').disabled = true;
-            document.getElementById('productSubCategory').innerHTML = '<option value="">Select Main Category First</option>';
+            newMainInput.style.display = 'none';
+            newSubInput.style.display = 'none';
+            
+            mainCategorySelect.style.display = 'block';
+            subCategorySelect.style.display = 'block';
+            mainCategorySelect.disabled = true;
+            mainCategorySelect.innerHTML = '<option value="">Select Section First</option>';
+            subCategorySelect.disabled = true;
+            subCategorySelect.innerHTML = '<option value="">Select Main Category First</option>';
         }
-        document.getElementById('newMainInput').style.display = 'none';
-        document.getElementById('newSubInput').style.display = 'none';
     });
     
     // Main category dropdown change - enable subcategory
@@ -58,20 +87,32 @@ function setupEventListeners() {
         const mainCategory = e.target.value;
         const section = document.getElementById('productSection').value;
         const newMainInput = document.getElementById('newMainInput');
+        const newSubInput = document.getElementById('newSubInput');
+        const subCategorySelect = document.getElementById('productSubCategory');
         
         if (mainCategory === '__ADD_NEW__') {
+            // User wants to add new main category - show text inputs
             newMainInput.style.display = 'block';
             newMainInput.focus();
-            document.getElementById('productSubCategory').disabled = true;
+            
+            // Replace subcategory dropdown with text input
+            subCategorySelect.style.display = 'none';
+            newSubInput.style.display = 'block';
+            newSubInput.placeholder = 'Enter new subcategory name';
         } else if (mainCategory && section) {
+            // Normal main category selected - show dropdown
             newMainInput.style.display = 'none';
+            newSubInput.style.display = 'none';
+            subCategorySelect.style.display = 'block';
             populateSubCategoryDropdown(section, mainCategory);
         } else {
+            // No main category selected - reset
             newMainInput.style.display = 'none';
-            document.getElementById('productSubCategory').disabled = true;
-            document.getElementById('productSubCategory').innerHTML = '<option value="">Select Main Category First</option>';
+            newSubInput.style.display = 'none';
+            subCategorySelect.style.display = 'block';
+            subCategorySelect.disabled = true;
+            subCategorySelect.innerHTML = '<option value="">Select Main Category First</option>';
         }
-        document.getElementById('newSubInput').style.display = 'none';
     });
     
     // Subcategory dropdown change - show "Add New" input if needed
@@ -97,40 +138,75 @@ function setupEventListeners() {
 
 // Load categories
 async function loadCategories() {
+    console.log('%c🚀 STEP 1: loadCategories() STARTED', 'color: #00aa00; font-weight: bold; font-size: 12px;');
+    console.trace('📍 Called from:');  // ADD STACK TRACE TO SEE WHO CALLED THIS
     try {
         const timestamp = Date.now();
+        console.log('%c📥 Fetching categories from API...', 'color: #0066cc; font-size: 11px;', { timestamp, url: `/admin/api/categories/all?t=${timestamp}` });
+        
         const response = await fetch(`/admin/api/categories/all?t=${timestamp}`);
+        console.log('%c✅ API Response received', 'color: #00aa00; font-size: 11px;', { status: response.status, statusText: response.statusText });
+        
         const data = await response.json();
+        console.log('%c📊 Parsed JSON data:', 'color: #0066cc; font-size: 11px;', { hasHierarchy: !!data.hierarchy, hierarchyLength: data.hierarchy?.length });
         
         if (data && data.hierarchy) {
             categoryHierarchy = data.hierarchy;
+            console.log('%c✅ categoryHierarchy assigned:', 'color: #00aa00; font-size: 11px;', { totalItems: categoryHierarchy.length });
             
             // Handle empty database case
             if (categoryHierarchy.length === 0) {
-                console.log('No categories found in database');
-                // Initialize with empty array to allow adding
+                console.warn('%c⚠️  No categories found in database (empty)', 'color: #ff9900; font-size: 11px;');
                 categoryHierarchy = [];
+            } else {
+                console.log('%c📂 Sections found:', 'color: #0066cc; font-size: 11px;', {
+                    sections: categoryHierarchy.map(c => c.section).join(', '),
+                    totalCategories: categoryHierarchy.length
+                });
             }
             
             populateCategoryFilters();
             populateSectionDropdown();
+            console.log('%c✅ Dropdowns populated', 'color: #00aa00; font-size: 11px;');
         } else {
-            // If no hierarchy returned, initialize as empty
-            console.log('No category hierarchy returned from server');
+            console.error('%c❌ No category hierarchy in API response', 'color: #ff0000; font-size: 11px;', data);
             categoryHierarchy = [];
             populateCategoryFilters();
             populateSectionDropdown();
         }
         
         // Load category metadata (images, etc.)
+        console.log('%c🔄 STEP 2: Loading category metadata...', 'color: #00aa00; font-weight: bold; font-size: 12px;');
         await loadCategoryMetadata();
         
-        // Load mobile category sections after categories are loaded
+        // Restore previous mobile view state or load sections
+        console.log('%c🔄 STEP 3: Restoring mobile view state...', 'color: #00aa00; font-weight: bold; font-size: 12px;', mobileViewState);
         if (typeof loadMobileCategorySections === 'function') {
             loadMobileCategorySections();
+            
+            // Restore the view the user was on before reload
+            if (mobileViewState.currentView === 'main-categories' && mobileViewState.currentSection) {
+                console.log('%c   🔄 Restoring main category view for:', 'color: #0066cc; font-size: 11px;', mobileViewState.currentSection);
+                setTimeout(() => {
+                    showMainCategoryCards(mobileViewState.currentSection);
+                }, 100);
+            } else if (mobileViewState.currentView === 'subcategories' && mobileViewState.currentSection && mobileViewState.currentMainCategory) {
+                console.log('%c   🔄 Restoring subcategory view for:', 'color: #0066cc; font-size: 11px;', { 
+                    section: mobileViewState.currentSection, 
+                    mainCategory: mobileViewState.currentMainCategory 
+                });
+                setTimeout(() => {
+                    showSubCategoryProducts(mobileViewState.currentSection, mobileViewState.currentMainCategory);
+                }, 100);
+            } else {
+                console.log('%c   ✅ Showing default section view', 'color: #00aa00; font-size: 11px;');
+            }
+        } else {
+            console.error('%c❌ loadMobileCategorySections function not found', 'color: #ff0000; font-size: 11px;');
         }
     } catch (error) {
-        console.error('Error loading categories:', error);
+        console.error('%c❌ ERROR in loadCategories():', 'color: #ff0000; font-weight: bold; font-size: 12px;', error);
+        console.error('%c   Stack trace:', 'color: #ff0000; font-size: 10px;', error.stack);
         showToast('Failed to load categories. Database may be empty.', 'warning');
         // Initialize with empty array to allow adding
         categoryHierarchy = [];
@@ -138,6 +214,7 @@ async function loadCategories() {
         populateSectionDropdown();
         
         // Load mobile sections even on error (to show Add button)
+        console.log('%c🔄 Loading mobile sections despite error...', 'color: #ff9900; font-size: 11px;');
         if (typeof loadMobileCategorySections === 'function') {
             loadMobileCategorySections();
         }
@@ -146,36 +223,88 @@ async function loadCategories() {
 
 // Load category metadata
 async function loadCategoryMetadata() {
+    console.log('%c📦 STEP 2B: loadCategoryMetadata() STARTED', 'color: #00aa00; font-weight: bold; font-size: 12px;');
+    
     try {
         const timestamp = Date.now();
+        console.log('%c1️⃣  Fetching metadata from API...', 'color: #0066cc; font-size: 11px;', { 
+            timestamp, 
+            url: `/admin/api/categories/metadata?t=${timestamp}` 
+        });
+        
         const response = await fetch(`/admin/api/categories/metadata?t=${timestamp}`);
+        console.log('%c2️⃣  API Response:', 'color: #0066cc; font-size: 11px;', { 
+            status: response.status,
+            statusText: response.statusText 
+        });
+        
         const data = await response.json();
+        console.log('%c3️⃣  Parsed JSON data:', 'color: #0066cc; font-size: 11px;', { 
+            hasMetadata: !!data.metadata,
+            metadataLength: data.metadata?.length 
+        });
         
         if (data && data.metadata) {
             // Convert array to object for easy lookup
             categoryMetadata = {};
+            console.log('%c4️⃣  Processing metadata documents...', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+                totalDocs: data.metadata.length
+            });
             
-            console.log('📥 Loading metadata from server:', data.metadata.length, 'documents');
+            let sectionCount = 0;
+            let mainCatCount = 0;
+            let subCatCount = 0;
+            let otherCount = 0;
             
-            data.metadata.forEach(item => {
-                // Log main category metadata specifically
-                if (item.type === 'main_category') {
-                    console.log(`  📂 Main Category: ${item.name} (section: ${item.section}, name_ta: ${item.name_ta || '(not set)'})`);
-                }
+            data.metadata.forEach((item, index) => {
+                console.log(`   Document ${index + 1}/${data.metadata.length}:`, {
+                    type: item.type,
+                    section: item.section,
+                    name: item.name,
+                    name_ta: item.name_ta || '(not set)',
+                    image_url: !!item.image_url
+                });
+                
+                // Count by type
+                if (item.type === 'section') sectionCount++;
+                else if (item.type === 'main_category') mainCatCount++;
+                else if (item.type === 'subcategory') subCatCount++;
+                else otherCount++;
                 
                 // Store by section name (for Level 1)
                 if (item.type === 'section' && item.section) {
                     categoryMetadata[item.section] = item;
+                    console.log(`     ✅ Stored section: ${item.section}`);
                 }
                 // Store by main category or subcategory name (for Level 2 & 3)
                 else if (item.name) {
                     categoryMetadata[item.name] = item;
+                    console.log(`     ✅ Stored by name: ${item.name}`);
                 }
             });
-            console.log('✅ Category metadata loaded:', Object.keys(categoryMetadata).length, 'items');
+            
+            console.log('%c5️⃣  Metadata processing complete:', 'color: #00aa00; font-weight: bold; font-size: 11px;', {
+                sections: sectionCount,
+                mainCategories: mainCatCount,
+                subcategories: subCatCount,
+                others: otherCount,
+                totalStored: Object.keys(categoryMetadata).length
+            });
+            
+            console.log('%c6️⃣  Metadata keys stored:', 'color: #0066cc; font-size: 11px;', {
+                keys: Object.keys(categoryMetadata).slice(0, 10),
+                totalKeys: Object.keys(categoryMetadata).length
+            });
+            
+            console.log('%c✅ loadCategoryMetadata() COMPLETED SUCCESSFULLY', 'color: #00aa00; font-weight: bold; font-size: 12px;');
+        } else {
+            console.warn('%c❌ No metadata in API response', 'color: #ff9900; font-weight: bold; font-size: 11px;', data);
+            categoryMetadata = {};
         }
     } catch (error) {
-        console.error('Error loading category metadata:', error);
+        console.error('%c❌ ERROR in loadCategoryMetadata():', 'color: #ff0000; font-weight: bold; font-size: 12px;', error);
+        console.error('%c   Stack trace:', 'color: #ff0000; font-size: 10px;', error.stack);
+        categoryMetadata = {};
     }
 }
 
@@ -436,13 +565,12 @@ async function openCreateModal() {
     document.getElementById('productForm').reset();
     document.getElementById('productId').value = '';
     
-    // Clear image preview
-    const imagePreview = document.getElementById('imagePreview');
-    const imageContent = imagePreview.querySelector('.image-preview-content');
-    const removeBtn = imagePreview.querySelector('.image-remove-btn');
-    imageContent.innerHTML = '';
-    imagePreview.style.display = 'none';
-    removeBtn.style.display = 'none';
+    // Clear image preview and reset converted file
+    const imagePreview = document.getElementById('productImagePreview');
+    const previewImg = document.getElementById('productPreviewImg');
+    if (imagePreview) imagePreview.style.display = 'none';
+    if (previewImg) previewImg.src = '';
+    productConvertedFile = null;
     
     // Auto-generate item_id
     const itemIdInput = document.getElementById('productItemId');
@@ -459,10 +587,18 @@ async function openCreateModal() {
     }
     
     // Reset category dropdowns
-    document.getElementById('productMainCategory').disabled = true;
-    document.getElementById('productMainCategory').innerHTML = '<option value="">Select Section First</option>';
-    document.getElementById('productSubCategory').disabled = true;
-    document.getElementById('productSubCategory').innerHTML = '<option value="">Select Main Category First</option>';
+    const sectionSelect = document.getElementById('productSection');
+    const mainCategorySelect = document.getElementById('productMainCategory');
+    const subcategorySelect = document.getElementById('productSubCategory');
+    
+    sectionSelect.style.display = 'block';
+    mainCategorySelect.style.display = 'block';
+    subcategorySelect.style.display = 'block';
+    
+    mainCategorySelect.disabled = true;
+    mainCategorySelect.innerHTML = '<option value="">Select Section First</option>';
+    subcategorySelect.disabled = true;
+    subcategorySelect.innerHTML = '<option value="">Select Main Category First</option>';
     
     // Hide all "add new" inputs
     document.getElementById('newSectionInput').style.display = 'none';
@@ -479,13 +615,12 @@ async function openAddProductFromMobile(section, mainCategory, subCategory) {
     document.getElementById('productForm').reset();
     document.getElementById('productId').value = '';
     
-    // Clear image preview
-    const imagePreview = document.getElementById('imagePreview');
-    const imageContent = imagePreview.querySelector('.image-preview-content');
-    const removeBtn = imagePreview.querySelector('.image-remove-btn');
-    imageContent.innerHTML = '';
-    imagePreview.style.display = 'none';
-    removeBtn.style.display = 'none';
+    // Clear image preview and reset converted file
+    const imagePreview = document.getElementById('productImagePreview');
+    const previewImg = document.getElementById('productPreviewImg');
+    if (imagePreview) imagePreview.style.display = 'none';
+    if (previewImg) previewImg.src = '';
+    productConvertedFile = null;
     
     // Auto-generate item_id
     const itemIdInput = document.getElementById('productItemId');
@@ -602,24 +737,32 @@ function editProduct(productId) {
     document.getElementById('productDescription').value = product.description || '';
     document.getElementById('productActive').checked = product.active;
     
-    // Hide all "add new" inputs
+    // Hide all "add new" inputs and show dropdowns
+    const sectionSelect = document.getElementById('productSection');
+    const mainCategorySelect = document.getElementById('productMainCategory');
+    const subcategorySelect = document.getElementById('productSubCategory');
+    
+    sectionSelect.style.display = 'block';
+    mainCategorySelect.style.display = 'block';
+    subcategorySelect.style.display = 'block';
+    
     document.getElementById('newSectionInput').style.display = 'none';
     document.getElementById('newMainInput').style.display = 'none';
     document.getElementById('newSubInput').style.display = 'none';
     
     // Show current image if exists
-    const imagePreview = document.getElementById('imagePreview');
-    const imageContent = imagePreview.querySelector('.image-preview-content');
-    const removeBtn = imagePreview.querySelector('.image-remove-btn');
+    const imagePreview = document.getElementById('productImagePreview');
+    const previewImg = document.getElementById('productPreviewImg');
+    
+    // Reset converted file
+    productConvertedFile = null;
     
     if (product.image_url) {
-        imageContent.innerHTML = `<img src="${product.image_url}" alt="Current image">`;
-        imagePreview.style.display = 'block';
-        removeBtn.style.display = 'inline-block';
+        if (previewImg) previewImg.src = product.image_url;
+        if (imagePreview) imagePreview.style.display = 'block';
     } else {
-        imageContent.innerHTML = '';
-        imagePreview.style.display = 'none';
-        removeBtn.style.display = 'none';
+        if (previewImg) previewImg.src = '';
+        if (imagePreview) imagePreview.style.display = 'none';
     }
     
     document.getElementById('productModal').style.display = 'block';
@@ -652,14 +795,20 @@ async function handleProductSubmit(e) {
         let mainCategory = mainCategorySelect.value;
         let subcategory = subcategorySelect.value;
         
-        // Check if "Add New" was selected and create new categories
-        if (section === '__ADD_NEW__') {
-            const newSection = document.getElementById('newSectionInput').value.trim();
+        // Check if "Add New" was selected OR if text input is visible (cascading creation)
+        const newSectionInput = document.getElementById('newSectionInput');
+        const newMainInput = document.getElementById('newMainInput');
+        const newSubInput = document.getElementById('newSubInput');
+        
+        // Handle new section
+        if (section === '__ADD_NEW__' || (newSectionInput.style.display !== 'none' && newSectionInput.value.trim())) {
+            const newSection = newSectionInput.value.trim();
             if (!newSection) {
-                // Restore disabled states before returning
                 sectionSelect.disabled = sectionWasDisabled;
                 mainCategorySelect.disabled = mainWasDisabled;
                 subcategorySelect.disabled = subWasDisabled;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Save Product';
                 showToast('Please enter a section name', 'error');
                 return;
             }
@@ -667,13 +816,15 @@ async function handleProductSubmit(e) {
             section = newSection;
         }
         
-        if (mainCategory === '__ADD_NEW__') {
-            const newMain = document.getElementById('newMainInput').value.trim();
+        // Handle new main category
+        if (mainCategory === '__ADD_NEW__' || (newMainInput.style.display !== 'none' && newMainInput.value.trim())) {
+            const newMain = newMainInput.value.trim();
             if (!newMain) {
-                // Restore disabled states before returning
                 sectionSelect.disabled = sectionWasDisabled;
                 mainCategorySelect.disabled = mainWasDisabled;
                 subcategorySelect.disabled = subWasDisabled;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Save Product';
                 showToast('Please enter a main category name', 'error');
                 return;
             }
@@ -681,13 +832,15 @@ async function handleProductSubmit(e) {
             mainCategory = newMain;
         }
         
-        if (subcategory === '__ADD_NEW__') {
-            const newSub = document.getElementById('newSubInput').value.trim();
+        // Handle new subcategory
+        if (subcategory === '__ADD_NEW__' || (newSubInput.style.display !== 'none' && newSubInput.value.trim())) {
+            const newSub = newSubInput.value.trim();
             if (!newSub) {
-                // Restore disabled states before returning
                 sectionSelect.disabled = sectionWasDisabled;
                 mainCategorySelect.disabled = mainWasDisabled;
                 subcategorySelect.disabled = subWasDisabled;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Save Product';
                 showToast('Please enter a subcategory name', 'error');
                 return;
             }
@@ -702,16 +855,15 @@ async function handleProductSubmit(e) {
         
         // ⚠️ MANDATORY IMAGE VALIDATION - Product image is required for new products
         if (!currentProductId) {  // Only validate for new products
-            const imageFile = document.getElementById('productImage').files[0];
-            if (!imageFile) {
+            if (!productConvertedFile) {
                 console.error('=== VALIDATION FAILED ===');
                 console.error('Product image is REQUIRED but not selected');
-                showToast('❌ Product image is required! Please select an image before saving.', 'error');
+                showToast('❌ Product image is required! Please use Image Converter to select an image.', 'error');
                 submitButton.disabled = false;
                 submitButton.textContent = 'Save Product';
                 return;  // Stop form submission
             }
-            console.log('✅ Image validation passed:', imageFile.name);
+            console.log('✅ Image validation passed:', productConvertedFile.name);
         }
         
         // Build product data object with proper 3-level structure
@@ -786,8 +938,8 @@ async function handleProductSubmit(e) {
         // Success - backend returns { message, product }
         showToast(data.message || 'Product saved successfully', 'success');
         
-        // IMPORTANT: Get image file BEFORE closing modal (which resets the form)
-        const imageFile = document.getElementById('productImage').files[0];
+        // IMPORTANT: Get converted image file BEFORE closing modal
+        const imageFile = productConvertedFile;
         console.log('=== REQUIRED IMAGE UPLOAD CHECK ===');
         console.log('Product Image (REQUIRED):', imageFile ? imageFile.name : '⚠️ MISSING');
         console.log('Product ID:', data.product ? data.product._id : 'None');
@@ -851,69 +1003,8 @@ async function handleProductSubmit(e) {
     }
 }
 
-// Handle image preview
-function handleImagePreview(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-        showToast('Invalid file type. Please use JPG, PNG, or WEBP', 'error');
-        e.target.value = '';
-        return;
-    }
-    
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-        showToast('File too large. Maximum size is 5MB', 'error');
-        e.target.value = '';
-        return;
-    }
-    
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        const imagePreview = document.getElementById('imagePreview');
-        const imageContent = imagePreview.querySelector('.image-preview-content');
-        const removeBtn = imagePreview.querySelector('.image-remove-btn');
-        
-        imageContent.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
-        imagePreview.style.display = 'block';
-        removeBtn.style.display = 'inline-block';
-        
-        // Change the file input styling to show success (required field fulfilled)
-        const fileInput = document.getElementById('productImage');
-        fileInput.style.borderColor = '#4CAF50';
-        fileInput.style.backgroundColor = '#E8F5E9';
-        
-        // Show success message for required field
-        showToast('✅ Required image selected! Will be uploaded when you save', 'success');
-    };
-    reader.readAsDataURL(file);
-}
-
-// Clear product image preview
-function clearProductImagePreview() {
-    const imagePreview = document.getElementById('imagePreview');
-    const imageContent = imagePreview.querySelector('.image-preview-content');
-    const removeBtn = imagePreview.querySelector('.image-remove-btn');
-    const fileInput = document.getElementById('productImage');
-    
-    // Clear the preview
-    imageContent.innerHTML = '';
-    imagePreview.style.display = 'none';
-    removeBtn.style.display = 'none';
-    
-    // Reset file input styling to required state (red)
-    fileInput.style.borderColor = '#D32F2F';
-    fileInput.style.backgroundColor = '';
-    
-    // Clear the file input
-    fileInput.value = '';
-    
-    showToast('Image removed', 'success');
-}
+// Note: Old handleImagePreview and clearProductImagePreview functions removed
+// Now using Image Converter with productConvertedFile global variable
 
 // Toggle Best Seller status
 async function toggleBestSeller(productId, currentStatus) {
@@ -1055,6 +1146,13 @@ function closeModal() {
     document.getElementById('productMainCategory').disabled = false;
     document.getElementById('productSubCategory').disabled = false;
     
+    // Reset converted image file
+    productConvertedFile = null;
+    const imagePreview = document.getElementById('productImagePreview');
+    if (imagePreview) imagePreview.style.display = 'none';
+    const previewImg = document.getElementById('productPreviewImg');
+    if (previewImg) previewImg.src = '';
+    
     document.getElementById('productModal').style.display = 'none';
     document.getElementById('productForm').reset();
     currentProductId = null;
@@ -1187,6 +1285,17 @@ async function openMobileView() {
     panel.classList.add('active');
     backdrop.classList.add('active');
     
+    // CRITICAL FIX: Reset container visibility states to default
+    const categoriesContainer = document.getElementById('mobileCategorySections');
+    const productsContainer = document.getElementById('mobileProductsList');
+    
+    if (categoriesContainer) {
+        categoriesContainer.style.display = 'block';  // Show categories by default
+    }
+    if (productsContainer) {
+        productsContainer.style.display = 'none';  // Hide products by default
+    }
+    
     // Show loading state
     const container = document.getElementById('mobileCategorySections');
     container.innerHTML = `
@@ -1231,12 +1340,48 @@ function loadMobilePreview() {
 
 // Load category sections for mobile view
 function loadMobileCategorySections() {
+    console.log('%c📱 MOBILE VIEW: loadMobileCategorySections() STARTED', 'color: #0066cc; font-weight: bold; font-size: 13px;');
+    
+    // Only reset state if we're explicitly loading sections (not restoring a previous view)
+    const isExplicitSectionLoad = !mobileViewState.currentSection;
+    if (isExplicitSectionLoad) {
+        mobileViewState.currentView = 'sections';
+        mobileViewState.currentSection = null;
+        mobileViewState.currentMainCategory = null;
+    }
+    
     const container = document.getElementById('mobileCategorySections');
+    console.log('%c1️⃣  Container check:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        elementFound: !!container,
+        elementId: 'mobileCategorySections',
+        innerHTML_length: container?.innerHTML?.length || 0
+    });
+    
+    if (!container) {
+        console.error('%c❌ CRITICAL: Container #mobileCategorySections not found in DOM!', 'color: #ff0000; font-weight: bold; font-size: 11px;');
+        return;
+    }
+    
+    console.log('%c2️⃣  Data validation:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        categoryHierarchy_defined: typeof categoryHierarchy !== 'undefined',
+        categoryHierarchy_length: categoryHierarchy?.length,
+        categoryHierarchy_isArray: Array.isArray(categoryHierarchy)
+    });
+    
+    if (!categoryHierarchy || !Array.isArray(categoryHierarchy)) {
+        console.error('%c❌ CRITICAL: categoryHierarchy is not an array!', 'color: #ff0000; font-weight: bold; font-size: 11px;', categoryHierarchy);
+        return;
+    }
+    
+    if (categoryHierarchy.length === 0) {
+        console.warn('%c⚠️  WARNING: categoryHierarchy is empty (no categories in database)', 'color: #ff9900; font-weight: bold; font-size: 11px;');
+    }
     
     let html = '<div class="mobile-category-title">📂 Sections</div>';
     
     // Always show search container if there are categories
     if (categoryHierarchy && categoryHierarchy.length > 0) {
+        console.log('%c3️⃣  Adding search container...', 'color: #0066cc; font-size: 11px;');
         html += `
             <div class="mobile-search-container">
                 <input type="text" 
@@ -1251,20 +1396,47 @@ function loadMobileCategorySections() {
     
     html += '<div class="mobile-category-grid" id="mobileCategoryGrid">';
     
+    console.log('%c4️⃣  Extracting sections from hierarchy...', 'color: #0066cc; font-weight: bold; font-size: 11px;');
+    
     // Get unique sections from category hierarchy (support `section` and `sections` array shapes)
     if (categoryHierarchy && categoryHierarchy.length > 0) {
         const sectionsSet = new Set();
-        categoryHierarchy.forEach(item => {
-            if (!item) return;
-            if (item.section && item.section !== null && item.section !== 'undefined') sectionsSet.add(item.section);
+        let sectionCount = 0;
+        
+        categoryHierarchy.forEach((item, index) => {
+            if (!item) {
+                console.warn(`   ⚠️  Item at index ${index} is null/undefined`, item);
+                return;
+            }
+            
+            if (item.section && item.section !== null && item.section !== 'undefined') {
+                sectionsSet.add(item.section);
+                sectionCount++;
+            }
+            
             if (Array.isArray(item.sections)) {
-                item.sections.forEach(s => { if (s && s !== null && s !== 'undefined') sectionsSet.add(s); });
+                item.sections.forEach(s => {
+                    if (s && s !== null && s !== 'undefined') {
+                        sectionsSet.add(s);
+                        sectionCount++;
+                    }
+                });
             }
         });
 
         const sections = Array.from(sectionsSet).sort();
+        console.log('%c   ✅ Sections extracted:', 'color: #00aa00; font-size: 11px;', {
+            totalSections: sections.length,
+            sectionNames: sections,
+            categoriesProcessed: categoryHierarchy.length
+        });
 
-        sections.forEach(section => {
+        if (sections.length === 0) {
+            console.warn('%c   ⚠️  No sections found in categoryHierarchy!', 'color: #ff9900; font-size: 11px;');
+        }
+
+        sections.forEach((section, idx) => {
+            console.log(`   📌 Section ${idx + 1}/${sections.length}: "${section}"`);
             html += `
                 <div class="mobile-category-card" data-category-name="${section.toLowerCase()}" onclick="showMobileCategoryProducts('${section.replace(/'/g, "\\'")}')">
                     <button class="edit-category-btn" onclick="openEditSectionModal('${section.replace(/'/g, "\\'")}', event)" title="Edit Section">
@@ -1278,6 +1450,7 @@ function loadMobileCategorySections() {
             `;
         });
     } else {
+        console.warn('%c   ⚠️  No categories to extract sections from', 'color: #ff9900; font-size: 11px;');
         // Show empty state message when no categories exist
         html += `
             <div class="mobile-empty-state-inline">
@@ -1288,6 +1461,7 @@ function loadMobileCategorySections() {
     }
     
     // Always show "Add Section" button
+    console.log('%c5️⃣  Adding "Add Section" button...', 'color: #0066cc; font-size: 11px;');
     html += `
         <div class="mobile-category-card mobile-add-category-card" data-category-name="add new" onclick="openAddCategoryModal()">
             <div class="name">➕ Add Section</div>
@@ -1295,10 +1469,42 @@ function loadMobileCategorySections() {
     `;
     
     html += '</div>';
-    container.innerHTML = html;
+    
+    console.log('%c6️⃣  HTML generation complete:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        totalCharacters: html.length,
+        htmlPreview: html.substring(0, 100) + '...'
+    });
+    
+    console.log('%c7️⃣  Setting innerHTML on container...', 'color: #0066cc; font-size: 11px;');
+    try {
+        container.innerHTML = html;
+        console.log('%c   ✅ innerHTML set successfully', 'color: #00aa00; font-size: 11px;');
+        
+        // Verify rendering
+        const renderedCards = container.querySelectorAll('.mobile-category-card');
+        console.log('%c8️⃣  Verification - Cards rendered:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+            totalCards: renderedCards.length,
+            expectedCards: categoryHierarchy.length + 1 // +1 for Add Section
+        });
+        
+        if (renderedCards.length === 0 && categoryHierarchy.length > 0) {
+            console.error('%c   ❌ ERROR: No cards found but categories exist!', 'color: #ff0000; font-weight: bold; font-size: 11px;');
+        }
+    } catch (renderError) {
+        console.error('%c   ❌ CRITICAL ERROR setting innerHTML:', 'color: #ff0000; font-weight: bold; font-size: 11px;', renderError);
+        return;
+    }
     
     // Hide products section initially
-    document.getElementById('mobileProductsList').style.display = 'none';
+    const productsContainer = document.getElementById('mobileProductsList');
+    if (productsContainer) {
+        productsContainer.style.display = 'none';
+        console.log('%c9️⃣  Products container hidden (display: none)', 'color: #0066cc; font-size: 11px;');
+    } else {
+        console.warn('%c   ⚠️  Products container #mobileProductsList not found', 'color: #ff9900; font-size: 11px;');
+    }
+    
+    console.log('%c✅ loadMobileCategorySections() COMPLETED SUCCESSFULLY', 'color: #00aa00; font-weight: bold; font-size: 13px;');
 }
 
 // Filter mobile categories based on search input
@@ -1361,20 +1567,49 @@ function clearMobileSearch() {
 
 // Show products for a selected category
 function showMobileCategoryProducts(categorySection) {
+    console.log('%c📱 MOBILE VIEW: showMobileCategoryProducts() STARTED', 'color: #0066cc; font-weight: bold; font-size: 13px;');
+    console.log('%c   Selected section:', 'color: #0066cc; font-size: 11px;', { section: categorySection });
+    
     const categoriesContainer = document.getElementById('mobileCategorySections');
     const productsContainer = document.getElementById('mobileProductsList');
     
-    // Hide section cards, show products
-    categoriesContainer.style.display = 'none';
-    productsContainer.style.display = 'block';
+    console.log('%c1️⃣  Container validation:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        sectionsContainer_found: !!categoriesContainer,
+        productsContainer_found: !!productsContainer
+    });
+    
+    if (!categoriesContainer || !productsContainer) {
+        console.error('%c❌ CRITICAL: One or both containers not found!', 'color: #ff0000; font-weight: bold; font-size: 11px;', {
+            sectionsContainer: !!categoriesContainer,
+            productsContainer: !!productsContainer
+        });
+        return;
+    }
+    
+    console.log('%c2️⃣  Toggling container visibility...', 'color: #0066cc; font-size: 11px;');
+    try {
+        categoriesContainer.style.display = 'none';
+        console.log('   ✅ Sections hidden (display: none)');
+        
+        productsContainer.style.display = 'block';
+        console.log('   ✅ Products shown (display: block)');
+    } catch (e) {
+        console.error('%c   ❌ ERROR toggling display:', 'color: #ff0000; font-size: 11px;', e);
+        return;
+    }
     
     // SPECIAL HANDLING: Best Seller shows featured products directly
+    console.log('%c3️⃣  Checking section type...', 'color: #0066cc; font-weight: bold; font-size: 11px;');
     if (categorySection === 'Best Seller') {
+        console.log('%c   🌟 Best Seller section detected - showing featured products', 'color: #ff9900; font-size: 11px;');
         showBestSellerProducts();
     } else {
+        console.log(`%c   📂 Normal section detected - showing main categories for: "${categorySection}"`, 'color: #0066cc; font-size: 11px;');
         // Normal sections: Show main category cards (Level 2)
         showMainCategoryCards(categorySection);
     }
+    
+    console.log('%c✅ showMobileCategoryProducts() COMPLETED', 'color: #00aa00; font-weight: bold; font-size: 13px;');
 }
 
 // Show Best Seller products directly (no main categories)
@@ -1458,12 +1693,57 @@ function showBestSellerProducts() {
 
 // Show main category cards for a section (Level 2)
 async function showMainCategoryCards(section) {
+    console.log('%c📱 MOBILE VIEW: showMainCategoryCards() STARTED', 'color: #0066cc; font-weight: bold; font-size: 13px;');
+    console.log('%c   For section:', 'color: #0066cc; font-size: 11px;', { section });
+    
+    // Update mobile view state
+    mobileViewState.currentView = 'main-categories';
+    mobileViewState.currentSection = section;
+    mobileViewState.currentMainCategory = null;
+    
+    // CRITICAL FIX: Ensure containers are in correct state
+    const categoriesContainer = document.getElementById('mobileCategorySections');
     const productsContainer = document.getElementById('mobileProductsList');
     
+    console.log('%c1️⃣  Container validation:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        categoriesContainer: !!categoriesContainer,
+        productsContainer: !!productsContainer,
+        productsContainerDisplay: productsContainer?.style.display
+    });
+    
+    if (!productsContainer || !categoriesContainer) {
+        console.error('%c❌ CRITICAL: Containers not found!', 'color: #ff0000; font-weight: bold; font-size: 11px;');
+        return;
+    }
+    
+    // Toggle visibility: hide sections, show products
+    categoriesContainer.style.display = 'none';
+    productsContainer.style.display = 'block';
+    console.log('%c   ✅ Containers toggled: sections=none, products=block', 'color: #00aa00; font-size: 11px;');
+    
     // Get category hierarchy for this section
+    console.log('%c2️⃣  Searching for section in categoryHierarchy...', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        hierarchyLength: categoryHierarchy.length,
+        lookingFor: section
+    });
+    
+    // DEBUG: Show all sections in hierarchy
+    console.log('%c   📋 Available sections in hierarchy:', 'color: #6666ff; font-size: 10px;');
+    categoryHierarchy.forEach((item, idx) => {
+        console.log(`      [${idx}] Section: "${item.section}" | Main cats: ${Object.keys(item.main_categories || {}).length}`);
+    });
+    
     const sectionCategory = categoryHierarchy.find(item => item.section === section);
     
+    console.log('%c   ✅ Section found:', 'color: #00aa00; font-size: 11px;', {
+        found: !!sectionCategory,
+        hasMainCategories: !!sectionCategory?.main_categories,
+        mainCategoriesCount: Object.keys(sectionCategory?.main_categories || {}).length,
+        sectionDetails: sectionCategory
+    });
+    
     if (!sectionCategory || !sectionCategory.main_categories) {
+        console.warn('%c   ⚠️  No main categories found for section: ' + section, 'color: #ff9900; font-size: 11px;');
         productsContainer.innerHTML = `
             <div class="mobile-back-button" onclick="showMobileCategories()">
                 ← Back to Sections
@@ -1477,20 +1757,34 @@ async function showMainCategoryCards(section) {
     }
     
     // Fetch most bought items to check starred status
+    console.log('%c3️⃣  Fetching most bought items...', 'color: #0066cc; font-weight: bold; font-size: 11px;');
     let mostBoughtItems = [];
     try {
         const timestamp = Date.now();
         const response = await fetch(`/admin/api/most-bought?t=${timestamp}`);
+        console.log('   Response status:', response.status);
+        
         if (response.ok) {
             const data = await response.json();
             mostBoughtItems = data.items || [];
+            console.log('%c   ✅ Most bought items loaded:', 'color: #00aa00; font-size: 11px;', {
+                count: mostBoughtItems.length,
+                items: mostBoughtItems
+            });
+        } else {
+            console.warn('%c   ⚠️  Most bought API returned status:', 'color: #ff9900; font-size: 11px;', response.status);
         }
     } catch (error) {
-        console.error('Error fetching most bought:', error);
+        console.warn('%c   ⚠️  Error fetching most bought:', 'color: #ff9900; font-size: 11px;', error.message);
     }
     
     // Extract main categories (Level 2) - these are the keys of main_categories object
+    console.log('%c4️⃣  Extracting main categories...', 'color: #0066cc; font-weight: bold; font-size: 11px;');
     const mainCategories = Object.keys(sectionCategory.main_categories);
+    console.log('%c   ✅ Main categories extracted:', 'color: #00aa00; font-size: 11px;', {
+        count: mainCategories.length,
+        names: mainCategories
+    });
     
     // Get section icon
     const sectionIcon = getCategoryIcon(section);
@@ -1510,7 +1804,9 @@ async function showMainCategoryCards(section) {
     `;
     
     // Build main category cards
-    mainCategories.forEach(mainCat => {
+    console.log('%c5️⃣  Building main category cards...', 'color: #0066cc; font-weight: bold; font-size: 11px;');
+    console.log('%c   📊 Main categories to render:', 'color: #6666ff; font-size: 10px;', mainCategories);
+    mainCategories.forEach((mainCat, idx) => {
         const metadata = categoryMetadata[mainCat] || {};
         const imageUrl = metadata.image_url;
         const icon = getCategoryIcon(mainCat);
@@ -1519,6 +1815,12 @@ async function showMainCategoryCards(section) {
         const isStarred = mostBoughtItems.some(item => 
             item.section === section && item.main_category === mainCat
         );
+        
+        console.log(`   Card ${idx + 1}/${mainCategories.length}: "${mainCat}"`, {
+            hasImage: !!imageUrl,
+            isStarred: isStarred,
+            metadata: metadata
+        });
         
         html += `
             <div class="mobile-category-card ${isStarred ? 'starred-category' : ''}" onclick="showSubCategoryProducts('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}')">
@@ -1551,12 +1853,46 @@ async function showMainCategoryCards(section) {
         </div>
     `;
     
-    productsContainer.innerHTML = html;
+    console.log('%c6️⃣  Setting innerHTML on container...', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+        htmlLength: html.length
+    });
+    
+    try {
+        productsContainer.innerHTML = html;
+        console.log('%c   ✅ innerHTML set successfully', 'color: #00aa00; font-size: 11px;');
+        
+        const renderedCards = productsContainer.querySelectorAll('.mobile-category-card');
+        console.log('%c7️⃣  Verification - Cards rendered:', 'color: #0066cc; font-weight: bold; font-size: 11px;', {
+            totalCards: renderedCards.length,
+            expectedCards: mainCategories.length + 1
+        });
+    } catch (renderError) {
+        console.error('%c   ❌ ERROR setting innerHTML:', 'color: #ff0000; font-weight: bold; font-size: 11px;', renderError);
+        return;
+    }
+    
+    console.log('%c✅ showMainCategoryCards() COMPLETED SUCCESSFULLY', 'color: #00aa00; font-weight: bold; font-size: 13px;');
 }
 
 // Show subcategory products in sidebar layout (Level 3)
 function showSubCategoryProducts(section, mainCategory) {
+    // Update mobile view state
+    mobileViewState.currentView = 'subcategories';
+    mobileViewState.currentSection = section;
+    mobileViewState.currentMainCategory = mainCategory;
+    
+    // CRITICAL FIX: Ensure containers are in correct state
+    const categoriesContainer = document.getElementById('mobileCategorySections');
     const productsContainer = document.getElementById('mobileProductsList');
+    
+    if (!productsContainer || !categoriesContainer) {
+        console.error('❌ CRITICAL: Containers not found for subcategory view!');
+        return;
+    }
+    
+    // Toggle visibility: hide sections, show products
+    categoriesContainer.style.display = 'none';
+    productsContainer.style.display = 'block';
     
     // Get category hierarchy for this section
     const sectionCategory = categoryHierarchy.find(item => item.section === section);
@@ -1698,6 +2034,11 @@ function searchMainCategories() {
 function showMobileCategories() {
     const categoriesContainer = document.getElementById('mobileCategorySections');
     const productsContainer = document.getElementById('mobileProductsList');
+    
+    // Reset mobile view state when going back to sections
+    mobileViewState.currentView = 'sections';
+    mobileViewState.currentSection = null;
+    mobileViewState.currentMainCategory = null;
     
     // Show categories, hide products
     categoriesContainer.style.display = 'block';
@@ -1860,16 +2201,20 @@ function openAddMainCategoryModal(section) {
                 </div>
                 
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label for="addMainCategoryImageFile">Upload Image <span style="color: red;">*</span></label>
-                    <input type="file" id="addMainCategoryImageFile" 
-                           accept="image/jpeg,image/jpg,image/png,image/webp" 
-                           onchange="handleAddMainCategoryImagePreview(event)"
-                           required>
-                    <span class="form-hint">📐 Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                    <label>Upload Image <span style="color: red;">*</span></label>
+                    <button type="button" class="btn-secondary" onclick="openInlineConverter('addMainCategoryConverterContainer', handleAddMainCategoryConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                        🖼️ Open Image Converter
+                    </button>
+                    <span class="form-hint">📐 Click to convert your image to 400×400px automatically</span>
                 </div>
+                
+                <div id="addMainCategoryConverterContainer" style="display: none;"></div>
                 
                 <div id="addMainCategoryImagePreview" class="image-preview" style="display: none; margin-bottom: 20px;">
                     <img id="addMainCategoryPreviewImg" alt="Preview" style="max-height: 150px; border-radius: 8px;">
+                    <div style="margin-top: 8px; color: #4CAF50; font-size: 13px;">
+                        ✅ Image ready to upload (400×400px)
+                    </div>
                     <button type="button" class="btn-danger btn-sm" onclick="clearAddMainCategoryImagePreview()">✕ Remove</button>
                 </div>
                 
@@ -1890,6 +2235,39 @@ function closeAddMainCategoryModal() {
     if (modal) {
         modal.remove();
     }
+    // Reset converted file
+    addMainCategoryConvertedFile = null;
+}
+
+// Global variable to store converted image for Add Main Category
+let addMainCategoryConvertedFile = null;
+
+// Callback when user clicks "Use Image" in inline converter
+function handleAddMainCategoryConverterResult(file, blob) {
+    addMainCategoryConvertedFile = file;
+    
+    // Show preview
+    const preview = document.getElementById('addMainCategoryImagePreview');
+    const previewImg = document.getElementById('addMainCategoryPreviewImg');
+    
+    if (preview && previewImg) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Clear add main category image preview
+function clearAddMainCategoryImagePreview() {
+    addMainCategoryConvertedFile = null;
+    const preview = document.getElementById('addMainCategoryImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    const previewImg = document.getElementById('addMainCategoryPreviewImg');
+    if (previewImg) previewImg.src = '';
 }
 
 // Handle add main category form submission
@@ -1900,7 +2278,7 @@ async function handleAddMainCategory(event, section) {
     
     const mainCategoryName = document.getElementById('mainCategoryName').value.trim();
     const mainCategoryNameTa = document.getElementById('mainCategoryNameTa').value.trim();
-    const imageFile = document.getElementById('addMainCategoryImageFile').files[0];
+    const imageFile = addMainCategoryConvertedFile; // Use converted image
     
     console.log('Form values - name:', mainCategoryName, 'name_ta:', mainCategoryNameTa, 'imageFile:', imageFile);
     
@@ -1911,8 +2289,8 @@ async function handleAddMainCategory(event, section) {
     
     // Validate that image is uploaded
     if (!imageFile) {
-        showToast('Please upload an image for the main category', 'error');
-        document.getElementById('addMainCategoryImageRequired').style.display = 'block';
+        showToast('Please convert and upload an image using the Image Converter', 'error');
+        return;
         return;
     }
     
@@ -2167,19 +2545,20 @@ function openAddSubCategory(section, mainCategory) {
                 </div>
                 
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label for="addSubCategoryImageFile">
-                        Upload Image <span style="color: red;">*</span>
-                    </label>
-                    <input type="file" 
-                           id="addSubCategoryImageFile" 
-                           accept="image/jpeg,image/jpg,image/png,image/webp" 
-                           onchange="handleAddSubCategoryImagePreview(event)"
-                           required>
-                    <span class="form-hint">� Square images only (1:1 ratio, 300x300px recommended, Max 800KB)</span>
+                    <label>Upload Image <span style="color: red;">*</span></label>
+                    <button type="button" class="btn-secondary" onclick="openInlineConverter('addSubcategoryConverterContainer', handleAddSubcategoryConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                        🖼️ Open Image Converter
+                    </button>
+                    <span class="form-hint">📐 Click to convert your image to 400×400px automatically</span>
                 </div>
+                
+                <div id="addSubcategoryConverterContainer" style="display: none;"></div>
                 
                 <div id="addSubCategoryImagePreview" class="image-preview" style="display: none; margin-bottom: 20px;">
                     <img id="addSubCategoryPreviewImg" alt="Preview" style="max-height: 100px;">
+                    <div style="margin-top: 8px; color: #4CAF50; font-size: 13px;">
+                        ✅ Image ready to upload (400×400px)
+                    </div>
                     <button type="button" class="btn-danger btn-sm" onclick="clearAddSubCategoryImagePreview()">✕ Remove</button>
                 </div>
                 
@@ -2225,6 +2604,37 @@ function closeAddSectionCategoryModal() {
     if (modal) {
         modal.remove();
     }
+}
+
+// Global variable to store converted image for Add Subcategory
+let addSubcategoryConvertedFile = null;
+
+// Callback when user clicks "Use Image" in inline converter for Add Subcategory
+function handleAddSubcategoryConverterResult(file, blob) {
+    addSubcategoryConvertedFile = file;
+    
+    // Show preview
+    const preview = document.getElementById('addSubCategoryImagePreview');
+    const previewImg = document.getElementById('addSubCategoryPreviewImg');
+    
+    if (preview && previewImg) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Clear add subcategory image preview
+function clearAddSubCategoryImagePreview() {
+    addSubcategoryConvertedFile = null;
+    const preview = document.getElementById('addSubCategoryImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    const previewImg = document.getElementById('addSubCategoryPreviewImg');
+    if (previewImg) previewImg.src = '';
 }
 
 // Handle section category image upload
@@ -2324,8 +2734,7 @@ async function handleAddSectionCategory(event, section) {
     const subcategoryName = subcategoryNameElement.value.trim();
     const subcategoryNameTaElement = document.getElementById('sectionCategoryNameTa');
     const subcategoryNameTa = subcategoryNameTaElement ? subcategoryNameTaElement.value.trim() : '';
-    const imageFileElement = document.getElementById('addSubCategoryImageFile');
-    const imageFile = imageFileElement ? imageFileElement.files[0] : null;
+    const imageFile = addSubcategoryConvertedFile; // Use converted image
     
     if (!mainCategory) {
         showToast('Main category is required', 'error');
@@ -2339,7 +2748,7 @@ async function handleAddSectionCategory(event, section) {
     
     // MANDATORY VALIDATION
     if (!imageFile) {
-        showToast('Please upload an image for the subcategory', 'error');
+        showToast('Please convert and upload an image using the Image Converter', 'error');
         return;
     }
     
@@ -2384,23 +2793,11 @@ async function handleAddSectionCategory(event, section) {
         
         showToast('Subcategory added successfully!', 'success');
         
-        // Reload categories and refresh view
-        await loadCategories();
+        // Close modal first
         closeAddSectionCategoryModal();
         
-        // Refresh the mobile view if open
-        // Check if we're in the subcategory sidebar view (Level 3)
-        const sidebarLayout = document.querySelector('.mobile-bestseller-layout');
-        if (sidebarLayout) {
-            // We're in Level 3, refresh with the main category that was being viewed
-            showSubCategoryProducts(section, mainCategory);
-        } else {
-            // We might be in Level 2 (main category cards), refresh that
-            const mainCategoryCards = document.getElementById('mainCategoryCards');
-            if (mainCategoryCards) {
-                showMainCategoryCards(section);
-            }
-        }
+        // Reload categories - this will automatically restore the subcategory view
+        await loadCategories();
         
     } catch (error) {
         console.error('Error adding category:', error);
@@ -2861,6 +3258,8 @@ async function deleteSubCategory(section, mainCategory, subCategory) {
 function openEditSectionModal(sectionName, event) {
     if (event) event.stopPropagation();
     
+    console.log('📋 Opening edit section modal:', sectionName);
+    
     const modal = document.getElementById('editSectionModal');
     document.getElementById('editSectionOldName').value = sectionName;
     document.getElementById('editSectionName').value = sectionName;
@@ -2868,6 +3267,12 @@ function openEditSectionModal(sectionName, event) {
     // Load current Tamil name from hierarchy
     const sectionDoc = categoryHierarchy.find(s => s.section === sectionName);
     document.getElementById('editSectionNameTa').value = sectionDoc?.section_ta || '';
+    
+    console.log('✅ Section modal opened with values:', {
+        oldName: sectionName,
+        newName: sectionName,
+        tamilName: sectionDoc?.section_ta || '(not set)'
+    });
     
     modal.style.display = 'flex';
 }
@@ -2889,6 +3294,30 @@ async function handleSectionEdit(event) {
         return;
     }
     
+    // Get old Tamil name from hierarchy
+    const sectionDoc = categoryHierarchy.find(s => s.section === oldName);
+    const oldNameTa = sectionDoc?.section_ta || '';
+    
+    // Normalize empty values for comparison (undefined, null, empty string all treated as empty)
+    const normalizedNewNameTa = newNameTa || '';
+    const normalizedOldNameTa = oldNameTa || '';
+    
+    // Check if anything actually changed
+    if (newName === oldName && normalizedNewNameTa === normalizedOldNameTa) {
+        console.log('⚠️  No changes detected, just closing modal');
+        closeEditSectionModal();
+        return; // Don't make API call if nothing changed!
+    }
+    
+    console.log('📝 Changes detected:', {
+        nameChanged: newName !== oldName,
+        tamilChanged: normalizedNewNameTa !== normalizedOldNameTa,
+        oldName,
+        newName,
+        oldNameTa: normalizedOldNameTa,
+        newNameTa: normalizedNewNameTa
+    });
+    
     try {
         showToast('Updating section...', 'info');
         
@@ -2907,9 +3336,15 @@ async function handleSectionEdit(event) {
         
         if (response.ok) {
             showToast('Section updated successfully', 'success');
-            await loadCategories();
+            
+            // CRITICAL: Update mobileViewState if section name changed
+            if (newName !== oldName && mobileViewState.currentSection === oldName) {
+                console.log(`🔄 Updating mobileViewState section: "${oldName}" → "${newName}"`);
+                mobileViewState.currentSection = newName;
+            }
+            
             closeEditSectionModal();
-            loadMobileCategorySections();
+            await loadCategories(); // This will automatically restore the view
         } else {
             showToast('Failed to update section', 'error');
         }
@@ -2960,17 +3395,49 @@ function openEditMainCategoryModal(section, mainCategoryName, event) {
         preview.style.display = 'none';
     }
     
-    // Clear file input
-    document.getElementById('editMainCategoryImageFile').value = '';
+    // Reset converted file
+    editMainCategoryConvertedFile = null;
     
     modal.style.display = 'flex';
+}
+
+// Global variable to store converted image for Edit Main Category
+let editMainCategoryConvertedFile = null;
+
+// Callback when user clicks "Use Image" in inline converter
+function handleEditMainCategoryConverterResult(file, blob) {
+    editMainCategoryConvertedFile = file;
+    
+    // Show preview
+    const preview = document.getElementById('editMainCategoryImagePreview');
+    const previewImg = document.getElementById('editMainCategoryPreviewImg');
+    
+    if (preview && previewImg) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Clear edit main category image
+function clearEditMainCategoryImage() {
+    editMainCategoryConvertedFile = null;
+    const preview = document.getElementById('editMainCategoryImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    const previewImg = document.getElementById('editMainCategoryPreviewImg');
+    if (previewImg) previewImg.src = '';
 }
 
 function closeEditMainCategoryModal() {
     document.getElementById('editMainCategoryModal').style.display = 'none';
     document.getElementById('editMainCategoryForm').reset();
     document.getElementById('editMainCategoryImagePreview').style.display = 'none';
-    document.getElementById('editMainCategoryImageFile').value = '';
+    // Reset converted file
+    editMainCategoryConvertedFile = null;
 }
 
 async function handleMainCategoryEdit(event) {
@@ -2980,19 +3447,60 @@ async function handleMainCategoryEdit(event) {
     const newName = document.getElementById('editMainCategoryName').value.trim();
     const newNameTa = document.getElementById('editMainCategoryNameTa').value.trim();
     const section = document.getElementById('editMainCategorySection').value;
-    const imageFile = document.getElementById('editMainCategoryImageFile').files[0];
+    const imageFile = editMainCategoryConvertedFile; // Use converted image
     
     if (!newName) {
         showToast('Main category name is required', 'error');
         return;
     }
     
+    // Get old values from metadata
+    const oldMetadata = categoryMetadata[oldName] || {};
+    const oldNameTa = oldMetadata.name_ta || '';
+    const oldImageUrl = oldMetadata.image_url || '';
+    
+    // Get current image URL (either new converted file or existing)
+    let currentImageUrl = oldImageUrl;
+    if (imageFile) {
+        // New image selected - will be different
+        currentImageUrl = 'NEW_IMAGE';
+    } else {
+        const previewImg = document.getElementById('editMainCategoryPreviewImg');
+        if (previewImg && previewImg.src && !previewImg.src.includes('blob:')) {
+            currentImageUrl = previewImg.src;
+        }
+    }
+    
+    // Normalize empty values
+    const normalizedNewNameTa = newNameTa || '';
+    const normalizedOldNameTa = oldNameTa || '';
+    
+    // Check if anything actually changed
+    if (newName === oldName && 
+        normalizedNewNameTa === normalizedOldNameTa && 
+        !imageFile &&
+        currentImageUrl === oldImageUrl) {
+        console.log('⚠️  No changes detected, just closing modal');
+        closeEditMainCategoryModal();
+        return;
+    }
+    
+    console.log('📝 Changes detected:', {
+        nameChanged: newName !== oldName,
+        tamilChanged: normalizedNewNameTa !== normalizedOldNameTa,
+        imageChanged: imageFile !== null || currentImageUrl !== oldImageUrl,
+        oldName,
+        newName,
+        oldNameTa: normalizedOldNameTa,
+        newNameTa: normalizedNewNameTa
+    });
+    
     try {
         showToast('Updating main category...', 'info');
         
         let imageUrl = null;
         
-        // Upload new image if selected
+        // Upload new image if converted
         if (imageFile) {
             const uploadResult = await uploadMainCategoryImage(imageFile);
             if (uploadResult) {
@@ -3035,9 +3543,15 @@ async function handleMainCategoryEdit(event) {
         if (response.ok) {
             console.log('✅ Main category updated successfully');
             showToast('Main category updated successfully', 'success');
-            await loadCategories();
+            
+            // CRITICAL: Update mobileViewState if main category name changed
+            if (newName !== oldName && mobileViewState.currentMainCategory === oldName) {
+                console.log(`🔄 Updating mobileViewState: "${oldName}" → "${newName}"`);
+                mobileViewState.currentMainCategory = newName;
+            }
+            
             closeEditMainCategoryModal();
-            showMainCategoryCards(section);
+            await loadCategories(); // This will automatically restore the view
         } else {
             const error = await response.json();
             console.error('❌ Failed to update:', error);
@@ -3208,7 +3722,73 @@ function closeEditSubCategoryModal() {
     // Reset form
     document.getElementById('editSubCategoryForm').reset();
     document.getElementById('editSubCategoryImagePreview').style.display = 'none';
+    // Reset converted file
+    editSubcategoryConvertedFile = null;
 }
+
+// Global variable to store converted image for Edit Subcategory
+let editSubcategoryConvertedFile = null;
+
+// Callback when user clicks "Use Image" in inline converter for Edit Subcategory
+function handleEditSubcategoryConverterResult(file, blob) {
+    editSubcategoryConvertedFile = file;
+    
+    // Show preview
+    const preview = document.getElementById('editSubCategoryImagePreview');
+    const previewImg = document.getElementById('editSubCategoryPreviewImg');
+    
+    if (preview && previewImg) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Clear edit subcategory image
+function clearEditSubCategoryImage() {
+    editSubcategoryConvertedFile = null;
+    const preview = document.getElementById('editSubCategoryImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    const previewImg = document.getElementById('editSubCategoryPreviewImg');
+    if (previewImg) previewImg.src = '';
+}
+
+// ===== PRODUCT IMAGE CONVERTER INTEGRATION =====
+// Global variable to store converted image for Product (Add/Edit)
+let productConvertedFile = null;
+
+// Callback when user clicks "Use Image" in inline converter for Product
+function handleProductConverterResult(file, blob) {
+    productConvertedFile = file;
+    
+    // Show preview
+    const preview = document.getElementById('productImagePreview');
+    const previewImg = document.getElementById('productPreviewImg');
+    
+    if (preview && previewImg) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Clear product image
+function clearProductImage() {
+    productConvertedFile = null;
+    const preview = document.getElementById('productImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    const previewImg = document.getElementById('productPreviewImg');
+    if (previewImg) previewImg.src = '';
+}
+// ===== END PRODUCT IMAGE CONVERTER INTEGRATION =====
 
 // Handle subcategory edit submission
 async function handleSubCategoryEdit(event) {
@@ -3219,19 +3799,59 @@ async function handleSubCategoryEdit(event) {
     const newNameTa = document.getElementById('editSubCategoryNameTa').value.trim();
     const section = document.getElementById('editSubCategorySection').value;
     const mainCategory = document.getElementById('editSubCategoryMainCategory').value;
-    const imageFile = document.getElementById('editSubCategoryImageFile').files[0];
+    const imageFile = editSubcategoryConvertedFile; // Use converted image
     
     if (!newName) {
         showToast('Please enter a subcategory name', 'error');
         return;
     }
     
+    // Get old values from metadata
+    const oldMetadata = categoryMetadata[oldName] || {};
+    const oldNameTa = oldMetadata.name_ta || '';
+    const oldImageUrl = oldMetadata.image_url || '';
+    
+    // Get current image URL
+    let currentImageUrl = oldImageUrl;
+    if (imageFile) {
+        currentImageUrl = 'NEW_IMAGE';
+    } else {
+        const previewImg = document.getElementById('editSubCategoryPreviewImg');
+        if (previewImg && previewImg.src && !previewImg.src.includes('blob:')) {
+            currentImageUrl = previewImg.src;
+        }
+    }
+    
+    // Normalize empty values
+    const normalizedNewNameTa = newNameTa || '';
+    const normalizedOldNameTa = oldNameTa || '';
+    
+    // Check if anything actually changed
+    if (newName === oldName && 
+        normalizedNewNameTa === normalizedOldNameTa && 
+        !imageFile &&
+        currentImageUrl === oldImageUrl) {
+        console.log('⚠️  No changes detected, just closing modal');
+        closeEditSubCategoryModal();
+        return;
+    }
+    
+    console.log('📝 Changes detected:', {
+        nameChanged: newName !== oldName,
+        tamilChanged: normalizedNewNameTa !== normalizedOldNameTa,
+        imageChanged: imageFile !== null || currentImageUrl !== oldImageUrl,
+        oldName,
+        newName,
+        oldNameTa: normalizedOldNameTa,
+        newNameTa: normalizedNewNameTa
+    });
+    
     try {
         showToast('Updating subcategory...', 'info');
         
         let imageUrl = null;
         
-        // Upload new image if selected
+        // Upload new converted image if selected
         if (imageFile) {
             console.log('Uploading new image for subcategory...');
             const uploadResult = await uploadSubCategoryImage(imageFile);
@@ -3286,12 +3906,11 @@ async function handleSubCategoryEdit(event) {
         
         showToast('Subcategory updated successfully!', 'success');
         
-        // Reload categories and refresh view
-        await loadCategories();
+        // Close modal first
         closeEditSubCategoryModal();
         
-        // Refresh the subcategory sidebar view
-        showSubCategoryProducts(section, mainCategory);
+        // Reload categories - this will automatically restore the subcategory view
+        await loadCategories();
         
     } catch (error) {
         console.error('Error updating subcategory:', error);

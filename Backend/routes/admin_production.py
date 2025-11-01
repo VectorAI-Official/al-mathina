@@ -365,6 +365,11 @@ async def update_main_category(section: str, main_category: str, update: Categor
         if update.image_url:
             update_data["image_url"] = update.image_url
         
+        # Check if name is being changed
+        new_name = update.name if hasattr(update, 'name') and update.name else main_category
+        if new_name != main_category:
+            update_data["name"] = new_name
+        
         # Update or create metadata
         result = metadata_collection.update_one(
             {
@@ -377,6 +382,37 @@ async def update_main_category(section: str, main_category: str, update: Categor
         )
         
         logger.info(f"✓ Main category updated: {section}/{main_category}")
+        
+        # If name changed, update category_hierarchy collection
+        if new_name != main_category:
+            logger.info(f"🔄 Updating hierarchy: '{main_category}' → '{new_name}'")
+            
+            # Find the hierarchy document for this section
+            hierarchy_doc = db.category_hierarchy.find_one({"sections": section})
+            
+            if hierarchy_doc:
+                # Get main categories list for this section
+                main_cats = hierarchy_doc.get("main_categories", {}).get(section, [])
+                
+                # Replace old name with new name
+                if main_category in main_cats:
+                    main_cats.remove(main_category)
+                    if new_name not in main_cats:
+                        main_cats.append(new_name)
+                        
+                        # Update the hierarchy
+                        db.category_hierarchy.update_one(
+                            {"_id": hierarchy_doc["_id"]},
+                            {"$set": {f"main_categories.{section}": main_cats}}
+                        )
+                        logger.info(f"✓ Hierarchy updated: main categories for '{section}' = {main_cats}")
+                    else:
+                        logger.warning(f"⚠️  New name '{new_name}' already exists in main categories")
+                else:
+                    logger.warning(f"⚠️  Old name '{main_category}' not found in main categories")
+            else:
+                logger.warning(f"⚠️  Hierarchy document not found for section '{section}'")
+        
         return {"success": True, "message": "Main category updated successfully"}
     
     except Exception as e:
@@ -1060,13 +1096,25 @@ async def update_section_compat(section_name: str, data: dict):
         name_ta = data.get("name_ta")
         image_url = data.get("image_url")
         
+        logger.info(f"🔄 Updating section: '{section_name}'")
+        logger.info(f"   - new_name: {new_name}")
+        logger.info(f"   - name_ta: {name_ta}")
+        logger.info(f"   - image_url: {image_url if not image_url else image_url[:80]}")
+        
         # Update hierarchy if name changed
         if new_name != section_name:
-            hierarchy = db.category_hierarchy.find_one({})
-            if hierarchy and section_name in hierarchy.get("sections", []):
-                sections = hierarchy["sections"]
-                sections[sections.index(section_name)] = new_name
-                db.category_hierarchy.update_one({}, {"$set": {"sections": sections}})
+            logger.info(f"   🔄 Section name changed, updating hierarchy...")
+            # Find the specific section document (each document is a section)
+            hierarchy_doc = db.category_hierarchy.find_one({"section": section_name})
+            if hierarchy_doc:
+                # Update the section field in this document
+                result = db.category_hierarchy.update_one(
+                    {"section": section_name},
+                    {"$set": {"section": new_name}}
+                )
+                logger.info(f"   ✓ Hierarchy updated: Matched {result.matched_count}, Modified {result.modified_count}")
+            else:
+                logger.warning(f"   ⚠️  Section document not found in hierarchy: '{section_name}'")
         
         # Update metadata
         update_doc = {"updated_at": datetime.utcnow()}
@@ -1077,10 +1125,12 @@ async def update_section_compat(section_name: str, data: dict):
         if new_name != section_name:
             update_doc["section"] = new_name
         
-        db.category_metadata.update_one(
+        logger.info(f"   📝 Updating metadata with: {update_doc}")
+        result = db.category_metadata.update_one(
             {"section": section_name, "type": "section"},
             {"$set": update_doc}
         )
+        logger.info(f"   ✓ Metadata updated: Matched {result.matched_count}, Modified {result.modified_count}")
         
         return {"success": True, "message": "Section updated"}
     except Exception as e:
@@ -1098,7 +1148,7 @@ async def update_main_category_compat(main_category_name: str, data: dict):
         name_ta = data.get("name_ta")
         image_url = data.get("image_url")
         
-        logger.info(f"🔄 Updating main category: {main_category_name} (section: {section})")
+        logger.info(f"🔄 Updating category: {main_category_name} (section: {section})")
         logger.info(f"   - new_name: {new_name}")
         logger.info(f"   - name_ta: {name_ta}")
         logger.info(f"   - image_url: {image_url if not image_url else image_url[:80]}")
@@ -1112,22 +1162,82 @@ async def update_main_category_compat(main_category_name: str, data: dict):
         if new_name != main_category_name:
             update_doc["name"] = new_name
         
-        # Query filter - must match exactly
-        filter_query = {
+        # Try to update as main category first
+        filter_query_main = {
             "section": section, 
             "name": main_category_name, 
             "type": "main_category"
         }
         
-        logger.info(f"   - Filter query: {filter_query}")
+        logger.info(f"   - Filter query (main): {filter_query_main}")
         logger.info(f"   - Update doc: {update_doc}")
         
-        result = db.category_metadata.update_one(filter_query, {"$set": update_doc})
+        result = db.category_metadata.update_one(filter_query_main, {"$set": update_doc})
         
-        logger.info(f"   ✓ Matched: {result.matched_count}, Modified: {result.modified_count}")
+        logger.info(f"   ✓ Main category matched: {result.matched_count}, Modified: {result.modified_count}")
         
+        # If not found, try alternative filters
         if result.matched_count == 0:
-            logger.warning(f"   ⚠️  No document found matching filter: {filter_query}")
+            logger.info(f"   ⚠️  Not found with type='main_category', trying alternatives...")
+            
+            alternative_filters = [
+                {"section": section, "name": main_category_name, "type": "main"},
+                {"section": section, "name": main_category_name},
+                {"name": main_category_name, "type": "main_category"},
+                {"name": main_category_name, "type": "main"},
+                {"name": main_category_name}
+            ]
+            
+            for alt_filter in alternative_filters:
+                logger.info(f"   🔄 Trying alternative filter: {alt_filter}")
+                result = db.category_metadata.update_one(alt_filter, {"$set": update_doc})
+                if result.matched_count > 0:
+                    logger.info(f"   ✅ Success with alternative filter! Matched: {result.matched_count}, Modified: {result.modified_count}")
+                    break
+            
+            if result.matched_count == 0:
+                logger.error(f"   ❌ No document found with any filter. Creating new document...")
+                # Insert as new document
+                new_doc = {
+                    "section": section,
+                    "name": new_name,
+                    "type": "main_category",
+                    "created_at": datetime.utcnow()
+                }
+                new_doc.update(update_doc)
+                db.category_metadata.insert_one(new_doc)
+                logger.info(f"   ✅ New document created for: {new_name}")
+        
+        # If name changed and document was found/created, update hierarchy
+        if new_name != main_category_name:
+            logger.info(f"   🔄 Updating hierarchy for main category: '{main_category_name}' → '{new_name}'")
+            
+            # Find the section document
+            hierarchy_doc = db.category_hierarchy.find_one({"section": section})
+            
+            if hierarchy_doc:
+                # Get main_categories dict
+                main_categories = hierarchy_doc.get("main_categories", {})
+                
+                # Check if old main category name exists as a key
+                if main_category_name in main_categories:
+                    # Get the subcategories list
+                    subcats = main_categories[main_category_name]
+                    
+                    # Remove old key and add with new key
+                    del main_categories[main_category_name]
+                    main_categories[new_name] = subcats
+                    
+                    # Update the hierarchy
+                    db.category_hierarchy.update_one(
+                        {"section": section},
+                        {"$set": {"main_categories": main_categories}}
+                    )
+                    logger.info(f"   ✓ Hierarchy updated: main categories = {list(main_categories.keys())}")
+                else:
+                    logger.warning(f"   ⚠️  Main category '{main_category_name}' not found in hierarchy for section '{section}'")
+            else:
+                logger.warning(f"   ⚠️  Hierarchy document not found for section '{section}'")
         
         return {"success": True, "message": "Main category updated"}
     except Exception as e:
@@ -1177,6 +1287,71 @@ async def update_subcategory_compat(subcategory_name: str, data: dict):
         
         if result.matched_count == 0:
             logger.warning(f"   ⚠️  No document found matching filter: {filter_query}")
+            
+            # Try alternative filters (maybe type field is missing or different)
+            alternative_filters = [
+                {"section": section, "main_category": main_category, "name": subcategory_name, "type": "sub"},
+                {"section": section, "main_category": main_category, "name": subcategory_name},
+                {"name": subcategory_name, "type": "subcategory"},
+                {"name": subcategory_name}
+            ]
+            
+            for alt_filter in alternative_filters:
+                logger.info(f"   🔄 Trying alternative filter: {alt_filter}")
+                result = db.category_metadata.update_one(alt_filter, {"$set": update_doc})
+                if result.matched_count > 0:
+                    logger.info(f"   ✅ Success with alternative filter! Matched: {result.matched_count}, Modified: {result.modified_count}")
+                    break
+            
+            if result.matched_count == 0:
+                logger.error(f"   ❌ No document found with any filter. Creating new document...")
+                # Insert as new document
+                new_doc = {
+                    "section": section,
+                    "main_category": main_category,
+                    "name": new_name,
+                    "type": "subcategory",
+                    "created_at": datetime.utcnow()
+                }
+                new_doc.update(update_doc)
+                db.category_metadata.insert_one(new_doc)
+                logger.info(f"   ✅ New document created for: {new_name}")
+        
+        # If name changed, update category_hierarchy collection
+        if new_name != subcategory_name:
+            logger.info(f"   🔄 Updating hierarchy: '{subcategory_name}' → '{new_name}'")
+            
+            # Find the hierarchy document for THIS SPECIFIC SECTION (each document is a section)
+            hierarchy_doc = db.category_hierarchy.find_one({"section": section})
+            
+            if hierarchy_doc:
+                # Navigate to subcategories: main_categories.{main_category}
+                main_categories = hierarchy_doc.get("main_categories", {})
+                logger.info(f"   📊 Available main categories in section '{section}': {list(main_categories.keys())}")
+                
+                # Get the subcategories list for this main category
+                if main_category in main_categories:
+                    subcats = main_categories[main_category]
+                    logger.info(f"   📊 Current subcategories for '{main_category}': {subcats}")
+                    
+                    # Replace old name with new name
+                    if subcategory_name in subcats:
+                        subcats_index = subcats.index(subcategory_name)
+                        subcats[subcats_index] = new_name
+                        
+                        # Update the hierarchy using exact path
+                        update_path = f"main_categories.{main_category}"
+                        db.category_hierarchy.update_one(
+                            {"section": section},
+                            {"$set": {update_path: subcats}}
+                        )
+                        logger.info(f"   ✓ Hierarchy updated: section='{section}', {update_path} = {subcats}")
+                    else:
+                        logger.warning(f"   ⚠️  Old name '{subcategory_name}' not found in subcategories list: {subcats}")
+                else:
+                    logger.warning(f"   ⚠️  Main category '{main_category}' not found in section '{section}'. Available: {list(main_categories.keys())}")
+            else:
+                logger.warning(f"   ⚠️  Hierarchy document not found for section '{section}'")
         
         return {"success": True, "message": "Subcategory updated"}
     except Exception as e:

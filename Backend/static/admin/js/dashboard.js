@@ -1961,6 +1961,18 @@ async function showMainCategoryCards(section) {
                 count: mostBoughtItems.length,
                 items: mostBoughtItems
             });
+            
+            // Show which items match current section
+            const itemsForThisSection = mostBoughtItems.filter(item => item.section === section);
+            console.log(`%c   📌 Starred items for section "${section}":`, 'color: #00aaff; font-weight: bold; font-size: 11px;', {
+                count: itemsForThisSection.length,
+                items: itemsForThisSection,
+                mainCategories: itemsForThisSection.map(item => item.main_category)
+            });
+            
+            if (itemsForThisSection.length === 0) {
+                console.log('%c   💡 TIP: No starred categories in this section. Try starring one with the ⭐ button!', 'color: #ff9900; font-size: 11px;');
+            }
         } else {
             console.warn('%c   ⚠️  Most bought API returned status:', 'color: #ff9900; font-size: 11px;', response.status);
         }
@@ -2014,7 +2026,7 @@ async function showMainCategoryCards(section) {
         
         html += `
             <div class="mobile-category-card ${isStarred ? 'starred-category' : ''}" onclick="showSubCategoryProducts('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}')">
-                ${isStarred ? '<span class="starred-badge">⭐ Starred</span>' : ''}
+                ${isStarred ? '<span class="starred-badge-hover">⭐ Starred</span>' : ''}
                 <button class="star-category-btn ${isStarred ? 'starred' : ''}" onclick="toggleStarMainCategory('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', ${isStarred}, event)" title="${isStarred ? 'Unstar' : 'Star'} Main Category">
                     ${isStarred ? '★' : '⭐'}
                 </button>
@@ -2060,6 +2072,59 @@ async function showMainCategoryCards(section) {
         console.error('%c   ❌ ERROR setting innerHTML:', 'color: #ff0000; font-weight: bold; font-size: 11px;', renderError);
         return;
     }
+    
+    // DEBUG: Check for starred badges and add hover event listeners
+    console.log('%c8️⃣  Debugging Starred Badges:', 'color: #ff6600; font-weight: bold; font-size: 12px;');
+    const starredCards = productsContainer.querySelectorAll('.mobile-category-card.starred-category');
+    const starredBadges = productsContainer.querySelectorAll('.starred-badge-hover');
+    
+    console.log('%c   📊 Starred Elements Found:', 'color: #0066cc; font-size: 11px;', {
+        starredCards: starredCards.length,
+        starredBadges: starredBadges.length
+    });
+    
+    starredBadges.forEach((badge, idx) => {
+        console.log(`%c   Badge ${idx + 1}:`, 'color: #6666ff; font-size: 10px;', {
+            element: badge,
+            innerHTML: badge.innerHTML,
+            computedStyle: {
+                display: window.getComputedStyle(badge).display,
+                opacity: window.getComputedStyle(badge).opacity,
+                position: window.getComputedStyle(badge).position,
+                zIndex: window.getComputedStyle(badge).zIndex,
+                top: window.getComputedStyle(badge).top,
+                left: window.getComputedStyle(badge).left
+            },
+            parentCard: badge.closest('.mobile-category-card'),
+            hasStarredClass: badge.closest('.mobile-category-card')?.classList.contains('starred-category')
+        });
+    });
+    
+    // Add hover event listeners to starred cards for debugging
+    starredCards.forEach((card, idx) => {
+        const badge = card.querySelector('.starred-badge-hover');
+        
+        card.addEventListener('mouseenter', function() {
+            console.log(`%c🖱️  HOVER START - Card ${idx + 1}`, 'color: #00ff00; font-weight: bold; font-size: 11px;');
+            if (badge) {
+                console.log('%c   Badge element:', 'color: #00ff00; font-size: 10px;', {
+                    innerHTML: badge.innerHTML,
+                    opacity: window.getComputedStyle(badge).opacity,
+                    display: window.getComputedStyle(badge).display,
+                    transform: window.getComputedStyle(badge).transform
+                });
+            } else {
+                console.error('%c   ❌ No badge found in this card!', 'color: #ff0000; font-weight: bold;');
+            }
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            console.log(`%c🖱️  HOVER END - Card ${idx + 1}`, 'color: #ff9900; font-weight: bold; font-size: 11px;');
+            if (badge) {
+                console.log('%c   Badge opacity after hover:', 'color: #ff9900; font-size: 10px;', window.getComputedStyle(badge).opacity);
+            }
+        });
+    });
     
     console.log('%c✅ showMainCategoryCards() COMPLETED SUCCESSFULLY', 'color: #00aa00; font-weight: bold; font-size: 13px;');
 }

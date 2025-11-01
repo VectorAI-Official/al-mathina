@@ -730,9 +730,21 @@ async def delete_product(product_id: str):
 async def get_most_bought():
     """Get all Most Bought categories"""
     try:
+        logger.info("=" * 80)
+        logger.info("🔍 GET MOST BOUGHT REQUEST RECEIVED")
+        
         db = get_mongo_db()
         most_bought = list(db.most_bought.find({}, {"_id": 0}))
-        return {"most_bought": most_bought}
+        
+        logger.info(f"📊 Found {len(most_bought)} starred categories in database")
+        for idx, item in enumerate(most_bought, 1):
+            logger.info(f"   {idx}. {item.get('section')} / {item.get('main_category')}")
+        
+        # Return as "items" array to match frontend expectation
+        logger.info(f"✅ Returning {len(most_bought)} items")
+        logger.info("=" * 80)
+        
+        return {"items": most_bought}
     
     except Exception as e:
         logger.error(f"✗ Failed to fetch most bought: {e}")

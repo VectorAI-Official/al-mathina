@@ -860,6 +860,10 @@ async def get_all_categories_hierarchy():
         
         logger.info(f"✓ Returning hierarchy: {len(hierarchy_docs)} section documents")
         
+        # Log each section being returned
+        for idx, doc in enumerate(hierarchy_docs, 1):
+            logger.info(f"   Section {idx}: '{doc.get('section', 'UNKNOWN')}'")
+        
         # Return in the format dashboard expects: {"hierarchy": [array of section documents]}
         return {
             "hierarchy": hierarchy_docs

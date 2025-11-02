@@ -1502,10 +1502,27 @@ async def delete_section_compat(section_name: str):
         db = get_mongo_db()
         
         logger.info(f"🗑️ Deleting section: {section_name}")
+        logger.info(f"   Section name length: {len(section_name)} chars")
+        logger.info(f"   Section name repr: {repr(section_name)}")
+        
+        # List all sections before deletion for debugging
+        all_sections = list(db.category_hierarchy.find({}, {"section": 1, "sections": 1, "_id": 0}))
+        logger.info(f"   📋 All sections in DB before delete: {len(all_sections)}")
+        for idx, doc in enumerate(all_sections, 1):
+            section_in_db = doc.get('section', 'NONE')
+            sections_array = doc.get('sections', [])
+            logger.info(f"      {idx}. section='{section_in_db}' sections={sections_array}")
         
         # Delete the section document from hierarchy (each document IS a section)
         hierarchy_result = db.category_hierarchy.delete_one({"section": section_name})
-        logger.info(f"   Hierarchy deleted: {hierarchy_result.deleted_count} document(s)")
+        logger.info(f"   Hierarchy document deleted: {hierarchy_result.deleted_count} document(s)")
+        
+        # ALSO remove from sections array (old structure compatibility)
+        array_result = db.category_hierarchy.update_many(
+            {"sections": section_name},
+            {"$pull": {"sections": section_name}}
+        )
+        logger.info(f"   Removed from sections arrays: {array_result.modified_count} document(s) updated")
         
         # Delete metadata for this section
         metadata_result = db.category_metadata.delete_many({"section": section_name})

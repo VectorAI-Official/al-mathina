@@ -1396,13 +1396,16 @@ function loadMobileCategorySections() {
             }
             
             if (item.section && item.section !== null && item.section !== 'undefined') {
+                console.log(`   Adding from item.section: "${item.section}"`);
                 sectionsSet.add(item.section);
                 sectionCount++;
             }
             
             if (Array.isArray(item.sections)) {
+                console.log(`   Found item.sections array:`, item.sections);
                 item.sections.forEach(s => {
                     if (s && s !== null && s !== 'undefined') {
+                        console.log(`   Adding from item.sections array: "${s}"`);
                         sectionsSet.add(s);
                         sectionCount++;
                     }

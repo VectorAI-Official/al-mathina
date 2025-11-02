@@ -223,12 +223,15 @@ class PaginationInfo {
 class ApiService {
   static Future<HomeData> getHomeData({String lang = 'en'}) async {
     try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final random = DateTime.now().microsecond;
       final response = await http.get(
-        Uri.parse('$API_BASE/home?lang=$lang&t=${DateTime.now().millisecondsSinceEpoch}'),
+        Uri.parse('$API_BASE/home?lang=$lang&t=$timestamp&_=$random'),
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
           'Expires': '0',
+          'If-Modified-Since': 'Thu, 1 Jan 1970 00:00:00 GMT',
         },
       );
       if (response.statusCode == 200) {

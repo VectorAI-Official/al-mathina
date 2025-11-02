@@ -3069,7 +3069,12 @@ async function deleteSection(section) {
         
         // Call backend API to delete section
         const response = await fetch(`/admin/api/categories/section/${encodeURIComponent(section)}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
         
         console.log('   📥 Response status:', response.status);

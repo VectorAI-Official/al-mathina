@@ -21,10 +21,19 @@
     --border-gray: #E0E0E0;
 }
 
+/* Prevent horizontal scrolling on mobile */
+html {
+    overflow-x: hidden;
+    width: 100%;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: var(--bg-gray);
     color: var(--text-dark);
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
 }
 
 /* Header */
@@ -3091,6 +3100,14 @@ body {
 @media (max-width: 768px) {
     /* Mobile devices */
     
+    /* Prevent any element from causing horizontal scroll */
+    img,
+    video,
+    iframe {
+        max-width: 100%;
+        height: auto;
+    }
+    
     /* Header - Make more compact */
     .header {
         padding: 15px 0;
@@ -3123,6 +3140,8 @@ body {
     /* Container */
     .container {
         padding: 15px 10px;
+        max-width: 100%;
+        overflow-x: hidden;
     }
     
     /* Action Bar */
@@ -3429,6 +3448,20 @@ body {
 @media (max-width: 480px) {
     /* Extra small devices */
     
+    /* Ensure no element exceeds viewport */
+    * {
+        max-width: 100%;
+    }
+    
+    img,
+    video,
+    iframe,
+    embed,
+    object {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+    
     /* Header */
     .logo h1 {
         font-size: 16px;
@@ -3442,6 +3475,8 @@ body {
     /* Container */
     .container {
         padding: 10px 8px;
+        width: 100%;
+        overflow-x: hidden;
     }
     
     /* Buttons */

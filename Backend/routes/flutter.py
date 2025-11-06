@@ -196,13 +196,13 @@ async def get_home_data(request: Request, lang: str = Query("en", description="L
                     "main_category_id": main_category_id,  # New: ID-based reference
                 })
             
-            # Sort main categories by name
-            section_data["main_categories"].sort(key=lambda x: x["name"])
+            # Sort main categories by name (handle None values)
+            section_data["main_categories"].sort(key=lambda x: x["name"] or "")
             
             response["sections"].append(section_data)
         
-        # Sort sections by name
-        response["sections"].sort(key=lambda x: x["title"])
+        # Sort sections by name (handle None values)
+        response["sections"].sort(key=lambda x: x["title"] or "")
         
         logger.info(f"Home data prepared: {len(response['best_sellers']['main_categories'])} best seller categories, {len(response['sections'])} sections")
         

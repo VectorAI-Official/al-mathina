@@ -287,7 +287,7 @@ async def get_user_orders(phone: str, request: Request):
 async def create_order(request: Request):
     """Create a new order"""
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         import uuid
         
         # Get request body
@@ -308,6 +308,10 @@ async def create_order(request: Request):
         # Generate a human-readable order ID
         order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
         
+        # Use local timezone (India Standard Time - UTC+5:30)
+        ist_offset = timezone(timedelta(hours=5, minutes=30))
+        current_time = datetime.now(ist_offset)
+        
         # Prepare order document
         order_doc = {
             'order_id': order_id,  # ✅ Store the generated order_id
@@ -317,14 +321,14 @@ async def create_order(request: Request):
             'status': 'pending',
             'payment_method': payment_method,
             'delivery_address': delivery_address,
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow(),
-            'estimated_delivery': (datetime.utcnow() + timedelta(days=3)).isoformat()
+            'created_at': current_time,
+            'updated_at': current_time,
+            'estimated_delivery': (current_time + timedelta(days=3)).isoformat()
         }
         
         result = orders_collection.insert_one(order_doc)
         
-        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_phone}")
+        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_phone} at {current_time.isoformat()}")
         
         return {
             "success": True,

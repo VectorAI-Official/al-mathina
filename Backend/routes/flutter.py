@@ -833,12 +833,16 @@ async def create_order(request: Request):
         if not user_id or not items or not delivery_address:
             raise HTTPException(status_code=400, detail="Missing required fields: user_id, items, delivery_address")
         
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         import random
         import string
         
         # Generate unique order_id (format: ORD-YYYYMMDD-XXXXX)
-        date_str = datetime.utcnow().strftime("%Y%m%d")
+        # Use local timezone (India Standard Time - UTC+5:30)
+        ist_offset = timezone(timedelta(hours=5, minutes=30))
+        current_time = datetime.now(ist_offset)
+        
+        date_str = current_time.strftime("%Y%m%d")
         random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
         order_id = f"ORD-{date_str}-{random_str}"
         
@@ -855,14 +859,14 @@ async def create_order(request: Request):
             "payment_method": payment_method or "cod",
             "total_amount": float(total_amount),
             "status": "pending",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "estimated_delivery": (datetime.utcnow() + timedelta(days=3)).isoformat()
+            "created_at": current_time,
+            "updated_at": current_time,
+            "estimated_delivery": (current_time + timedelta(days=3)).isoformat()
         }
         
         result = orders_collection.insert_one(order_doc)
         
-        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_id}")
+        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_id} at {current_time.isoformat()}")
         
         return {
             "success": True,

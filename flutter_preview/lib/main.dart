@@ -1359,12 +1359,17 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          _isLoading
-              ? SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18.0, 18.0, 18.0, 90.0),
-                  child: Column(
+      body: RefreshIndicator(
+        onRefresh: _loadHomeData,
+        color: kPrimaryColor, // Green color to match app theme
+        backgroundColor: Colors.white,
+        child: Stack(
+          children: [
+            _isLoading
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(), // Enable scroll even when loading
+                    padding: const EdgeInsets.fromLTRB(18.0, 18.0, 18.0, 90.0),
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Banner skeleton
@@ -1438,30 +1443,55 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               : _error != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                          const SizedBox(height: 16),
-                          Text('${provider.text('error')}: $_error', textAlign: TextAlign.center),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _isLoading = true;
-                                _error = null;
-                              });
-                              _loadHomeData();
-                            },
-                            child: Text(provider.text('retry')),
+                  ? SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(), // Enable pull-to-refresh on error
+                      child: Container(
+                        height: MediaQuery.of(context).size.height - 200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 32),
+                                child: Text(
+                                  '${provider.text('error')}: $_error',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _isLoading = true;
+                                    _error = null;
+                                  });
+                                  _loadHomeData();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: kPrimaryColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                ),
+                                child: Text(provider.text('retry')),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'or swipe down to refresh',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     )
-                  : RefreshIndicator(
-                      onRefresh: _loadHomeData,
-                      child: SingleChildScrollView(
+                  : SingleChildScrollView(
                         controller: _scrollController,
                         child: Column(
                           children: [
@@ -1534,10 +1564,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                    ),
           
-          // Floating cart button moved to MainScreen
-        ],
+            // Floating cart button moved to MainScreen
+          ],
+        ),
       ),
     );
   }

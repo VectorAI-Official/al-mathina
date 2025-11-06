@@ -9,6 +9,8 @@ let currentOrder = null;
 
 // Initialize orders management
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Orders page initialized');
+    
     // Check if we're on the orders page
     if (document.getElementById('ordersContainer')) {
         loadOrders();
@@ -18,25 +20,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Setup event listeners
 function setupEventListeners() {
-    // Search and filter
-    const searchInput = document.getElementById('orderSearch');
+    console.log('🎯 Setting up event listeners');
+    
+    // Search input - try both IDs for compatibility
+    const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
     if (searchInput) {
         searchInput.addEventListener('input', filterOrders);
+        searchInput.addEventListener('keyup', filterOrders);
+        console.log('   ✅ Search listeners attached');
+    } else {
+        console.warn('   ⚠️  Search input not found');
     }
     
+    // Status filter
     const statusFilter = document.getElementById('statusFilter');
     if (statusFilter) {
         statusFilter.addEventListener('change', filterOrders);
+        console.log('   ✅ Status filter listener attached');
+    } else {
+        console.warn('   ⚠️  Status filter not found');
     }
 }
 
 // Load all orders
 async function loadOrders() {
+    console.log('🔄 Loading orders...');
     try {
         showLoading('ordersContainer');
         
         const response = await fetch('/api/admin/orders');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log(`✅ Loaded ${data.orders?.length || 0} orders`);
         
         if (data.success) {
             allOrders = data.orders;
@@ -46,7 +65,7 @@ async function loadOrders() {
             showError('ordersContainer', 'Failed to load orders');
         }
     } catch (error) {
-        console.error('Error loading orders:', error);
+        console.error('❌ Error loading orders:', error);
         showError('ordersContainer', 'Error loading orders: ' + error.message);
     }
 }
@@ -54,6 +73,11 @@ async function loadOrders() {
 // Display orders in list
 function displayOrders(orders) {
     const container = document.getElementById('ordersContainer');
+    
+    if (!container) {
+        console.error('❌ ordersContainer element not found!');
+        return;
+    }
     
     if (orders.length === 0) {
         container.innerHTML = `
@@ -66,60 +90,73 @@ function displayOrders(orders) {
         return;
     }
     
-    container.innerHTML = orders.map(order => `
-        <div class="order-card" onclick="viewOrderDetails('${order.order_id}')">
-            <div class="order-card-header">
-                <div class="order-info">
-                    <h3>Order #${order.order_id}</h3>
-                    <p class="order-date">
-                        <i class="fas fa-calendar"></i>
-                        ${formatDateTime(order.created_at)}
-                    </p>
-                </div>
-                <span class="status-badge status-${order.status}">${order.status.toUpperCase()}</span>
-            </div>
-            
-            <div class="order-card-body">
-                <div class="customer-info">
-                    <div class="info-row">
-                        <i class="fas fa-user"></i>
-                        <span><strong>${order.user_name || 'Unknown Customer'}</strong></span>
+    try {
+        container.innerHTML = orders.map(order => `
+            <div class="order-card" onclick="viewOrderDetails('${order.order_id}')">
+                <div class="order-card-header">
+                    <div class="order-info">
+                        <h3>Order #${order.order_id}</h3>
+                        <p class="order-date">
+                            <i class="fas fa-calendar"></i>
+                            ${formatDateTime(order.created_at)}
+                        </p>
                     </div>
-                    <div class="info-row">
-                        <i class="fas fa-phone"></i>
-                        <span>${order.user_phone}</span>
-                    </div>
-                    ${order.user_store_name ? `
-                        <div class="info-row">
-                            <i class="fas fa-store"></i>
-                            <span>${order.user_store_name}</span>
-                        </div>
-                    ` : ''}
+                    <span class="status-badge status-${order.status}">${order.status.toUpperCase()}</span>
                 </div>
                 
-                <div class="order-summary">
-                    <div class="summary-item">
-                        <span class="label">Items:</span>
-                        <span class="value">${order.items?.length || 0}</span>
+                <div class="order-card-body">
+                    <div class="customer-info">
+                        <div class="info-row">
+                            <i class="fas fa-user"></i>
+                            <span><strong>${order.user_name || 'Unknown Customer'}</strong></span>
+                        </div>
+                        <div class="info-row">
+                            <i class="fas fa-phone"></i>
+                            <span>${order.user_phone}</span>
+                        </div>
+                        ${order.user_store_name ? `
+                            <div class="info-row">
+                                <i class="fas fa-store"></i>
+                                <span>${order.user_store_name}</span>
+                            </div>
+                        ` : ''}
                     </div>
-                    <div class="summary-item">
-                        <span class="label">Total Amount:</span>
-                        <span class="value amount">₹${parseFloat(order.total_amount).toFixed(2)}</span>
+                    
+                    <div class="order-summary">
+                        <div class="summary-item">
+                            <span class="label">Items:</span>
+                            <span class="value">${order.items?.length || 0}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Total Amount:</span>
+                            <span class="value amount">₹${parseFloat(order.total_amount).toFixed(2)}</span>
+                        </div>
                     </div>
                 </div>
+                
+                <div class="order-card-footer">
+                    <span class="payment-method">
+                        <i class="fas fa-credit-card"></i>
+                        ${order.payment_method || 'COD'}
+                    </span>
+                    <span class="view-link">
+                        View Details <i class="fas fa-chevron-right"></i>
+                    </span>
+                </div>
             </div>
-            
-            <div class="order-card-footer">
-                <span class="payment-method">
-                    <i class="fas fa-credit-card"></i>
-                    ${order.payment_method || 'COD'}
-                </span>
-                <span class="view-link">
-                    View Details <i class="fas fa-chevron-right"></i>
-                </span>
+        `).join('');
+        
+        console.log(`✅ Displayed ${orders.length} orders`);
+    } catch (displayError) {
+        console.error('❌ Error generating order HTML:', displayError);
+        container.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f44336;"></i>
+                <h3>Display Error</h3>
+                <p>Error rendering orders: ${displayError.message}</p>
             </div>
-        </div>
-    `).join('');
+        `;
+    }
 }
 
 // View order details
@@ -529,21 +566,102 @@ function printInvoice(orderId) {
 
 // Filter orders
 function filterOrders() {
-    const searchTerm = document.getElementById('orderSearch')?.value.toLowerCase() || '';
-    const statusFilter = document.getElementById('statusFilter')?.value || 'all';
+    console.log('🔍 filterOrders() called');
     
-    let filtered = allOrders.filter(order => {
-        const matchesSearch = 
-            order.order_id.toLowerCase().includes(searchTerm) ||
-            (order.user_name && order.user_name.toLowerCase().includes(searchTerm)) ||
-            order.user_phone.includes(searchTerm);
+    try {
+        // Guard: Check if allOrders exists and is an array
+        if (!allOrders || !Array.isArray(allOrders)) {
+            console.error('❌ allOrders is not defined or not an array!');
+            return;
+        }
         
-        const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+        // Get search input
+        const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
+        const searchTerm = searchInput?.value?.toLowerCase().trim() || '';
         
-        return matchesSearch && matchesStatus;
-    });
+        // Get status filter
+        const statusFilterElement = document.getElementById('statusFilter');
+        const statusFilter = statusFilterElement?.value || '';
+        
+        console.log(`   Filtering ${allOrders.length} orders - Search: "${searchTerm}", Status: "${statusFilter}"`);
+        
+        // Update clear button visibility
+        updateClearButtonVisibility();
+        
+        // Filter orders
+        let filtered = allOrders.filter((order, index) => {
+            try {
+                // Skip if order is null or undefined
+                if (!order) {
+                    return false;
+                }
+                
+                // Safely handle null/undefined values
+                const orderId = order.order_id ? String(order.order_id).toLowerCase() : '';
+                const userName = order.user_name ? String(order.user_name).toLowerCase() : '';
+                const userPhone = order.user_phone ? String(order.user_phone).toLowerCase() : '';
+                const storeName = order.user_store_name ? String(order.user_store_name).toLowerCase() : '';
+                const orderStatus = order.status ? String(order.status).toLowerCase() : '';
+                
+                // Match search term against multiple fields
+                const matchesSearch = !searchTerm || 
+                    orderId.includes(searchTerm) ||
+                    userName.includes(searchTerm) ||
+                    userPhone.includes(searchTerm) ||
+                    storeName.includes(searchTerm);
+                
+                // Match status filter
+                const matchesStatus = !statusFilter || orderStatus === statusFilter.toLowerCase();
+                
+                return matchesSearch && matchesStatus;
+            } catch (orderError) {
+                console.error(`❌ Error processing order at index ${index}:`, orderError);
+                return false;
+            }
+        });
+        
+        console.log(`   ✅ Filtered: ${filtered.length} orders match criteria`);
+        
+        // Display filtered results
+        displayOrders(filtered);
+        
+        // Update stats based on filtered orders
+        updateFilteredStats(filtered);
+        
+    } catch (error) {
+        console.error('❌ FATAL ERROR in filterOrders:', error);
+        console.error('   Error stack:', error.stack);
+    }
+}
+
+// Update statistics based on filtered orders
+function updateFilteredStats(orders) {
+    // Guard: Check if orders is valid
+    if (!orders || !Array.isArray(orders)) {
+        console.warn('⚠️  updateFilteredStats: orders is not valid');
+        return;
+    }
     
-    displayOrders(filtered);
+    try {
+        const pending = orders.filter(o => o && o.status === 'pending').length;
+        const delivered = orders.filter(o => o && o.status === 'delivered').length;
+        const totalRevenue = orders.reduce((sum, o) => {
+            if (!o) return sum;
+            return sum + parseFloat(o.total_amount || 0);
+        }, 0);
+        
+        const totalOrdersEl = document.getElementById('totalOrders');
+        const pendingOrdersEl = document.getElementById('pendingOrders');
+        const deliveredOrdersEl = document.getElementById('deliveredOrders');
+        const totalRevenueEl = document.getElementById('totalRevenue');
+        
+        if (totalOrdersEl) totalOrdersEl.textContent = orders.length;
+        if (pendingOrdersEl) pendingOrdersEl.textContent = pending;
+        if (deliveredOrdersEl) deliveredOrdersEl.textContent = delivered;
+        if (totalRevenueEl) totalRevenueEl.textContent = `₹${totalRevenue.toFixed(2)}`;
+    } catch (error) {
+        console.error('❌ Error in updateFilteredStats:', error);
+    }
 }
 
 // Update order statistics
@@ -615,5 +733,62 @@ window.onclick = function(event) {
     const modal = document.getElementById('orderDetailsModal');
     if (event.target === modal) {
         closeOrderDetailsModal();
+    }
+}
+
+// Clear search input
+// Clear search input
+function clearSearch() {
+    try {
+        const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
+        if (searchInput) {
+            searchInput.value = '';
+            filterOrders();
+            updateClearButtonVisibility();
+        }
+    } catch (error) {
+        console.error('❌ Error in clearSearch:', error);
+    }
+}
+
+// Reset all filters
+function resetFilters() {
+    console.log('🔄 Resetting all filters...');
+    
+    // Clear search
+    const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    // Reset status filter
+    const statusFilter = document.getElementById('statusFilter');
+    if (statusFilter) {
+        statusFilter.value = '';
+    }
+    
+    // Re-display all orders
+    displayOrders(allOrders);
+    
+    // Update stats with all orders
+    updateOrderStats();
+    
+    // Update clear button visibility
+    updateClearButtonVisibility();
+    
+    console.log('   ✅ Filters reset');
+}
+
+// Update clear button visibility based on search input
+function updateClearButtonVisibility() {
+    const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    
+    if (searchInput && clearBtn) {
+        if (searchInput.value.trim()) {
+            clearBtn.style.display = 'block';
+        } else {
+            clearBtn.style.display = 'none';
+        }
     }
 }

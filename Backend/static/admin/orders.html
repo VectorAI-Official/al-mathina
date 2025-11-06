@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Order Management - AL-Madhina Admin</title>
     <link rel="stylesheet" href="css/orders.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -63,12 +66,24 @@
                 <label for="searchInput">
                     <i class="fas fa-search"></i> Search
                 </label>
-                <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="Search by Order ID, Customer, Phone..."
-                    onkeyup="filterOrders()"
-                >
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Search by Order ID, Customer, Phone, Store..."
+                        oninput="filterOrders()"
+                        onkeyup="filterOrders()"
+                        style="flex: 1;"
+                    >
+                    <button 
+                        id="clearSearchBtn" 
+                        onclick="clearSearch()" 
+                        style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: #666; display: none;"
+                        title="Clear search"
+                    >
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
             </div>
             <div class="filter-group">
                 <label for="statusFilter">

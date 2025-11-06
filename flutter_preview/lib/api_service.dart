@@ -13,6 +13,8 @@ class MainCategory {
   final int productCount;
   final String section;
   final String mainCategory;
+  final String? sectionId;  // New: ID-based reference
+  final String? mainCategoryId;  // New: ID-based reference
 
   MainCategory({
     required this.id,
@@ -21,16 +23,20 @@ class MainCategory {
     required this.productCount,
     required this.section,
     required this.mainCategory,
+    this.sectionId,
+    this.mainCategoryId,
   });
 
   factory MainCategory.fromJson(Map<String, dynamic> json) {
     return MainCategory(
-      id: json['id'],
-      name: json['name'],
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
       imageUrl: json['image_url'] ?? '',
-      productCount: json['product_count'],
-      section: json['section'],
-      mainCategory: json['main_category'],
+      productCount: json['product_count'] ?? 0,
+      section: json['section'] ?? '',
+      mainCategory: json['main_category'] ?? '',
+      sectionId: json['section_id'],
+      mainCategoryId: json['main_category_id'],
     );
   }
 }
@@ -50,12 +56,12 @@ class Section {
 
   factory Section.fromJson(Map<String, dynamic> json) {
     return Section(
-      title: json['title'],
-      icon: json['icon'],
-      sectionName: json['section_name'],
-      mainCategories: (json['main_categories'] as List)
-          .map((item) => MainCategory.fromJson(item))
-          .toList(),
+      title: json['title'] ?? '',
+      icon: json['icon'] ?? '',
+      sectionName: json['section_name'] ?? '',
+      mainCategories: (json['main_categories'] as List?)
+          ?.map((item) => MainCategory.fromJson(item))
+          .toList() ?? [],
     );
   }
 }
@@ -73,11 +79,11 @@ class BestSellersSection {
 
   factory BestSellersSection.fromJson(Map<String, dynamic> json) {
     return BestSellersSection(
-      title: json['title'],
-      icon: json['icon'],
-      mainCategories: (json['main_categories'] as List)
-          .map((item) => MainCategory.fromJson(item))
-          .toList(),
+      title: json['title'] ?? '',
+      icon: json['icon'] ?? '',
+      mainCategories: (json['main_categories'] as List?)
+          ?.map((item) => MainCategory.fromJson(item))
+          .toList() ?? [],
     );
   }
 }
@@ -93,10 +99,12 @@ class HomeData {
 
   factory HomeData.fromJson(Map<String, dynamic> json) {
     return HomeData(
-      bestSellers: BestSellersSection.fromJson(json['best_sellers']),
-      sections: (json['sections'] as List)
-          .map((item) => Section.fromJson(item))
-          .toList(),
+      bestSellers: json['best_sellers'] != null 
+          ? BestSellersSection.fromJson(json['best_sellers'])
+          : BestSellersSection(title: '', icon: '', mainCategories: []),
+      sections: (json['sections'] as List?)
+          ?.map((item) => Section.fromJson(item))
+          .toList() ?? [],
     );
   }
 }
@@ -107,6 +115,7 @@ class Subcategory {
   final int productCount;
   final String icon;
   final String imageUrl;
+  final String? subcategoryId;  // New: ID-based reference
 
   Subcategory({
     required this.name,
@@ -114,21 +123,23 @@ class Subcategory {
     required this.productCount,
     required this.icon,
     required this.imageUrl,
+    this.subcategoryId,
   });
 
   factory Subcategory.fromJson(Map<String, dynamic> json) {
     return Subcategory(
-      name: json['name'],
-      nameDisplay: json['name_display'] ?? json['name'],  // Fallback to name if no display name
-      productCount: json['product_count'],
-      icon: json['icon'],
+      name: json['name'] ?? '',
+      nameDisplay: json['name_display'] ?? json['name'] ?? '',  // Fallback to name if no display name
+      productCount: json['product_count'] ?? 0,
+      icon: json['icon'] ?? '',
       imageUrl: json['image_url'] ?? '',
+      subcategoryId: json['subcategory_id'],
     );
   }
 }
 
 class Product {
-  final String? itemId;  // Changed to nullable
+  final String? itemId;  // Product ID
   final String? section;
   final String? mainCategory;
   final String? subcategory;
@@ -144,9 +155,13 @@ class Product {
   final String? categorySection;
   final String? categoryMain;
   final String? categoryBreadcrumb;
+  // New: ID-based references
+  final String? categorySectionId;
+  final String? categoryMainId;
+  final String? categorySubId;
 
   Product({
-    this.itemId,  // Changed to optional
+    this.itemId,
     this.section,
     this.mainCategory,
     this.subcategory,
@@ -162,11 +177,14 @@ class Product {
     this.categorySection,
     this.categoryMain,
     this.categoryBreadcrumb,
+    this.categorySectionId,
+    this.categoryMainId,
+    this.categorySubId,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
-      itemId: json['item_id']?.toString(),  // Convert to string or null
+      itemId: json['item_id']?.toString(),
       section: json['section']?.toString(),
       mainCategory: json['main_category']?.toString(),
       subcategory: json['subcategory']?.toString(),
@@ -182,6 +200,9 @@ class Product {
       categorySection: json['category_section'],
       categoryMain: json['category_main'],
       categoryBreadcrumb: json['category_breadcrumb'],
+      categorySectionId: json['category_section_id'],
+      categoryMainId: json['category_main_id'],
+      categorySubId: json['category_sub_id'],
     );
   }
 
@@ -271,6 +292,9 @@ class ApiService {
     String? section,
     String? mainCategory,
     String? subcategory,
+    String? sectionId,  // New: ID-based filtering
+    String? mainCategoryId,  // New: ID-based filtering
+    String? subcategoryId,  // New: ID-based filtering
     int page = 1,
     int limit = 50,
     String lang = 'en',
@@ -282,9 +306,25 @@ class ApiService {
         'lang': lang,
         't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
-      if (section != null) queryParams['section'] = section;
-      if (mainCategory != null) queryParams['main_category'] = mainCategory;
-      if (subcategory != null) queryParams['subcategory'] = subcategory;
+      
+      // Prefer ID-based queries over name-based queries
+      if (sectionId != null) {
+        queryParams['section_id'] = sectionId;
+      } else if (section != null) {
+        queryParams['section'] = section;
+      }
+      
+      if (mainCategoryId != null) {
+        queryParams['main_category_id'] = mainCategoryId;
+      } else if (mainCategory != null) {
+        queryParams['main_category'] = mainCategory;
+      }
+      
+      if (subcategoryId != null) {
+        queryParams['subcategory_id'] = subcategoryId;
+      } else if (subcategory != null) {
+        queryParams['subcategory'] = subcategory;
+      }
 
       final uri = Uri.parse('$API_BASE/products').replace(queryParameters: queryParams);
       final response = await http.get(

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 2px solid #ddd; border-radius: 5px; }
+        .pass { border-color: green; background: #f0fff0; }
+        .fail { border-color: red; background: #fff0f0; }
+        input { padding: 8px; width: 300px; margin: 10px 0; }
+        .result { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Orders Search Functionality Test</h1>
+    
+    <div class="test">
+        <h3>Search Input Test</h3>
+        <input type="text" id="searchInput" placeholder="Type to search..." oninput="testSearch()">
+        <div id="searchResult" class="result"></div>
+    </div>
+
+    <div class="test">
+        <h3>Filter Test</h3>
+        <select id="statusFilter" onchange="testFilter()">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="delivered">Delivered</option>
+        </select>
+        <div id="filterResult" class="result"></div>
+    </div>
+
+    <script>
+        let allOrders = [];
+
+        async function loadTestOrders() {
+            try {
+                const response = await fetch('/api/admin/orders');
+                const data = await response.json();
+                allOrders = data.orders || [];
+                document.getElementById('searchResult').innerHTML = `✅ Loaded ${allOrders.length} orders for testing`;
+                document.getElementById('filterResult').innerHTML = `Ready to test`;
+            } catch (error) {
+                document.getElementById('searchResult').innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+
+        function testSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            if (!searchTerm) {
+                document.getElementById('searchResult').innerHTML = `⚪ Type something to search...`;
+                return;
+            }
+
+            const filtered = allOrders.filter(order => {
+                const orderId = order.order_id ? String(order.order_id).toLowerCase() : '';
+                const userName = order.user_name ? String(order.user_name).toLowerCase() : '';
+                const userPhone = order.user_phone ? String(order.user_phone).toLowerCase() : '';
+                const storeName = order.user_store_name ? String(order.user_store_name).toLowerCase() : '';
+                
+                return orderId.includes(searchTerm) ||
+                       userName.includes(searchTerm) ||
+                       userPhone.includes(searchTerm) ||
+                       storeName.includes(searchTerm);
+            });
+
+            const resultDiv = document.getElementById('searchResult');
+            resultDiv.innerHTML = `
+                <strong>Search for "${searchTerm}":</strong><br>
+                ✅ Found ${filtered.length} matching orders<br>
+                ${filtered.slice(0, 3).map(o => `
+                    <div style="margin: 5px 0; padding: 5px; background: white; border-radius: 3px;">
+                        ${o.order_id} - ${o.user_name} (${o.user_phone})
+                    </div>
+                `).join('')}
+                ${filtered.length > 3 ? `<em>...and ${filtered.length - 3} more</em>` : ''}
+            `;
+        }
+
+        function testFilter() {
+            const statusFilter = document.getElementById('statusFilter');
+            const status = statusFilter.value.toLowerCase();
+
+            if (!status) {
+                document.getElementById('filterResult').innerHTML = `⚪ All orders shown (${allOrders.length})`;
+                return;
+            }
+
+            const filtered = allOrders.filter(order => {
+                const orderStatus = order.status ? String(order.status).toLowerCase() : '';
+                return orderStatus === status;
+            });
+
+            document.getElementById('filterResult').innerHTML = `
+                <strong>Filter by "${status}":</strong><br>
+                ✅ Found ${filtered.length} ${status} orders
+            `;
+        }
+
+        // Load orders on page load
+        window.addEventListener('load', loadTestOrders);
+    </script>
+</body>
+</html>

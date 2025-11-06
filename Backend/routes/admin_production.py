@@ -1227,50 +1227,165 @@ async def generate_item_id():
 async def update_section_compat(section_name: str, data: dict):
     """Update section (compatibility endpoint)"""
     try:
+        logger.info(f"=" * 80)
+        logger.info(f"🔧 BACKEND STEP 1: Section edit endpoint called")
+        logger.info(f"   Section name from URL: '{section_name}'")
+        logger.info(f"   Request data: {data}")
+        
         db = get_mongo_db()
         new_name = data.get("new_name", section_name)
-        name_ta = data.get("name_ta")
+        # Frontend sends 'section_ta', accept both for compatibility
+        section_ta = data.get("section_ta") or data.get("name_ta")
         image_url = data.get("image_url")
         
-        logger.info(f"🔄 Updating section: '{section_name}'")
-        logger.info(f"   - new_name: {new_name}")
-        logger.info(f"   - name_ta: {name_ta}")
+        logger.info(f"� BACKEND STEP 2: Parsed request data:")
+        logger.info(f"   - new_name: '{new_name}'")
+        logger.info(f"   - section_ta: '{section_ta}'")
         logger.info(f"   - image_url: {image_url if not image_url else image_url[:80]}")
+        logger.info(f"   - Name changed: {new_name != section_name}")
         
         # Update hierarchy if name changed
         if new_name != section_name:
-            logger.info(f"   🔄 Section name changed, updating hierarchy...")
-            # Find the specific section document (each document is a section)
+            logger.info(f"🔧 BACKEND STEP 3a: Section name changed, updating hierarchy...")
+            
+            # Try to find section document (new structure: each doc has 'section' field)
             hierarchy_doc = db.category_hierarchy.find_one({"section": section_name})
+            logger.info(f"   - Found hierarchy doc with section field: {hierarchy_doc is not None}")
+            
             if hierarchy_doc:
+                # NEW STRUCTURE: Document has 'section' field
+                logger.info(f"   - Using NEW structure (section field)")
+                logger.info(f"   - Hierarchy doc ID: {hierarchy_doc.get('_id')}")
                 # Update the section field in this document
                 result = db.category_hierarchy.update_one(
                     {"section": section_name},
                     {"$set": {"section": new_name}}
                 )
-                logger.info(f"   ✓ Hierarchy updated: Matched {result.matched_count}, Modified {result.modified_count}")
+                logger.info(f"   ✓ Hierarchy section field updated: Matched {result.matched_count}, Modified {result.modified_count}")
+                
+                # Also update section_ta in hierarchy if provided
+                if section_ta is not None:
+                    ta_result = db.category_hierarchy.update_one(
+                        {"section": new_name},
+                        {"$set": {"section_ta": section_ta}}
+                    )
+                    logger.info(f"   ✓ Hierarchy section_ta updated: Matched {ta_result.matched_count}, Modified {ta_result.modified_count}")
             else:
-                logger.warning(f"   ⚠️  Section document not found in hierarchy: '{section_name}'")
+                # OLD STRUCTURE: Document has 'sections' array
+                logger.info(f"   - Trying OLD structure (sections array)...")
+                # Find document containing this section in the sections array
+                old_doc = db.category_hierarchy.find_one({"sections": section_name})
+                logger.info(f"   - Found doc with sections array: {old_doc is not None}")
+                
+                if old_doc:
+                    logger.info(f"   - Using OLD structure (sections array)")
+                    logger.info(f"   - Old doc ID: {old_doc.get('_id')}")
+                    logger.info(f"   - Current sections array: {old_doc.get('sections')}")
+                    
+                    # Remove old name from array (FIRST operation)
+                    result1 = db.category_hierarchy.update_one(
+                        {"_id": old_doc["_id"]},
+                        {"$pull": {"sections": section_name}}
+                    )
+                    logger.info(f"   ✓ Removed old name from array: Matched {result1.matched_count}, Modified {result1.modified_count}")
+                    
+                    # Add new name to array (SECOND operation)
+                    result2 = db.category_hierarchy.update_one(
+                        {"_id": old_doc["_id"]},
+                        {"$push": {"sections": new_name}}
+                    )
+                    logger.info(f"   ✓ Added new name to array: Matched {result2.matched_count}, Modified {result2.modified_count}")
+                    
+                    # For old structure, also try to add section field for future compatibility
+                    if "section" not in old_doc and len(old_doc.get("sections", [])) == 1:
+                        logger.info(f"   - Migrating to new structure: adding section field")
+                        db.category_hierarchy.update_one(
+                            {"_id": old_doc["_id"]},
+                            {"$set": {"section": new_name}}
+                        )
+                else:
+                    logger.warning(f"   ⚠️  Section not found in either structure: '{section_name}'")
+        else:
+            logger.info(f"🔧 BACKEND STEP 3b: Section name unchanged, updating only section_ta...")
+            # Even if name didn't change, update section_ta in hierarchy
+            if section_ta is not None:
+                # Try new structure first
+                ta_result = db.category_hierarchy.update_one(
+                    {"section": section_name},
+                    {"$set": {"section_ta": section_ta}}
+                )
+                logger.info(f"   ✓ Hierarchy section_ta updated (new structure): Matched {ta_result.matched_count}, Modified {ta_result.modified_count}")
+                
+                # If not found, try old structure
+                if ta_result.matched_count == 0:
+                    ta_result = db.category_hierarchy.update_one(
+                        {"sections": section_name},
+                        {"$set": {"section_ta": section_ta}}
+                    )
+                    logger.info(f"   ✓ Hierarchy section_ta updated (old structure): Matched {ta_result.matched_count}, Modified {ta_result.modified_count}")
         
-        # Update metadata
+        # STEP 4: Update metadata
         update_doc = {"updated_at": datetime.utcnow()}
-        if name_ta is not None:
-            update_doc["name_ta"] = name_ta
+        if section_ta is not None:
+            update_doc["name_ta"] = section_ta
         if image_url is not None:
             update_doc["image_url"] = image_url
         if new_name != section_name:
             update_doc["section"] = new_name
         
-        logger.info(f"   📝 Updating metadata with: {update_doc}")
+        logger.info(f"🔧 BACKEND STEP 4: Updating metadata...")
+        logger.info(f"   - Filter: {{'section': '{section_name}', 'type': 'section'}}")
+        logger.info(f"   - Update doc: {update_doc}")
+        
         result = db.category_metadata.update_one(
             {"section": section_name, "type": "section"},
             {"$set": update_doc}
         )
         logger.info(f"   ✓ Metadata updated: Matched {result.matched_count}, Modified {result.modified_count}")
         
+        # STEP 5: Update ALL child references if name changed
+        if new_name != section_name:
+            logger.info(f"🔧 BACKEND STEP 5: Updating all child references...")
+            
+            # Update all products with this section
+            products_result = db.products.update_many(
+                {"category_section": section_name},
+                {"$set": {"category_section": new_name}}
+            )
+            logger.info(f"   ✓ Products updated: Matched {products_result.matched_count}, Modified {products_result.modified_count}")
+            
+            # Update all metadata documents with this section
+            metadata_result = db.category_metadata.update_many(
+                {"section": section_name},
+                {"$set": {"section": new_name}}
+            )
+            logger.info(f"   ✓ Metadata documents updated: Matched {metadata_result.matched_count}, Modified {metadata_result.modified_count}")
+            
+            # Update most_bought entries
+            most_bought_result = db.most_bought.update_many(
+                {"section": section_name},
+                {"$set": {"section": new_name}}
+            )
+            logger.info(f"   ✓ Most bought entries updated: Matched {most_bought_result.matched_count}, Modified {most_bought_result.modified_count}")
+        
+        # STEP 6: Verify the update by reading back
+        logger.info(f"🔧 BACKEND STEP 6: Verifying update...")
+        updated_hierarchy = db.category_hierarchy.find_one({"section": new_name})
+        logger.info(f"   - Updated hierarchy section: '{updated_hierarchy.get('section') if updated_hierarchy else 'NOT FOUND'}'")
+        logger.info(f"   - Updated hierarchy section_ta: '{updated_hierarchy.get('section_ta') if updated_hierarchy else 'NOT FOUND'}'")
+        
+        # Verify products were updated
+        if new_name != section_name:
+            sample_product = db.products.find_one({"category_section": new_name})
+            logger.info(f"   - Sample product with new section: {sample_product.get('product_name') if sample_product else 'NONE'}")
+        
+        logger.info(f"✅ BACKEND STEP 7: Section update complete!")
+        logger.info(f"=" * 80)
+        
         return {"success": True, "message": "Section updated"}
     except Exception as e:
-        logger.error(f"✗ Failed to update section: {e}")
+        logger.error(f"❌ BACKEND ERROR: Failed to update section: {e}")
+        logger.exception("Full traceback:")
         raise HTTPException(status_code=500, detail=str(e))
 
 

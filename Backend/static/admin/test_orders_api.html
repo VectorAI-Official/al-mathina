@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .log { background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Orders API Test</h1>
+    <button onclick="testAPI()">Test API</button>
+    <div id="log"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            console.log(message);
+        }
+
+        async function testAPI() {
+            document.getElementById('log').innerHTML = '';
+            log('🔄 Starting API test...', 'info');
+            
+            try {
+                log('📡 Fetching /api/admin/orders...', 'info');
+                const response = await fetch('/api/admin/orders');
+                log(`📥 Response status: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                
+                const data = await response.json();
+                log(`✅ Data received - success: ${data.success}, orders: ${data.orders?.length}`, 'success');
+                
+                if (data.orders && data.orders.length > 0) {
+                    const order = data.orders[0];
+                    log(`📦 First order:`, 'info');
+                    log(`   - Order ID: ${order.order_id}`, 'info');
+                    log(`   - User: ${order.user_name} (${order.user_phone})`, 'info');
+                    log(`   - Status: ${order.status}`, 'info');
+                    log(`   - Amount: ₹${order.total_amount}`, 'info');
+                    log(`   - Items: ${order.items?.length}`, 'info');
+                }
+                
+                log(`✅ API TEST PASSED`, 'success');
+                
+            } catch (error) {
+                log(`❌ ERROR: ${error.message}`, 'error');
+                log(`Stack: ${error.stack}`, 'error');
+            }
+        }
+
+        // Auto-run test on load
+        window.addEventListener('load', () => {
+            setTimeout(testAPI, 500);
+        });
+    </script>
+</body>
+</html>

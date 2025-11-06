@@ -36,14 +36,31 @@ async def get_all_orders(request: Request):
         for order in orders:
             order['_id'] = str(order['_id'])
             
-            # Get user details
-            user = users_collection.find_one({"phone": order.get('user_phone')})
+            # Ensure order_id exists (use _id as fallback for old orders)
+            if 'order_id' not in order:
+                order['order_id'] = str(order['_id'])
+            
+            # Get user details - support both user_phone and user_id fields
+            user_phone = order.get('user_phone')
+            user_id = order.get('user_id')
+            
+            user = None
+            if user_phone:
+                user = users_collection.find_one({"phone": user_phone})
+            elif user_id:
+                # Try to find by user_id or phone (user_id might be phone)
+                user = users_collection.find_one({"user_id": user_id}) or users_collection.find_one({"phone": user_id})
+            
             if user:
                 order['user_name'] = user.get('name', 'Unknown')
                 order['user_store_name'] = user.get('store_name', '')
+                # Ensure user_phone is set for display
+                if not user_phone:
+                    order['user_phone'] = user.get('phone', user_id)
             else:
                 order['user_name'] = 'Unknown'
                 order['user_store_name'] = ''
+                order['user_phone'] = user_phone or user_id or 'N/A'
             
             # Enrich items with product details and images
             enriched_items = []
@@ -101,10 +118,25 @@ async def get_order_by_id(order_id: str, request: Request):
         
         order['_id'] = str(order['_id'])
         
-        # Get user details
-        user = users_collection.find_one({"phone": order.get('user_phone')})
+        # Ensure order_id exists
+        if 'order_id' not in order:
+            order['order_id'] = str(order['_id'])
+        
+        # Get user details - support both user_phone and user_id
+        user_phone = order.get('user_phone')
+        user_id = order.get('user_id')
+        
+        user = None
+        if user_phone:
+            user = users_collection.find_one({"phone": user_phone})
+        elif user_id:
+            user = users_collection.find_one({"user_id": user_id}) or users_collection.find_one({"phone": user_id})
+        
         if user:
             order['user_name'] = user.get('name', 'Unknown')
+            # Ensure user_phone is set
+            if not user_phone:
+                order['user_phone'] = user.get('phone', user_id)
             # Get store details
             store_details = user.get('store_details', {})
             order['user_store_name'] = store_details.get('store_name', '')
@@ -119,6 +151,7 @@ async def get_order_by_id(order_id: str, request: Request):
             order['user_name'] = 'Unknown'
             order['user_store_name'] = ''
             order['user_store_address'] = {}
+            order['user_phone'] = user_phone or user_id or 'N/A'
         
         # Enrich items with product details
         enriched_items = []

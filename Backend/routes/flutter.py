@@ -119,13 +119,19 @@ async def get_home_data(request: Request, lang: str = Query("en", description="L
             if lang == "ta" and metadata and metadata.get("name_ta"):
                 display_name = metadata.get("name_ta")
             
+            # Get IDs from metadata (added by migration)
+            section_id = metadata.get("section_id") if metadata else None
+            main_category_id = metadata.get("main_category_id") if metadata else None
+            
             response["best_sellers"]["main_categories"].append({
                 "id": f"most_bought_{section.lower().replace(' ', '_')}_{main_category.lower().replace(' ', '_')}",
                 "name": display_name,
                 "image_url": make_absolute(request, metadata.get("image_url", "") if metadata else ""),
                 "product_count": product_count,
                 "section": section,
-                "main_category": main_category
+                "main_category": main_category,
+                "section_id": section_id,  # New: ID-based reference
+                "main_category_id": main_category_id,  # New: ID-based reference
             })
         
         # Get all regular sections from hierarchy
@@ -175,13 +181,19 @@ async def get_home_data(request: Request, lang: str = Query("en", description="L
                 if lang == "ta" and metadata and metadata.get("name_ta"):
                     main_cat_display_name = metadata.get("name_ta")
                 
+                # Get IDs from metadata or hierarchy (added by migration)
+                section_id = section_doc.get("section_id")
+                main_category_id = metadata.get("main_category_id") if metadata else main_cat_data.get("main_category_id")
+                
                 section_data["main_categories"].append({
                     "id": f"{section_name.lower().replace(' ', '_')}_{main_cat_name.lower().replace(' ', '_')}",
                     "name": main_cat_display_name,
                     "image_url": make_absolute(request, metadata.get("image_url", "") if metadata else ""),
                     "product_count": product_count,
                     "section": section_name,
-                    "main_category": main_cat_name
+                    "main_category": main_cat_name,
+                    "section_id": section_id,  # New: ID-based reference
+                    "main_category_id": main_category_id,  # New: ID-based reference
                 })
             
             # Sort main categories by name
@@ -822,9 +834,22 @@ async def create_order(request: Request):
             raise HTTPException(status_code=400, detail="Missing required fields: user_id, items, delivery_address")
         
         from datetime import datetime, timedelta
+        import random
+        import string
+        
+        # Generate unique order_id (format: ORD-YYYYMMDD-XXXXX)
+        date_str = datetime.utcnow().strftime("%Y%m%d")
+        random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        order_id = f"ORD-{date_str}-{random_str}"
+        
+        # Get user details for enrichment (supports both user_id and phone-based lookups)
+        users_collection = db["users"]
+        user_doc = users_collection.find_one({"user_id": user_id}) or users_collection.find_one({"phone": user_id})
         
         order_doc = {
+            "order_id": order_id,  # NEW: Unique order ID
             "user_id": user_id,
+            "user_phone": user_doc.get("phone") if user_doc else user_id,  # NEW: For admin compatibility
             "items": items,
             "delivery_address": delivery_address,
             "payment_method": payment_method or "cod",
@@ -837,12 +862,13 @@ async def create_order(request: Request):
         
         result = orders_collection.insert_one(order_doc)
         
-        logger.info(f"Created order {result.inserted_id} for user {user_id}")
+        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_id}")
         
         return {
             "success": True,
             "message": "Order created successfully",
-            "order_id": str(result.inserted_id),
+            "order_id": order_id,  # Return the readable order_id
+            "mongodb_id": str(result.inserted_id),  # Also return MongoDB _id
             "status": "pending",
             "created_at": order_doc["created_at"].isoformat()
         }

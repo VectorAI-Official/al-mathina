@@ -3458,11 +3458,22 @@ function closeEditSectionModal() {
 async function handleSectionEdit(event) {
     event.preventDefault();
     
+    console.log('🔧 STEP 1: handleSectionEdit() called');
+    
     const oldName = document.getElementById('editSectionOldName').value;
     const newName = document.getElementById('editSectionName').value.trim();
     const newNameTa = document.getElementById('editSectionNameTa').value.trim();
     
+    console.log('🔧 STEP 2: Form values extracted:', {
+        oldName,
+        newName,
+        newNameTa,
+        oldName_length: oldName.length,
+        newName_length: newName.length
+    });
+    
     if (!newName) {
+        console.log('❌ STEP 3: Validation failed - empty name');
         showToast('Section name is required', 'error');
         return;
     }
@@ -3471,18 +3482,23 @@ async function handleSectionEdit(event) {
     const sectionDoc = categoryHierarchy.find(s => s.section === oldName);
     const oldNameTa = sectionDoc?.section_ta || '';
     
+    console.log('🔧 STEP 3: Found section in hierarchy:', {
+        sectionDoc_found: !!sectionDoc,
+        oldNameTa
+    });
+    
     // Normalize empty values for comparison (undefined, null, empty string all treated as empty)
     const normalizedNewNameTa = newNameTa || '';
     const normalizedOldNameTa = oldNameTa || '';
     
     // Check if anything actually changed
     if (newName === oldName && normalizedNewNameTa === normalizedOldNameTa) {
-        console.log('⚠️  No changes detected, just closing modal');
+        console.log('⚠️  STEP 4: No changes detected, just closing modal');
         closeEditSectionModal();
         return; // Don't make API call if nothing changed!
     }
     
-    console.log('📝 Changes detected:', {
+    console.log('📝 STEP 4: Changes detected:', {
         nameChanged: newName !== oldName,
         tamilChanged: normalizedNewNameTa !== normalizedOldNameTa,
         oldName,
@@ -3501,28 +3517,48 @@ async function handleSectionEdit(event) {
         // Always include section_ta (even if empty, to allow clearing)
         requestBody.section_ta = newNameTa;
         
-        const response = await fetch(`/admin/api/categories/section/${encodeURIComponent(oldName)}`, {
+        console.log('🔧 STEP 5: Request body prepared:', requestBody);
+        
+        const url = `/admin/api/categories/section/${encodeURIComponent(oldName)}`;
+        console.log('🔧 STEP 6: Making PUT request to:', url);
+        
+        const response = await fetch(url, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
         
+        console.log('🔧 STEP 7: Response received:', {
+            status: response.status,
+            ok: response.ok,
+            statusText: response.statusText
+        });
+        
+        const responseData = await response.json();
+        console.log('🔧 STEP 8: Response data:', responseData);
+        
         if (response.ok) {
             showToast('Section updated successfully', 'success');
+            console.log('✅ STEP 9: Update successful');
             
             // CRITICAL: Update mobileViewState if section name changed
             if (newName !== oldName && mobileViewState.currentSection === oldName) {
-                console.log(`🔄 Updating mobileViewState section: "${oldName}" → "${newName}"`);
+                console.log(`🔄 STEP 10: Updating mobileViewState section: "${oldName}" → "${newName}"`);
                 mobileViewState.currentSection = newName;
             }
             
+            console.log('🔧 STEP 11: Closing modal...');
             closeEditSectionModal();
+            
+            console.log('🔧 STEP 12: Calling loadCategories()...');
             await loadCategories(); // This will automatically restore the view
+            console.log('✅ STEP 13: Section edit complete!');
         } else {
+            console.log('❌ STEP 9: Update failed:', responseData);
             showToast('Failed to update section', 'error');
         }
     } catch (error) {
-        console.error('Error updating section:', error);
+        console.error('❌ ERROR in handleSectionEdit:', error);
         showToast('Error updating section', 'error');
     }
 }

@@ -140,8 +140,8 @@ async def get_home_data(request: Request, lang: str = Query("en", description="L
         for section_doc in sections:
             section_name = section_doc.get("section")
             
-            # Skip Best Seller if it exists in hierarchy (it's handled separately)
-            if section_name == "Most Bought":
+            # Skip sections with no name or "Most Bought"
+            if not section_name or section_name == "Most Bought":
                 continue
             
             # Get display name for section based on language

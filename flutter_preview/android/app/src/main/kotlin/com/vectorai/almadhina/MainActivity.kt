@@ -1,4 +1,4 @@
-package com.example.flutter_preview
+package com.vectorai.almadhina
 
 import io.flutter.embedding.android.FlutterActivity
 

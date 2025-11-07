@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'; // For ScrollDirection
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,8 +8,10 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'api_service.dart';
+import 'screens/phone_auth_screen.dart';
 
 const Color kPrimaryColor = Color(0xFF66BB6A); // Colors.green[400]
 const String kAppName = 'AL-Madhina';
@@ -535,9 +538,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    if (!kIsWeb) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } catch (e) {
+    print('Firebase initialization note: $e');
+  }
   
   // Create AppProvider and load saved language preference
   final appProvider = AppProvider();
@@ -6226,9 +6235,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Sign out from Firebase
+              try {
+                await FirebaseAuth.instance.signOut();
+              } catch (e) {
+                print('Firebase sign out error: $e');
+              }
+              
+              // Clear local storage
               final prefs = await SharedPreferences.getInstance();
               await prefs.remove('isOldUser');
               await prefs.remove('userPhone');
+              
+              // Navigate to login screen
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),

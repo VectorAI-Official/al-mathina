@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/phone_auth_service.dart';
+import '../main.dart' show MainScreen, mainScreenKey;
 
 const kPrimaryColor = Color(0xFF004D40);
 
@@ -97,23 +99,45 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         },
         onVerificationFailed: (exception) {
           if (mounted) {
+            String errorMsg = 'Verification failed';
+            if (exception.code == 'invalid-phone-number') {
+              errorMsg = 'Invalid phone number format';
+            } else if (exception.code == 'too-many-requests') {
+              errorMsg = 'Too many attempts. Please try again later';
+            } else if (exception.code == 'quota-exceeded') {
+              errorMsg = 'SMS quota exceeded. Please try again later';
+            } else if (exception.message != null) {
+              errorMsg = exception.message!;
+            }
+            
             setState(() {
               _isLoading = false;
-              _errorMessage = exception.message ?? 'Verification failed';
+              _errorMessage = errorMsg;
             });
           }
         },
         onVerificationCompleted: (credential) async {
           // Auto sign-in on instant verification (rarely happens)
           try {
-            await FirebaseAuth.instance.signInWithCredential(credential);
+            final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
             if (mounted) {
+              // Save the user as authenticated
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('isOldUser', true);
+              await prefs.setString('userPhone', userCredential.user?.phoneNumber ?? _phoneController.text);
+              
+              // Navigate to MainScreen
               widget.onAuthSuccess?.call();
-              Navigator.of(context).pop();
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (context) => MainScreen(key: mainScreenKey),
+                ),
+                (route) => false,
+              );
             }
           } catch (e) {
             if (mounted) {
-              setState(() => _errorMessage = 'Sign-in failed: $e');
+              setState(() => _errorMessage = 'Auto sign-in failed: ${e.toString()}');
             }
           }
         },
@@ -148,14 +172,29 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     });
 
     try {
-      await PhoneAuthService.signInWithOTP(
+      final userCredential = await PhoneAuthService.signInWithOTP(
         otp: otp,
         verificationId: _verificationId,
       );
 
-      if (mounted) {
+      if (mounted && userCredential != null) {
+        // Save the user as authenticated in SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isOldUser', true);
+        await prefs.setString('userPhone', userCredential.user?.phoneNumber ?? _phoneController.text);
+        
+        // Notify success callback if provided
         widget.onAuthSuccess?.call();
-        Navigator.of(context).pop();
+        
+        // Navigate to MainScreen, removing all previous routes
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => MainScreen(key: mainScreenKey),
+            ),
+            (route) => false, // Remove all previous routes
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
@@ -163,8 +202,14 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           _isLoading = false;
           if (e.code == 'invalid-verification-code') {
             _errorMessage = 'Invalid OTP. Please try again.';
+          } else if (e.code == 'session-expired') {
+            _errorMessage = 'OTP expired. Please request a new one.';
+          } else if (e.code == 'too-many-requests') {
+            _errorMessage = 'Too many attempts. Please try again later.';
+          } else if (e.code == 'credential-already-in-use') {
+            _errorMessage = 'This phone number is already in use.';
           } else {
-            _errorMessage = e.message ?? 'Sign-in failed';
+            _errorMessage = e.message ?? 'Sign-in failed. Please try again.';
           }
         });
       }
@@ -172,7 +217,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Error: ${e.toString()}';
+          _errorMessage = 'Connection error. Please check your internet and try again.';
         });
       }
     }

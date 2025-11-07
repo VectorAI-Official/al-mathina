@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'api_service.dart';
 
 const Color kPrimaryColor = Color(0xFF66BB6A); // Colors.green[400]
@@ -531,6 +533,11 @@ class AppProvider with ChangeNotifier {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   // Create AppProvider and load saved language preference
   final appProvider = AppProvider();

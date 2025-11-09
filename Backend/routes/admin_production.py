@@ -5,6 +5,7 @@ Handles category management, product CRUD, and image uploads via Cloudinary
 import logging
 import os
 import json
+import uuid
 from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, Form, UploadFile, File
@@ -16,6 +17,13 @@ from utils.cloudinary_helper import upload_image_to_cloudinary, delete_image_fro
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/api", tags=["admin"])
+
+
+# ============ UUID Generation Helper ============
+def generate_category_id(section: str, main_category: str = None, subcategory: str = None) -> str:
+    """Generate consistent UUID for a category based on its path"""
+    key = f"{section}|{main_category or ''}|{subcategory or ''}"
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, key))
 
 
 # ============ Pydantic Models ============
@@ -193,7 +201,7 @@ async def get_sections():
 
 @router.post("/section")
 async def create_section(section: SectionCreate):
-    """Create a new section"""
+    """Create a new section with UUID"""
     try:
         db = get_mongo_db()
         hierarchy_collection = db.category_hierarchy
@@ -203,6 +211,9 @@ async def create_section(section: SectionCreate):
         if hierarchy and section.name in hierarchy.get("sections", []):
             raise HTTPException(status_code=400, detail="Section already exists")
         
+        # Generate section UUID
+        section_id = generate_category_id(section.name)
+        
         # Add section to hierarchy
         hierarchy_collection.update_one(
             {},
@@ -210,23 +221,23 @@ async def create_section(section: SectionCreate):
             upsert=True
         )
         
-        # Save metadata if Tamil name provided
-        if section.name_ta:
-            db.category_metadata.update_one(
-                {"section": section.name, "type": "section"},
-                {
-                    "$set": {
-                        "section": section.name,
-                        "type": "section",
-                        "name_ta": section.name_ta,
-                        "updated_at": datetime.utcnow()
-                    }
-                },
-                upsert=True
-            )
+        # Save metadata with UUID
+        db.category_metadata.update_one(
+            {"section": section.name, "type": "section"},
+            {
+                "$set": {
+                    "section": section.name,
+                    "type": "section",
+                    "category_id": section_id,
+                    "name_ta": section.name_ta if section.name_ta else None,
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
         
-        logger.info(f"✓ Section created: {section.name}")
-        return {"success": True, "message": "Section created successfully"}
+        logger.info(f"✓ Section created with UUID: {section.name} (ID: {section_id})")
+        return {"success": True, "message": "Section created successfully", "section_id": section_id}
     
     except HTTPException:
         raise
@@ -237,10 +248,13 @@ async def create_section(section: SectionCreate):
 
 @router.put("/section/{section_name}")
 async def update_section(section_name: str, update: CategoryUpdate):
-    """Update a section's name, Tamil name, and/or image"""
+    """Update a section's name, Tamil name, and/or image with UUID-based CASCADE"""
     try:
         db = get_mongo_db()
         metadata_collection = db.category_metadata
+        
+        # Get old section ID
+        old_section_id = generate_category_id(section_name)
         
         # Prepare update data
         update_data = {"updated_at": datetime.utcnow()}
@@ -251,6 +265,14 @@ async def update_section(section_name: str, update: CategoryUpdate):
         if update.image_url:
             update_data["image_url"] = update.image_url
         
+        # Check if name is being changed
+        new_name = update.name if hasattr(update, 'name') and update.name else section_name
+        if new_name != section_name:
+            update_data["name"] = new_name
+            # Generate new section ID
+            new_section_id = generate_category_id(new_name)
+            update_data["category_id"] = new_section_id
+        
         # Update or create metadata
         result = metadata_collection.update_one(
             {"section": section_name, "type": "section"},
@@ -259,7 +281,75 @@ async def update_section(section_name: str, update: CategoryUpdate):
         )
         
         logger.info(f"✓ Section updated: {section_name}")
-        return {"success": True, "message": "Section updated successfully"}
+        
+        # If name changed, CASCADE UPDATE using UUID references
+        if new_name != section_name:
+            logger.info(f"🔄 CASCADE: Renaming section '{section_name}' → '{new_name}' (ID: {old_section_id} → {new_section_id})")
+            
+            # 1. CASCADE UPDATE: Update all products by section_id (using CORRECT field names)
+            products_result = db.products.update_many(
+                {"category_section_id": old_section_id},
+                {
+                    "$set": {
+                        "category_section": new_name,  # CORRECT field name
+                        "category_section_id": new_section_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            logger.info(f"✓ CASCADE: Updated {products_result.modified_count} products (by UUID)")
+            
+            # 2. CASCADE UPDATE: Update all main category metadata
+            main_cat_result = db.category_metadata.update_many(
+                {"section_id": old_section_id, "type": "main_category"},
+                {
+                    "$set": {
+                        "section": new_name,
+                        "section_id": new_section_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            logger.info(f"✓ CASCADE: Updated {main_cat_result.modified_count} main category metadata")
+            
+            # 3. CASCADE UPDATE: Update all subcategory metadata
+            subcat_result = db.category_metadata.update_many(
+                {"section_id": old_section_id, "type": "subcategory"},
+                {
+                    "$set": {
+                        "section": new_name,
+                        "section_id": new_section_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            logger.info(f"✓ CASCADE: Updated {subcat_result.modified_count} subcategory metadata")
+            
+            # 4. CASCADE UPDATE: Update category_hierarchy
+            db.category_hierarchy.update_many(
+                {"sections": section_name},
+                {"$pull": {"sections": section_name}}
+            )
+            db.category_hierarchy.update_many(
+                {},
+                {"$addToSet": {"sections": new_name}}
+            )
+            hierarchy_docs = db.category_hierarchy.find({"sections": new_name})
+            for doc in hierarchy_docs:
+                if section_name in doc.get("main_categories", {}):
+                    main_cats = doc["main_categories"].pop(section_name, [])
+                    doc["main_categories"][new_name] = main_cats
+                    db.category_hierarchy.update_one(
+                        {"_id": doc["_id"]},
+                        {"$set": {"main_categories": doc["main_categories"]}}
+                    )
+            logger.info(f"✓ CASCADE: Updated category_hierarchy")
+        
+        return {
+            "success": True, 
+            "message": "Section updated successfully",
+            "reload_required": new_name != section_name
+        }
     
     except Exception as e:
         logger.error(f"✗ Failed to update section: {e}")
@@ -310,10 +400,14 @@ async def get_main_categories(section: str):
 
 @router.post("/main-category")
 async def create_main_category(category: MainCategoryCreate):
-    """Create a new main category"""
+    """Create a new main category with UUID"""
     try:
         db = get_mongo_db()
         hierarchy_collection = db.category_hierarchy
+        
+        # Generate UUIDs
+        section_id = generate_category_id(category.section)
+        main_cat_id = generate_category_id(category.section, category.name)
         
         # Add to hierarchy
         hierarchy_collection.update_one(
@@ -322,28 +416,29 @@ async def create_main_category(category: MainCategoryCreate):
             upsert=True
         )
         
-        # Save metadata if Tamil name provided
-        if category.name_ta:
-            db.category_metadata.update_one(
-                {
+        # Save metadata with UUID
+        db.category_metadata.update_one(
+            {
+                "section": category.section,
+                "name": category.name,
+                "type": "main_category"
+            },
+            {
+                "$set": {
                     "section": category.section,
                     "name": category.name,
-                    "type": "main_category"
-                },
-                {
-                    "$set": {
-                        "section": category.section,
-                        "name": category.name,
-                        "type": "main_category",
-                        "name_ta": category.name_ta,
-                        "updated_at": datetime.utcnow()
-                    }
-                },
-                upsert=True
-            )
+                    "type": "main_category",
+                    "category_id": main_cat_id,
+                    "section_id": section_id,
+                    "name_ta": category.name_ta if category.name_ta else None,
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
         
-        logger.info(f"✓ Main category created: {category.section}/{category.name}")
-        return {"success": True, "message": "Main category created successfully"}
+        logger.info(f"✓ Main category created with UUID: {category.section}/{category.name} (ID: {main_cat_id})")
+        return {"success": True, "message": "Main category created successfully", "main_category_id": main_cat_id}
     
     except Exception as e:
         logger.error(f"✗ Failed to create main category: {e}")
@@ -352,10 +447,14 @@ async def create_main_category(category: MainCategoryCreate):
 
 @router.put("/main-category/{section}/{main_category}")
 async def update_main_category(section: str, main_category: str, update: CategoryUpdate):
-    """Update a main category's Tamil name and/or image"""
+    """Update a main category's name with UUID-based CASCADE"""
     try:
         db = get_mongo_db()
         metadata_collection = db.category_metadata
+        
+        # Get old IDs
+        old_section_id = generate_category_id(section)
+        old_main_cat_id = generate_category_id(section, main_category)
         
         # Prepare update data
         update_data = {"updated_at": datetime.utcnow()}
@@ -370,51 +469,130 @@ async def update_main_category(section: str, main_category: str, update: Categor
         new_name = update.name if hasattr(update, 'name') and update.name else main_category
         if new_name != main_category:
             update_data["name"] = new_name
+            # Generate new main category ID
+            new_main_cat_id = generate_category_id(section, new_name)
+            update_data["category_id"] = new_main_cat_id
         
-        # Update or create metadata
+        # Update or create metadata (use OLD name to find, then update to new name)
         result = metadata_collection.update_one(
             {
                 "section": section,
-                "name": main_category,
+                "name": main_category,  # Find by OLD name
                 "type": "main_category"
             },
-            {"$set": update_data},
+            {"$set": update_data},  # Update to new name (if changed)
             upsert=True
         )
         
-        logger.info(f"✓ Main category updated: {section}/{main_category}")
+        logger.info(f"✓ Main category metadata updated: {section}/{main_category}" + (f" → {new_name}" if new_name != main_category else ""))
         
-        # If name changed, update category_hierarchy collection
+        # If name changed, CASCADE UPDATE using UUID references
         if new_name != main_category:
-            logger.info(f"🔄 Updating hierarchy: '{main_category}' → '{new_name}'")
+            new_main_cat_id = generate_category_id(section, new_name)
+            logger.info(f"🔄 CASCADE: Renaming main category '{main_category}' → '{new_name}' (ID: {old_main_cat_id} → {new_main_cat_id})")
             
-            # Find the hierarchy document for this section
+            # 1. Update category_hierarchy collection (CRITICAL for dashboard display)
             hierarchy_doc = db.category_hierarchy.find_one({"sections": section})
             
             if hierarchy_doc:
-                # Get main categories list for this section
                 main_cats = hierarchy_doc.get("main_categories", {}).get(section, [])
+                logger.info(f"   Current hierarchy main_categories for '{section}': {main_cats}")
                 
-                # Replace old name with new name
                 if main_category in main_cats:
-                    main_cats.remove(main_category)
-                    if new_name not in main_cats:
-                        main_cats.append(new_name)
-                        
-                        # Update the hierarchy
-                        db.category_hierarchy.update_one(
-                            {"_id": hierarchy_doc["_id"]},
-                            {"$set": {f"main_categories.{section}": main_cats}}
-                        )
-                        logger.info(f"✓ Hierarchy updated: main categories for '{section}' = {main_cats}")
-                    else:
-                        logger.warning(f"⚠️  New name '{new_name}' already exists in main categories")
+                    # Find index and replace in-place to preserve order
+                    idx = main_cats.index(main_category)
+                    main_cats[idx] = new_name
+                    
+                    db.category_hierarchy.update_one(
+                        {"_id": hierarchy_doc["_id"]},
+                        {"$set": {f"main_categories.{section}": main_cats}}
+                    )
+                    logger.info(f"✓ CASCADE: Hierarchy updated - '{main_category}' → '{new_name}'")
+                    logger.info(f"   New hierarchy main_categories: {main_cats}")
                 else:
-                    logger.warning(f"⚠️  Old name '{main_category}' not found in main categories")
+                    logger.warning(f"⚠️  Old name '{main_category}' not found in hierarchy!")
             else:
                 logger.warning(f"⚠️  Hierarchy document not found for section '{section}'")
+            
+            # 2. CASCADE UPDATE: Update all products by main_category_id (using CORRECT field names)
+            products_result = db.products.update_many(
+                {"category_main_id": old_main_cat_id},
+                {
+                    "$set": {
+                        "category_main": new_name,  # CORRECT field name
+                        "category_main_id": new_main_cat_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            logger.info(f"✓ CASCADE: Updated {products_result.modified_count} products (by UUID)")
+            
+            # 3. CASCADE UPDATE: Update all subcategory metadata and regenerate their IDs
+            # First, get all subcategories under this main category
+            subcats_cursor = db.category_metadata.find({
+                "main_category_id": old_main_cat_id,
+                "type": "subcategory"
+            })
+            
+            subcategories_list = []  # Track subcategory names for hierarchy update
+            
+            for subcat_doc in subcats_cursor:
+                subcat_name = subcat_doc.get("name")
+                subcategories_list.append(subcat_name)
+                old_subcat_id = subcat_doc.get("category_id")
+                # Generate new subcategory ID with new main category name
+                new_subcat_id = generate_category_id(section, new_name, subcat_name)
+                
+                # Update subcategory metadata
+                db.category_metadata.update_one(
+                    {"_id": subcat_doc["_id"]},
+                    {
+                        "$set": {
+                            "main_category": new_name,
+                            "main_category_id": new_main_cat_id,
+                            "category_id": new_subcat_id,
+                            "updated_at": datetime.utcnow()
+                        }
+                    }
+                )
+                
+                # Update products referencing this subcategory (using CORRECT field names)
+                db.products.update_many(
+                    {"category_sub_id": old_subcat_id},
+                    {
+                        "$set": {
+                            "category_main": new_name,  # CORRECT field name
+                            "category_main_id": new_main_cat_id,
+                            "category_sub_id": new_subcat_id,
+                            "updated_at": datetime.utcnow()
+                        }
+                    }
+                )
+            
+            # 4. CASCADE UPDATE: Update subcategories in hierarchy (for dashboard display)
+            if subcategories_list and hierarchy_doc:
+                # Update subcategories.{section}.{old_main_cat} → subcategories.{section}.{new_main_cat}
+                subcats_in_hierarchy = hierarchy_doc.get("subcategories", {}).get(section, {})
+                if main_category in subcats_in_hierarchy:
+                    # Move subcategories from old main cat name to new main cat name
+                    subcats_in_hierarchy[new_name] = subcats_in_hierarchy.pop(main_category)
+                    
+                    db.category_hierarchy.update_one(
+                        {"_id": hierarchy_doc["_id"]},
+                        {"$set": {f"subcategories.{section}": subcats_in_hierarchy}}
+                    )
+                    logger.info(f"✓ CASCADE: Moved {len(subcategories_list)} subcategories in hierarchy")
+            
+            logger.info(f"✓ CASCADE: Updated all subcategory metadata and regenerated UUIDs")
         
-        return {"success": True, "message": "Main category updated successfully"}
+        # Return with reload flag if name changed
+        return {
+            "success": True, 
+            "message": "Main category updated successfully",
+            "reload_required": new_name != main_category,  # Signal dashboard to reload
+            "old_name": main_category if new_name != main_category else None,
+            "new_name": new_name if new_name != main_category else None
+        }
     
     except Exception as e:
         logger.error(f"✗ Failed to update main category: {e}")
@@ -470,10 +648,15 @@ async def get_subcategories(section: str, main_category: str):
 
 @router.post("/subcategory")
 async def create_subcategory(subcategory: SubcategoryCreate):
-    """Create a new subcategory"""
+    """Create a new subcategory with UUID"""
     try:
         db = get_mongo_db()
         hierarchy_collection = db.category_hierarchy
+        
+        # Generate UUIDs
+        section_id = generate_category_id(subcategory.section)
+        main_cat_id = generate_category_id(subcategory.section, subcategory.main_category)
+        subcat_id = generate_category_id(subcategory.section, subcategory.main_category, subcategory.name)
         
         # Add to hierarchy
         hierarchy_collection.update_one(
@@ -486,30 +669,32 @@ async def create_subcategory(subcategory: SubcategoryCreate):
             upsert=True
         )
         
-        # Save metadata if Tamil name provided
-        if subcategory.name_ta:
-            db.category_metadata.update_one(
-                {
+        # Save metadata with UUID
+        db.category_metadata.update_one(
+            {
+                "section": subcategory.section,
+                "main_category": subcategory.main_category,
+                "name": subcategory.name,
+                "type": "subcategory"
+            },
+            {
+                "$set": {
                     "section": subcategory.section,
                     "main_category": subcategory.main_category,
                     "name": subcategory.name,
-                    "type": "subcategory"
-                },
-                {
-                    "$set": {
-                        "section": subcategory.section,
-                        "main_category": subcategory.main_category,
-                        "name": subcategory.name,
-                        "type": "subcategory",
-                        "name_ta": subcategory.name_ta,
-                        "updated_at": datetime.utcnow()
-                    }
-                },
-                upsert=True
-            )
+                    "type": "subcategory",
+                    "category_id": subcat_id,
+                    "section_id": section_id,
+                    "main_category_id": main_cat_id,
+                    "name_ta": subcategory.name_ta if subcategory.name_ta else None,
+                    "updated_at": datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
         
-        logger.info(f"✓ Subcategory created: {subcategory.section}/{subcategory.main_category}/{subcategory.name}")
-        return {"success": True, "message": "Subcategory created successfully"}
+        logger.info(f"✓ Subcategory created with UUID: {subcategory.section}/{subcategory.main_category}/{subcategory.name} (ID: {subcat_id})")
+        return {"success": True, "message": "Subcategory created successfully", "subcategory_id": subcat_id}
     
     except Exception as e:
         logger.error(f"✗ Failed to create subcategory: {e}")
@@ -523,10 +708,15 @@ async def update_subcategory(
     subcategory: str,
     update: CategoryUpdate
 ):
-    """Update a subcategory's Tamil name and/or image"""
+    """Update a subcategory's name with UUID-based CASCADE"""
     try:
         db = get_mongo_db()
         metadata_collection = db.category_metadata
+        
+        # Get old IDs
+        old_section_id = generate_category_id(section)
+        old_main_cat_id = generate_category_id(section, main_category)
+        old_subcat_id = generate_category_id(section, main_category, subcategory)
         
         # Prepare update data
         update_data = {"updated_at": datetime.utcnow()}
@@ -536,6 +726,14 @@ async def update_subcategory(
         
         if update.image_url:
             update_data["image_url"] = update.image_url
+        
+        # Check if name is being changed
+        new_name = update.name if hasattr(update, 'name') and update.name else subcategory
+        if new_name != subcategory:
+            update_data["name"] = new_name
+            # Generate new subcategory ID
+            new_subcat_id = generate_category_id(section, main_category, new_name)
+            update_data["category_id"] = new_subcat_id
         
         # Update or create metadata
         result = metadata_collection.update_one(
@@ -550,7 +748,30 @@ async def update_subcategory(
         )
         
         logger.info(f"✓ Subcategory updated: {section}/{main_category}/{subcategory}")
-        return {"success": True, "message": "Subcategory updated successfully"}
+        
+        # If name changed, CASCADE UPDATE using UUID references
+        if new_name != subcategory:
+            new_subcat_id = generate_category_id(section, main_category, new_name)
+            logger.info(f"🔄 CASCADE: Renaming subcategory '{subcategory}' → '{new_name}' (ID: {old_subcat_id} → {new_subcat_id})")
+            
+            # CASCADE UPDATE: Update all products by subcategory_id (using CORRECT field names)
+            products_result = db.products.update_many(
+                {"category_sub_id": old_subcat_id},
+                {
+                    "$set": {
+                        "category_sub": new_name,  # CORRECT field name
+                        "category_sub_id": new_subcat_id,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            logger.info(f"✓ CASCADE: Updated {products_result.modified_count} products (by UUID)")
+        
+        return {
+            "success": True, 
+            "message": "Subcategory updated successfully",
+            "reload_required": new_name != subcategory
+        }
     
     except Exception as e:
         logger.error(f"✗ Failed to update subcategory: {e}")
@@ -611,11 +832,22 @@ async def create_product(product: ProductCreate):
         if existing:
             raise HTTPException(status_code=400, detail="Product with this item_id already exists")
         
-        # Create product document
+        # Generate category UUIDs
+        section_id = generate_category_id(product.section)
+        main_cat_id = generate_category_id(product.section, product.main_category)
+        subcat_id = generate_category_id(product.section, product.main_category, product.subcategory)
+        
+        # Create product document with CORRECT field names and UUID fields
         product_doc = {
-            "section": product.section,
-            "main_category": product.main_category,
-            "subcategory": product.subcategory,
+            # CORRECT field names (as used in existing DB)
+            "category_section": product.section,
+            "category_main": product.main_category,
+            "category_sub": product.subcategory,
+            # UUID references for CASCADE updates
+            "category_section_id": section_id,
+            "category_main_id": main_cat_id,
+            "category_sub_id": subcat_id,
+            # Product data
             "product_name": product.product_name,
             "product_name_ta": product.product_name_ta,
             "item_id": product.item_id,
@@ -628,7 +860,7 @@ async def create_product(product: ProductCreate):
         
         result = products_collection.insert_one(product_doc)
         
-        logger.info(f"✓ Product created: {product.product_name} ({product.item_id})")
+        logger.info(f"✓ Product created with UUID: {product.product_name} (section_id={section_id}, main_id={main_cat_id}, sub_id={subcat_id})")
         
         return {
             "success": True,
@@ -1122,6 +1354,26 @@ async def add_product_compat(request: Request):
         removed_brand = data.pop("brand", None)
         logger.info(f"   ✅ Removed 'category': {removed_category}")
         logger.info(f"   ✅ Removed 'brand': {removed_brand}")
+
+        logger.info("📦 STEP 5B: ASSIGNING DETERMINISTIC CATEGORY UUIDs (compat mode)")
+        try:
+            section_val = data.get("category_section")
+            main_val = data.get("category_main")
+            sub_val = data.get("category_sub")
+
+            # Only set if not already present (avoid overwriting if caller supplied)
+            if section_val and "category_section_id" not in data:
+                data["category_section_id"] = generate_category_id(section_val)
+                logger.info(f"   ✓ category_section_id = {data['category_section_id']}")
+            if section_val and main_val and "category_main_id" not in data:
+                data["category_main_id"] = generate_category_id(section_val, main_val)
+                logger.info(f"   ✓ category_main_id = {data['category_main_id']}")
+            if section_val and main_val and sub_val and "category_sub_id" not in data:
+                data["category_sub_id"] = generate_category_id(section_val, main_val, sub_val)
+                logger.info(f"   ✓ category_sub_id = {data['category_sub_id']}")
+        except Exception as uuid_err:
+            logger.error(f"   ⚠️ Failed to assign deterministic UUIDs: {uuid_err}")
+            # Don't fail product creation; continue
         
         logger.info("📦 STEP 6: MONGODB CONNECTION CHECK")
         logger.info(f"   📊 Database: {db.name}")
@@ -1459,38 +1711,108 @@ async def update_main_category_compat(main_category_name: str, data: dict):
                 db.category_metadata.insert_one(new_doc)
                 logger.info(f"   ✅ New document created for: {new_name}")
         
-        # If name changed and document was found/created, update hierarchy
+        # If name changed, perform UUID CASCADE UPDATE
         if new_name != main_category_name:
-            logger.info(f"   🔄 Updating hierarchy for main category: '{main_category_name}' → '{new_name}'")
-            
-            # Find the section document
+            logger.info(f"   🔄 CASCADE: Renaming main category '{main_category_name}' → '{new_name}'")
+            old_main_cat_id = generate_category_id(section, main_category_name)
+            new_main_cat_id = generate_category_id(section, new_name)
+
+            # 1. Hierarchy update
             hierarchy_doc = db.category_hierarchy.find_one({"section": section})
-            
             if hierarchy_doc:
-                # Get main_categories dict
                 main_categories = hierarchy_doc.get("main_categories", {})
-                
-                # Check if old main category name exists as a key
                 if main_category_name in main_categories:
-                    # Get the subcategories list
                     subcats = main_categories[main_category_name]
-                    
-                    # Remove old key and add with new key
                     del main_categories[main_category_name]
                     main_categories[new_name] = subcats
-                    
-                    # Update the hierarchy
                     db.category_hierarchy.update_one(
                         {"section": section},
                         {"$set": {"main_categories": main_categories}}
                     )
                     logger.info(f"   ✓ Hierarchy updated: main categories = {list(main_categories.keys())}")
-                else:
-                    logger.warning(f"   ⚠️  Main category '{main_category_name}' not found in hierarchy for section '{section}'")
-            else:
-                logger.warning(f"   ⚠️  Hierarchy document not found for section '{section}'")
+
+            # 2. Primary CASCADE: UUID-based products
+            products_result_uuid = db.products.update_many(
+                {"category_main_id": old_main_cat_id},
+                {"$set": {"category_main": new_name, "category_main_id": new_main_cat_id, "updated_at": datetime.utcnow()}}
+            )
+            logger.info(f"   ✓ CASCADE(UUID): Modified {products_result_uuid.modified_count} products")
+
+            # 2b. Fallback CASCADE: name-based where UUID missing
+            products_result_name = db.products.update_many(
+                {
+                    "category_section": section,
+                    "category_main": main_category_name,
+                    "$or": [
+                        {"category_main_id": {"$exists": False}},
+                        {"category_main_id": None},
+                        {"category_main_id": ""}
+                    ]
+                },
+                {"$set": {"category_main": new_name, "category_main_id": new_main_cat_id, "updated_at": datetime.utcnow()}}
+            )
+            if products_result_name.modified_count:
+                logger.info(f"   ✓ CASCADE(FALLBACK): Modified {products_result_name.modified_count} products missing UUIDs")
+
+            # 3. Subcategory metadata + products under subcategories
+            subcats_cursor = db.category_metadata.find({"main_category_id": old_main_cat_id, "type": "subcategory"})
+            subcat_count = 0
+            for subcat_doc in subcats_cursor:
+                subcat_name = subcat_doc.get("name")
+                old_subcat_id = subcat_doc.get("category_id")
+                new_subcat_id = generate_category_id(section, new_name, subcat_name)
+                db.category_metadata.update_one(
+                    {"_id": subcat_doc["_id"]},
+                    {"$set": {"main_category": new_name, "main_category_id": new_main_cat_id, "category_id": new_subcat_id, "updated_at": datetime.utcnow()}}
+                )
+                # Products with old subcat UUID
+                prod_update_uuid = db.products.update_many(
+                    {"category_sub_id": old_subcat_id},
+                    {"$set": {"category_main": new_name, "category_main_id": new_main_cat_id, "category_sub_id": new_subcat_id, "updated_at": datetime.utcnow()}}
+                )
+                # Fallback: products missing subcat UUID but matching names
+                prod_update_name = db.products.update_many(
+                    {
+                        "category_section": section,
+                        "category_main": main_category_name,
+                        "category_sub": subcat_name,
+                        "$or": [
+                            {"category_sub_id": {"$exists": False}},
+                            {"category_sub_id": None},
+                            {"category_sub_id": ""}
+                        ]
+                    },
+                    {"$set": {"category_main": new_name, "category_main_id": new_main_cat_id, "category_sub_id": new_subcat_id, "updated_at": datetime.utcnow()}}
+                )
+                if prod_update_name.modified_count or prod_update_uuid.modified_count:
+                    logger.info(f"      • Subcat '{subcat_name}': UUID products={prod_update_uuid.modified_count}, fallback products={prod_update_name.modified_count}")
+                subcat_count += 1
+            if subcat_count:
+                logger.info(f"   ✓ CASCADE: Processed {subcat_count} subcategories (UUID + fallback)")
+
+            # 4. Backfill section UUID for any touched products missing it
+            backfill_section_uuid = generate_category_id(section)
+            backfill_result = db.products.update_many(
+                {
+                    "category_section": section,
+                    "$or": [
+                        {"category_section_id": {"$exists": False}},
+                        {"category_section_id": None},
+                        {"category_section_id": ""}
+                    ]
+                },
+                {"$set": {"category_section_id": backfill_section_uuid}}
+            )
+            if backfill_result.modified_count:
+                logger.info(f"   ✓ BACKFILL: Added section UUID to {backfill_result.modified_count} products")
         
-        return {"success": True, "message": "Main category updated"}
+        return {
+            "success": True, 
+            "message": "Main category updated",
+            "reload_required": new_name != main_category_name,
+            "old_name": main_category_name if new_name != main_category_name else None,
+            "new_name": new_name if new_name != main_category_name else None
+        }
     except Exception as e:
         logger.error(f"✗ Failed to update main category: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -42,11 +42,12 @@ android {
 }
 
 dependencies {
-    // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:34.5.0"))
+    // Import the Firebase BoM - Updated to latest compatible version
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
 
-    // Firebase Analytics
+    // Core Firebase services used by the app
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
 
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries

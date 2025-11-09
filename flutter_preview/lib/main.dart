@@ -60,6 +60,26 @@ const Map<String, Map<String, String>> translations = {
     'added': 'added to cart!',
     'added_to_cart': 'Added to cart!',
     
+    // Phone Authentication
+    'al_mathina': 'Al-Mathina',
+    'traders': 'Traders',
+    'welcome_back': 'Welcome Back',
+    'enter_otp': 'Enter OTP',
+    'phone_number': 'Phone Number',
+    'enter_the_number': 'Enter the Number',
+    'enter_6_digit_otp': 'Enter 6-Digit OTP',
+    'otp_sent_to': 'OTP sent to',
+    'change_phone_number': 'Change Phone Number',
+    'invalid_phone_number': 'Invalid phone number',
+    'please_enter_10_digit': 'Please enter a 10-digit phone number',
+    'invalid_otp': 'Invalid OTP. Please try again.',
+    'otp_expired': 'OTP expired. Please request a new one.',
+    'verification_failed': 'Verification failed',
+    'connection_error': 'Connection error. Please try again.',
+    'too_many_attempts': 'Too many attempts. Please try again later',
+    'sms_quota_exceeded': 'SMS quota exceeded',
+    'auto_signin_failed': 'Auto sign-in failed',
+    
     // Payment & Checkout
     'payment_upi': 'Pay via UPI/Apps',
     'cod': 'Cash on Delivery',
@@ -99,6 +119,9 @@ const Map<String, Map<String, String>> translations = {
     'name_required': 'Please fill out your name',
     'store_required': 'Please fill out your store details',
     'both_required': 'Please fill out your name and store details',
+    'complete_profile_first': 'Please complete your profile before checking out',
+    'complete_name_first': 'Please add your name before checking out',
+    'complete_store_first': 'Please fill in your store details before checking out',
     'logout': 'Logout',
     'logout_confirm': 'Are you sure you want to logout?',
     'please_fill_name': 'Please fill in your name',
@@ -199,6 +222,26 @@ const Map<String, Map<String, String>> translations = {
     'loading': 'ஏற்றுகிறது...',
     'retry': 'மீண்டும் முயற்சிக்கவும்',
     'error': 'பிழை',
+    
+    // Phone Authentication
+    'al_mathina': 'அல்-மதீனா',
+    'traders': 'வணிகர்கள்',
+    'welcome_back': 'மீண்டும் வருக',
+    'enter_otp': 'OTP ஐ உள்ளிடவும்',
+    'phone_number': 'தொலைபேசி எண்',
+    'enter_the_number': 'எண்ணை உள்ளிடவும்',
+    'enter_6_digit_otp': '6-இலக்க OTP உள்ளிடவும்',
+    'otp_sent_to': 'OTP அனுப்பப்பட்டது',
+    'change_phone_number': 'தொலைபேசி எண்ணை மாற்று',
+    'invalid_phone_number': 'தவறான தொலைபேசி எண்',
+    'please_enter_10_digit': '10-இலக்க தொலைபேசி எண்ணை உள்ளிடவும்',
+    'invalid_otp': 'தவறான OTP. மீண்டும் முயற்சிக்கவும்.',
+    'otp_expired': 'OTP காலாவதியானது. புதிய ஒன்றைக் கோரவும்.',
+    'verification_failed': 'சரிபார்ப்பு தோல்வியடைந்தது',
+    'connection_error': 'இணைப்பு பிழை. மீண்டும் முயற்சிக்கவும்.',
+    'too_many_attempts': 'பல முயற்சிகள். பிறகு முயற்சிக்கவும்',
+    'sms_quota_exceeded': 'SMS ஒதுக்கீடு மீறப்பட்டது',
+    'auto_signin_failed': 'தானியங்கி உள்நுழைவு தோல்வியடைந்தது',
     
     // Cart
     'total': 'தொகை:',
@@ -347,6 +390,11 @@ const Map<String, Map<String, String>> translations = {
     'no_orders': 'இன்னும் ஆர்டர்கள் இல்லை!',
     'no_orders_message': 'நீங்கள் இன்னும் எந்த ஆர்டரும் செய்யவில்லை.\nஉங்கள் ஆர்டர்களை இங்கே பார்க்க ஷாப்பிங் தொடங்குங்கள்.',
     'checkout': 'செக்அவுட்',
+    
+    // Profile Completeness
+    'complete_profile_first': 'தொடர உங்கள் சுயவிவரத்தை முடிக்கவும்',
+    'complete_name_first': 'தொடர உங்கள் பெயரை சேர்க்கவும்',
+    'complete_store_first': 'தொடர கடை விவரங்களை சேர்க்கவும்',
   }
 };
 
@@ -538,21 +586,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Firebase
-  try {
-    if (!kIsWeb) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    }
-  } catch (e) {
-    print('Firebase initialization note: $e');
-  }
-  
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   // Create AppProvider and load saved language preference
   final appProvider = AppProvider();
-  await appProvider.loadLanguage();
-  
-  runApp(
+  await appProvider.loadLanguage();  runApp(
     ChangeNotifierProvider(
       create: (context) => appProvider,
       child: const MyApp(),
@@ -629,157 +669,6 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             SizedBox(height: 24),
             CircularProgressIndicator(color: kPrimaryColor),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class PhoneAuthScreen extends StatefulWidget {
-  const PhoneAuthScreen({super.key});
-
-  @override
-  State<PhoneAuthScreen> createState() => _PhoneAuthScreenState();
-}
-
-class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
-  final TextEditingController _phoneController = TextEditingController();
-  final List<TextEditingController> _otpControllers = List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _otpFocusNodes = List.generate(6, (_) => FocusNode());
-  bool _showOtp = false;
-  Timer? _autoFillTimer;
-
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    for (var controller in _otpControllers) {
-      controller.dispose();
-    }
-    for (var node in _otpFocusNodes) {
-      node.dispose();
-    }
-    _autoFillTimer?.cancel();
-    super.dispose();
-  }
-
-  void _sendOtp() {
-    if (_phoneController.text.length == 10) {
-      setState(() => _showOtp = true);
-      _autoFillTimer = Timer(const Duration(milliseconds: 500), () {
-        for (int i = 0; i < 6; i++) {
-          _otpControllers[i].text = '${(i + 1) % 10}';
-        }
-      });
-    }
-  }
-
-  Future<void> _verifyOtp() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isOldUser', true);
-    await prefs.setString('userPhone', _phoneController.text.trim());
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => MainScreen(key: mainScreenKey)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<AppProvider>(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Phone Authentication', style: TextStyle(color: kPrimaryColor)),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 40),
-            Text(
-              'Welcome to ${provider.text('app_name')}',
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kPrimaryColor),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              maxLength: 10,
-              decoration: InputDecoration(
-                labelText: 'Mobile Number',
-                prefixIcon: const Icon(Icons.phone, color: kPrimaryColor),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: kPrimaryColor, width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (!_showOtp)
-              ElevatedButton(
-                onPressed: _sendOtp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Send OTP', style: TextStyle(fontSize: 18)),
-              ),
-            if (_showOtp) ...[
-              const SizedBox(height: 24),
-              const Text(
-                'Enter OTP',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 45,
-                    child: TextField(
-                      controller: _otpControllers[index],
-                      focusNode: _otpFocusNodes[index],
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: kPrimaryColor, width: 2),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        if (value.isNotEmpty && index < 5) {
-                          _otpFocusNodes[index + 1].requestFocus();
-                        }
-                      },
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _verifyOtp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Verify OTP', style: TextStyle(fontSize: 18)),
-              ),
-            ],
           ],
         ),
       ),
@@ -958,10 +847,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
 
       // Check store details completeness
       try {
-        final response = await ApiService.getStoreDetails(phone);
-        final storeDetails = response['store_details'] as Map<String, dynamic>?;
+        final storeDetails = await ApiService.getStoreDetails(phone);
         
-        if (storeDetails == null) {
+        if (storeDetails.isEmpty) {
           storeIncomplete = true;
         } else {
           storeIncomplete = (
@@ -1479,18 +1367,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 16),
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _isLoading = true;
-                                    _error = null;
-                                  });
-                                  _loadHomeData();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: kPrimaryColor,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                ),
+                                onPressed: () => _loadHomeData(),
                                 child: Text(provider.text('retry')),
                               ),
                               const SizedBox(height: 8),
@@ -2380,7 +2257,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     ),
                   );
                 }
-
                 // Show quantity controls when qty > 0
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2938,7 +2814,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   ),
                 );
               }
-
               // Show quantity controls when qty > 0 (matching Cart page style)
               return Column(
                 children: [
@@ -3099,10 +2974,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
       // Check store details completeness
       try {
-        final response = await ApiService.getStoreDetails(phone);
-        final storeDetails = response['store_details'] as Map<String, dynamic>?;
+        final storeDetails = await ApiService.getStoreDetails(phone);
         
-        if (storeDetails == null) {
+        if (storeDetails.isEmpty) {
           storeIncomplete = true;
         } else {
           storeIncomplete = (
@@ -3735,7 +3609,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
 
       // Fetch user's store details for delivery address
-      final storeDetails = await ApiService.getStoreDetails(userPhone);
+      Map<String, dynamic> storeDetails = {};
+      try {
+        final storeResponse = await ApiService.getStoreDetails(userPhone);
+        // storeResponse is already unwrapped, it returns the inner map directly
+        storeDetails = storeResponse is Map<String, dynamic> ? storeResponse : {};
+      } catch (e) {
+        print('Error fetching store details: $e');
+        // Continue with empty store details if fetch fails
+      }
 
       // Show loading dialog
       if (context.mounted) {
@@ -3765,6 +3647,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       // Debug: Print items to check if all fields are present
       print('Order items being sent: $items');
+      print('Store details for delivery: $storeDetails');
 
       // Create order with real store address
       final paymentMethod = _selectedPayment == 'upi' ? 'UPI' : 'Cash on Delivery';
@@ -4163,7 +4046,7 @@ class SubcategoryProductsScreen extends StatefulWidget {
 class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   List<Subcategory> _subcategories = [];
   List<Product> _products = [];
-  String? _selectedSubcategory;
+  Subcategory? _selectedSubcategory;
   bool _isLoadingSubcategories = true;
   bool _isLoadingProducts = false;
   String? _error;
@@ -4194,11 +4077,17 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
 
     try {
       final provider = Provider.of<AppProvider>(context, listen: false);
+      print('DEBUG: Loading subcategories for section="${widget.section}" mainCategory="${widget.mainCategory}" lang="${provider.currentLanguage}"');
       final subcategories = await ApiService.getSubcategories(
         section: widget.section,
         mainCategory: widget.mainCategory,
         lang: provider.currentLanguage,
       );
+      
+      print('DEBUG: Received ${subcategories.length} subcategories');
+      if (subcategories.isNotEmpty) {
+        print('DEBUG: First subcategory: name="${subcategories[0].name}" id="${subcategories[0].subcategoryId}" productCount=${subcategories[0].productCount}');
+      }
       
       setState(() {
         _subcategories = subcategories;
@@ -4206,11 +4095,12 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
         
         // Auto-select first subcategory
         if (_subcategories.isNotEmpty) {
-          _selectedSubcategory = _subcategories[0].name;
+          _selectedSubcategory = _subcategories[0];
           _loadProducts(_selectedSubcategory!);
         }
       });
     } catch (e) {
+      print('DEBUG: Error loading subcategories: $e');
       setState(() {
         _error = e.toString();
         _isLoadingSubcategories = false;
@@ -4218,7 +4108,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
     }
   }
 
-  Future<void> _loadProducts(String subcategory) async {
+  Future<void> _loadProducts(Subcategory subcategory) async {
     setState(() {
       _isLoadingProducts = true;
       _selectedSubcategory = subcategory;
@@ -4226,18 +4116,25 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
 
     try {
       final provider = Provider.of<AppProvider>(context, listen: false);
+      print('DEBUG: Loading products for subcategory: name="${subcategory.name}" id="${subcategory.subcategoryId}"');
+      print('DEBUG: API params: section="${widget.section}" mainCategory="${widget.mainCategory}" subcategoryId="${subcategory.subcategoryId}" subcategory="${subcategory.name}"');
+      
       final result = await ApiService.getProducts(
         section: widget.section,
         mainCategory: widget.mainCategory,
-        subcategory: subcategory,
+        subcategoryId: subcategory.subcategoryId,
+        subcategory: subcategory.name,  // Fallback to name if ID is not available
         lang: provider.currentLanguage,
       );
+      
+      print('DEBUG: Received ${(result['products'] as List<Product>).length} products');
       
       setState(() {
         _products = result['products'] as List<Product>;
         _isLoadingProducts = false;
       });
     } catch (e) {
+      print('DEBUG: Error loading products: $e');
       setState(() {
         _error = e.toString();
         _isLoadingProducts = false;
@@ -4300,10 +4197,10 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                             itemCount: _subcategories.length,
                             itemBuilder: (context, index) {
                               final subcategory = _subcategories[index];
-                              final isSelected = _selectedSubcategory == subcategory.name;
+                              final isSelected = _selectedSubcategory?.name == subcategory.name;
                               
                               return InkWell(
-                                onTap: () => _loadProducts(subcategory.name),
+                                onTap: () => _loadProducts(subcategory),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                                   decoration: BoxDecoration(
@@ -4738,7 +4635,6 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                         ),
                       );
                     }
-
                     // Show quantity controls when qty > 0
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -5073,9 +4969,21 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       Text('${provider.text('error')}: $_error'),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: _loadProductDetails,
-                        child: Text(provider.text('retry')),
-                      ),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isOldUser');
+              await prefs.remove('userPhone');
+
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+          ),
                     ],
                   ),
                 )
@@ -5382,7 +5290,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           Text('${provider.text('error')}: $_error'),
                           const SizedBox(height: 16),
                           ElevatedButton(
-                            onPressed: _loadFavorites,
+                            onPressed: () => _loadFavorites(),
                             child: Text(provider.text('retry')),
                           ),
                         ],
@@ -5627,7 +5535,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     ),
                   );
                 }
-
                 // Show quantity controls when qty > 0 (matching Cart page style)
                 return Column(
                   children: [
@@ -5722,12 +5629,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       print('DEBUG: Calling API with phone: $phone');
       final response = await ApiService.getUserProfile(phone);
-      final storeResponse = await ApiService.getStoreDetails(phone);
+      final storeDetails = await ApiService.getStoreDetails(phone);
       print('DEBUG: API Response: $response');
       
       setState(() {
         _userProfile = response['user'];
-        _storeDetails = storeResponse['store_details'];
+        _storeDetails = storeDetails;
         _isNameIncomplete = _checkNameIncomplete();
         _isStoreIncomplete = _checkStoreIncomplete();
         _isLoading = false;
@@ -5802,29 +5709,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 24),
                 if (_error!.contains('No phone number')) ...[
                   ElevatedButton(
-                    onPressed: () async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.clear();
-                      if (context.mounted) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
-                          (route) => false,
-                        );
-                      }
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                      );
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimaryColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                    ),
                     child: Text(provider.text('login_now'), style: const TextStyle(fontSize: 16)),
                   ),
                 ] else ...[
                   ElevatedButton(
-                    onPressed: _loadUserProfile,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimaryColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                    ),
+                    onPressed: () => _loadUserProfile(),
                     child: const Text('Retry', style: TextStyle(fontSize: 16)),
                   ),
                 ],
@@ -6019,7 +5913,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: ElevatedButton.icon(
                 onPressed: () => _showLogoutDialog(context),
                 icon: const Icon(Icons.logout, color: Colors.white),
-                label: Text(provider.text('logout'), style: const TextStyle(fontSize: 16, color: Colors.white)),
+                label: const Text('Logout', style: const TextStyle(fontSize: 16, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -6095,6 +5989,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showEditProfileDialog(BuildContext context, String currentName, String currentEmail, String phone) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final nameController = TextEditingController(text: currentName);
+    final emailController = TextEditingController(text: currentEmail);
 
     return showDialog(
       context: context,
@@ -6108,7 +6003,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: InputDecoration(
                 labelText: provider.text('name'),
                 border: const OutlineInputBorder(),
+                hintText: 'Enter your name',
               ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: InputDecoration(
+                labelText: provider.text('email'),
+                border: const OutlineInputBorder(),
+                hintText: 'Enter your email (optional)',
+              ),
+              keyboardType: TextInputType.emailAddress,
             ),
           ],
         ),
@@ -6119,30 +6025,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final name = nameController.text.trim();
+              final email = emailController.text.trim();
+              
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(provider.text('name_required')),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
               try {
-                // Only update name; email is intentionally omitted per design
+                // Show loading
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(child: CircularProgressIndicator()),
+                );
+
+                // Update profile via API
                 await ApiService.updateUserProfile(
                   phone,
-                  nameController.text.trim(),
-                  null,
+                  name,
+                  email.isEmpty ? null : email,
                 );
+
                 if (context.mounted) {
-                  Navigator.pop(context);
-                  _loadUserProfile();
+                  Navigator.pop(context); // Close loading dialog
+                  Navigator.pop(context); // Close edit dialog
+                  
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(provider.text('profile_updated'))),
+                    SnackBar(
+                      content: Text(provider.text('profile_updated')),
+                      backgroundColor: Colors.green,
+                    ),
                   );
+                  
+                  // Reload profile to show updated data
+                  _loadUserProfile();
                 }
               } catch (e) {
                 if (context.mounted) {
+                  Navigator.pop(context); // Close loading dialog
+                  
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${provider.text('error')}: $e')),
+                    SnackBar(
+                      content: Text('${provider.text('error_saving')}: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
-            child: Text(provider.text('save')),
+            child: Text(provider.text('save'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -6226,7 +6165,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(provider.text('logout')),
+        title: const Text('Logout'),
         content: Text(provider.text('logout_confirm')),
         actions: [
           TextButton(
@@ -6246,8 +6185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final prefs = await SharedPreferences.getInstance();
               await prefs.remove('isOldUser');
               await prefs.remove('userPhone');
-              
-              // Navigate to login screen
+
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
@@ -6256,7 +6194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(provider.text('logout'), style: const TextStyle(color: Colors.white)),
+            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -6322,10 +6260,21 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                       Text('${provider.text('error')}: $_error'),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: _loadOrders,
-                        style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
-                        child: Text(provider.text('retry')),
-                      ),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isOldUser');
+              await prefs.remove('userPhone');
+
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+          ),
                     ],
                   ),
                 )
@@ -6791,10 +6740,21 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                       Text('${provider.text('error')}: $_error'),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: _loadOrderDetails,
-                        style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
-                        child: Text(provider.text('retry')),
-                      ),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isOldUser');
+              await prefs.remove('userPhone');
+
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+          ),
                     ],
                   ),
                 )
@@ -7323,34 +7283,21 @@ class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                try {
-                  await ApiService.addAddress(widget.userPhone, {
-                    'street': streetController.text.trim(),
-                    'city': cityController.text.trim(),
-                    'state': stateController.text.trim(),
-                    'pincode': pincodeController.text.trim(),
-                    'landmark': landmarkController.text.trim(),
-                    'is_default': isDefault,
-                  });
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    _loadAddresses();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Address added successfully')),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
-              child: const Text('Save'),
-            ),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isOldUser');
+              await prefs.remove('userPhone');
+
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+          ),
           ],
         ),
       ),
@@ -7416,34 +7363,21 @@ class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                try {
-                  await ApiService.updateAddress(widget.userPhone, index, {
-                    'street': streetController.text.trim(),
-                    'city': cityController.text.trim(),
-                    'state': stateController.text.trim(),
-                    'pincode': pincodeController.text.trim(),
-                    'landmark': landmarkController.text.trim(),
-                    'is_default': isDefault,
-                  });
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    _loadAddresses();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Address updated successfully')),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
-              child: const Text('Update'),
-            ),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('isOldUser');
+              await prefs.remove('userPhone');
+
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+          ),
           ],
         ),
       ),
@@ -7464,7 +7398,7 @@ class _ManageAddressesScreenState extends State<ManageAddressesScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -7531,16 +7465,16 @@ class _StoreDetailsScreenState extends State<StoreDetailsScreen> {
 
   Future<void> _loadStoreDetails() async {
     try {
-      final response = await ApiService.getStoreDetails(widget.userPhone);
-      final storeDetails = response['store_details'] as Map<String, dynamic>;
+      // getStoreDetails now returns the store_details map directly (already unwrapped)
+      final storeDetails = await ApiService.getStoreDetails(widget.userPhone);
       
       setState(() {
-        _storeNameController.text = storeDetails['store_name'] ?? '';
-        _streetController.text = storeDetails['street'] ?? '';
-        _cityController.text = storeDetails['city'] ?? '';
-        _stateController.text = storeDetails['state'] ?? '';
-        _pincodeController.text = storeDetails['pincode'] ?? '';
-        _landmarkController.text = storeDetails['landmark'] ?? '';
+        _storeNameController.text = storeDetails['store_name']?.toString() ?? '';
+        _streetController.text = storeDetails['street']?.toString() ?? '';
+        _cityController.text = storeDetails['city']?.toString() ?? '';
+        _stateController.text = storeDetails['state']?.toString() ?? '';
+        _pincodeController.text = storeDetails['pincode']?.toString() ?? '';
+        _landmarkController.text = storeDetails['landmark']?.toString() ?? '';
         _isLoading = false;
       });
     } catch (e) {
@@ -8042,3 +7976,7 @@ class FloatingCartButton extends StatelessWidget {
     );
   }
 }
+
+
+
+

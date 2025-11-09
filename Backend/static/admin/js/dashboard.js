@@ -3750,7 +3750,8 @@ async function handleMainCategoryEdit(event) {
         });
         
         if (response.ok) {
-            console.log('✅ Main category updated successfully');
+            const result = await response.json();
+            console.log('✅ Main category updated successfully', result);
             showToast('Main category updated successfully', 'success');
             
             // CRITICAL: Update mobileViewState if main category name changed
@@ -3760,7 +3761,30 @@ async function handleMainCategoryEdit(event) {
             }
             
             closeEditMainCategoryModal();
-            await loadCategories(); // This will automatically restore the view
+            
+            // If name changed (CASCADE happened), force full reload
+            if (result.reload_required) {
+                console.log('🔄 CASCADE UPDATE detected - Forcing full reload');
+                showToast(`Category renamed: "${result.old_name}" → "${result.new_name}". Reloading...`, 'success');
+                
+                // Wait a bit for CASCADE to complete, then reload
+                setTimeout(async () => {
+                    await loadCategories();
+                    console.log('🔄 Reloading products view');
+                    await loadProducts();
+
+                    if (mobileViewState.currentView === 'main-categories' && mobileViewState.currentSection === section) {
+                        console.log('🔄 Refreshing mobile main category cards');
+                        await showMainCategoryCards(section);
+                    } else if (mobileViewState.currentView === 'subcategories' && mobileViewState.currentSection === section && mobileViewState.currentMainCategory === newName) {
+                        console.log('🔄 Refreshing subcategory product view');
+                        await showSubCategoryProducts(section, newName);
+                    }
+                }, 500); // 500ms delay to ensure CASCADE completes
+            } else {
+                // Just metadata update (Tamil name, image), normal reload
+                await loadCategories();
+            }
         } else {
             const error = await response.json();
             console.error('❌ Failed to update:', error);

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "753225358557",
-    "project_id": "al-mathina",
-    "storage_bucket": "al-mathina.firebasestorage.app"
+    "project_number": "779452748415",
+    "project_id": "al-mathina-f75c0",
+    "storage_bucket": "al-mathina-f75c0.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:753225358557:android:5aa8dd7a891f803058cf34",
+        "mobilesdk_app_id": "1:779452748415:android:6f52b3e15f01453775254a",
         "android_client_info": {
           "package_name": "com.vectorai.almadhina"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDWr3c373kCJ9bneDJasqLpNAK1Og0UhuU"
+          "current_key": "AIzaSyB0w44-Er2OzpXNQ0hkjP1I4rFOLmcBRB0"
         }
       ],
       "services": {

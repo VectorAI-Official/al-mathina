@@ -6,19 +6,13 @@ class PhoneAuthService {
 
   // Store verification ID for later use
   static String? _verificationId;
-  static String? _resendToken;
-
-  // Callbacks for UI updates
-  static Function(String)? onCodeSent;
-  static Function(String)? onVerificationFailed;
-  static Function()? onVerificationCompleted;
 
   /// Send OTP to phone number
   static Future<void> verifyPhoneNumber({
     required String phoneNumber,
     required Duration timeout,
     required Function(String verificationId) onCodeSent,
-    required Function(FirebaseException exception) onVerificationFailed,
+    required Function(FirebaseAuthException exception) onVerificationFailed,
     required Function(PhoneAuthCredential credential) onVerificationCompleted,
   }) async {
     try {
@@ -36,9 +30,8 @@ class PhoneAuthService {
           }
           onVerificationFailed(e);
         },
-        codeSent: (String verificationId, int? resendTokenId) {
+        codeSent: (String verificationId, int? resendToken) {
           _verificationId = verificationId;
-          _resendToken = resendTokenId?.toString();
           onCodeSent(verificationId);
           if (kDebugMode) {
             print('OTP sent to $phoneNumber');
@@ -128,7 +121,6 @@ class PhoneAuthService {
     try {
       await _auth.signOut();
       _verificationId = null;
-      _resendToken = null;
       if (kDebugMode) {
         print('User signed out');
       }
@@ -140,28 +132,8 @@ class PhoneAuthService {
     }
   }
 
-  /// Disable app verification (for testing only)
-  static void disableAppVerification() {
-    _auth.firebaseAuthSettings.appVerificationDisabledForTesting = true;
-  }
-
-  /// Enable app verification (for production)
-  static void enableAppVerification() {
-    _auth.firebaseAuthSettings.appVerificationDisabledForTesting = false;
-  }
-
-  /// Force reCAPTCHA flow (for testing)
-  static void forceRecaptchaFlow() {
-    _auth.firebaseAuthSettings.forceRecaptchaFlowForTesting = true;
-  }
-
   /// Set language code for SMS
   static void setLanguageCode(String languageCode) {
     _auth.setLanguageCode(languageCode);
-  }
-
-  /// Use app language for SMS
-  static void useAppLanguage() {
-    _auth.useAppLanguage();
   }
 }

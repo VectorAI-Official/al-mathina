@@ -1,10 +1,67 @@
 // API Service for AL-Madhina Flutter App
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
-// Production backend URL on Render
+// Production backend URL on Render (with Cloudflare CDN)
 const String BASE_URL = "https://al-mathina.onrender.com";
 const String API_BASE = "$BASE_URL/api/flutter";
+
+// Fallback: Direct Cloudflare origin (in case main domain fails)
+const String FALLBACK_URL = "https://gcp-us-west1-1.origin.onrender.com";
+const String FALLBACK_API_BASE = "$FALLBACK_URL/api/flutter";
+
+// Helper function to make HTTP requests with retry and fallback
+Future<http.Response> _makeRequest(Uri uri, {Map<String, String>? headers, int retries = 2}) async {
+  Exception? lastError;
+  
+  // Try primary URL first
+  for (int i = 0; i < retries; i++) {
+    try {
+      final response = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+      return response;
+    } on SocketException catch (e) {
+      lastError = e;
+      if (i < retries - 1) {
+        await Future.delayed(Duration(seconds: 1));
+      }
+    } on TimeoutException catch (e) {
+      lastError = e;
+      if (i < retries - 1) {
+        await Future.delayed(Duration(seconds: 1));
+      }
+    } catch (e) {
+      lastError = Exception(e.toString());
+      if (i < retries - 1) {
+        await Future.delayed(Duration(seconds: 1));
+      }
+    }
+  }
+  
+  // If primary failed, try fallback URL (replace domain)
+  try {
+    final fallbackUri = Uri.parse(uri.toString().replaceFirst(BASE_URL, FALLBACK_URL));
+    final response = await http.get(
+      fallbackUri, 
+      headers: {
+        ...?headers,
+        'Host': 'al-mathina.onrender.com', // Keep original host header
+      }
+    ).timeout(const Duration(seconds: 15));
+    return response;
+  } catch (e) {
+    // Both failed, throw the original error with helpful message
+    throw Exception(
+      'Cannot connect to server. Please:\n'
+      '• Check your internet connection\n'
+      '• Try switching between WiFi and Mobile Data\n'
+      '• Or contact support if issue persists'
+    );
+  }
+}
 
 class MainCategory {
   final String id;
@@ -246,7 +303,7 @@ class ApiService {
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final random = DateTime.now().microsecond;
-      final response = await http.get(
+      final response = await _makeRequest(
         Uri.parse('$API_BASE/home?lang=$lang&t=$timestamp&_=$random'),
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
@@ -272,7 +329,7 @@ class ApiService {
     String lang = 'en',
   }) async {
     try {
-      final response = await http.get(
+      final response = await _makeRequest(
         Uri.parse('$API_BASE/main-category/$section/$mainCategory/subcategories?lang=$lang'),
       );
       if (response.statusCode == 200) {
@@ -569,7 +626,15 @@ class ApiService {
     try {
       final response = await http.get(Uri.parse('$API_BASE/user/store-details/$phone'));
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final data = json.decode(response.body);
+        // Backend returns {"success": true, "store_details": {...}}.
+        // Unwrap and return the inner store_details map if present so callers
+        // receive the address fields directly (street, city, state, pincode, landmark).
+        if (data is Map && data.containsKey('store_details')) {
+          return Map<String, dynamic>.from(data['store_details'] ?? {});
+        }
+        // Fallback: return top-level map as a map<string,dynamic>
+        return Map<String, dynamic>.from(data);
       } else {
         throw Exception('Failed to load store details: ${response.statusCode}');
       }

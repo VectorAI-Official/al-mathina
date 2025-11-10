@@ -7,7 +7,7 @@ class SharedPrefsService {
   static const String _savedAccountsKey = 'saved_accounts';
 
   /// Save an account to the list (only if not already present)
-  Future<void> saveAccount(SavedAccount account) async {
+  static Future<void> saveAccount(SavedAccount account) async {
     final prefs = await SharedPreferences.getInstance();
     final accounts = await getSavedAccounts();
 
@@ -21,7 +21,7 @@ class SharedPrefsService {
   }
 
   /// Get all saved accounts
-  Future<List<SavedAccount>> getSavedAccounts() async {
+  static Future<List<SavedAccount>> getSavedAccounts() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_savedAccountsKey);
 
@@ -41,7 +41,7 @@ class SharedPrefsService {
   }
 
   /// Remove an account by uid
-  Future<void> removeAccount(String uid) async {
+  static Future<void> removeAccount(String uid) async {
     final prefs = await SharedPreferences.getInstance();
     final accounts = await getSavedAccounts();
 
@@ -52,7 +52,7 @@ class SharedPrefsService {
   }
 
   /// Clear all saved accounts
-  Future<void> clearAllAccounts() async {
+  static Future<void> clearAllAccounts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_savedAccountsKey);
   }

@@ -6,15 +6,21 @@ import 'package:sms_autofill/sms_autofill.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../services/phone_auth_service.dart';
+import '../services/shared_prefs_service.dart';
+import '../models/saved_account.dart';
 import '../main.dart' show MainScreen, mainScreenKey, AppProvider;
 
 const kPrimaryColor = Color(0xFF66BB6A);
 
 class PhoneAuthScreen extends StatefulWidget {
   final VoidCallback? onAuthSuccess;
+  final bool showCancelButton;
+  final String? prefilledPhone;
 
   const PhoneAuthScreen({
     this.onAuthSuccess,
+    this.showCancelButton = false,
+    this.prefilledPhone,
     Key? key,
   }) : super(key: key);
 
@@ -39,6 +45,17 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> with CodeAutoFill {
     _requestPermissions();
     _getAppSignature();
     listenForCode();
+    
+    // Pre-fill phone number if provided
+    if (widget.prefilledPhone != null) {
+      _phoneController.text = widget.prefilledPhone!;
+      // Auto-send OTP for account switching
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _sendOTP();
+        }
+      });
+    }
   }
 
   @override
@@ -75,16 +92,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> with CodeAutoFill {
   }
 
   Future<void> _requestPermissions() async {
-    // Request SMS permission for auto-fill
-    if (await Permission.sms.isDenied) {
-      await Permission.sms.request();
-    }
-
-    // Request phone permission for reading phone state
-    if (await Permission.phone.isDenied) {
-      await Permission.phone.request();
-    }
-
+    // SMS auto-fill works with SMS User Consent API (no dangerous permissions needed)
+    // Only request notification permission
+    
     // Request notification permission
     if (await Permission.notification.isDenied) {
       await Permission.notification.request();
@@ -251,12 +261,23 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> with CodeAutoFill {
     await prefs.setBool('isOldUser', true);
     await prefs.setString('userPhone', phoneNumber);
     
+    // Save account to saved accounts list
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      final account = SavedAccount(
+        uid: currentUser.uid,
+        phoneNumber: phoneNumber,
+      );
+      await SharedPrefsService.saveAccount(account);
+      print('Account saved: ${account.phoneNumber} (${account.uid})');
+    }
+    
     widget.onAuthSuccess?.call();
     
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (context) => MainScreen(key: mainScreenKey),
+          builder: (context) => const MainScreen(),
         ),
         (route) => false,
       );
@@ -287,10 +308,36 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> with CodeAutoFill {
                 children: [
                   const SizedBox(height: 20),
                   
-                  // Language Switcher (Top Right)
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: _buildLanguageSwitcher(appProvider),
+                  // Cancel button and Language Switcher (Top Row)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Cancel button (only show when adding account)
+                      if (widget.showCancelButton)
+                        IconButton(
+                          icon: const Icon(Icons.close, color: kPrimaryColor),
+                          tooltip: 'Cancel',
+                          onPressed: () {
+                            // Check if we can pop
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            } else {
+                              // If we can't pop, navigate to MainScreen
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const MainScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                          },
+                        )
+                      else
+                        const SizedBox(width: 48), // Placeholder for alignment
+                      
+                      // Language Switcher
+                      _buildLanguageSwitcher(appProvider),
+                    ],
                   ),
                   
                   const SizedBox(height: 20),
@@ -451,7 +498,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> with CodeAutoFill {
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     counterText: '',
-                    hintText: appProvider.text('enter_the_number'),
+                    hintText: appProvider.text('please_enter_10_digit'),
                     contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                   ),
                   onChanged: (value) {

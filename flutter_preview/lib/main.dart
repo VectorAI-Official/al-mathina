@@ -12,6 +12,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'api_service.dart';
 import 'screens/phone_auth_screen.dart';
+import 'screens/account_switcher_page.dart';
+import 'services/shared_prefs_service.dart';
 
 const Color kPrimaryColor = Color(0xFF66BB6A); // Colors.green[400]
 const String kAppName = 'AL-Madhina';
@@ -71,7 +73,7 @@ const Map<String, Map<String, String>> translations = {
     'otp_sent_to': 'OTP sent to',
     'change_phone_number': 'Change Phone Number',
     'invalid_phone_number': 'Invalid phone number',
-    'please_enter_10_digit': 'Please enter a 10-digit phone number',
+    'please_enter_10_digit': 'Please enter the 10 digit number',
     'invalid_otp': 'Invalid OTP. Please try again.',
     'otp_expired': 'OTP expired. Please request a new one.',
     'verification_failed': 'Verification failed',
@@ -234,7 +236,7 @@ const Map<String, Map<String, String>> translations = {
     'otp_sent_to': 'OTP அனுப்பப்பட்டது',
     'change_phone_number': 'தொலைபேசி எண்ணை மாற்று',
     'invalid_phone_number': 'தவறான தொலைபேசி எண்',
-    'please_enter_10_digit': '10-இலக்க தொலைபேசி எண்ணை உள்ளிடவும்',
+    'please_enter_10_digit': 'தயவுசெய்து 10 இலக்க எண்ணை உள்ளிடவும்',
     'invalid_otp': 'தவறான OTP. மீண்டும் முயற்சிக்கவும்.',
     'otp_expired': 'OTP காலாவதியானது. புதிய ஒன்றைக் கோரவும்.',
     'verification_failed': 'சரிபார்ப்பு தோல்வியடைந்தது',
@@ -1161,61 +1163,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: Border.all(color: const Color(0xFF4CAF50), width: 1.5),
                 ),
                 child: DropdownButton<String>(
-                value: provider.currentLanguage,
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.black87, size: 20),
-                underline: Container(),
-                isDense: true,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'en',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
+                  value: provider.currentLanguage,
+                  icon: const Icon(Icons.arrow_drop_down, color: Colors.black87, size: 20),
+                  underline: Container(),
+                  isDense: true,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'en',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'ta',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
+                    DropdownMenuItem(
+                      value: 'ta',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-                selectedItemBuilder: (BuildContext context) {
-                  return [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
-                    ),
-                  ];
-                },
-                onChanged: (value) {
-                  if (value != null) provider.setLanguage(value);
-                },
+                  ],
+                  selectedItemBuilder: (BuildContext context) {
+                    return [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
+                    ];
+                  },
+                  onChanged: (value) {
+                    if (value != null) provider.setLanguage(value);
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(70.0),
@@ -5629,7 +5631,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       print('DEBUG: Calling API with phone: $phone');
       final response = await ApiService.getUserProfile(phone);
-      final storeDetails = await ApiService.getStoreDetails(phone);
+      
+      // Try to get store details, but don't fail if it errors
+      Map<String, dynamic>? storeDetails;
+      try {
+        storeDetails = await ApiService.getStoreDetails(phone);
+      } catch (storeError) {
+        print('DEBUG: Store details error (non-critical): $storeError');
+        // Set storeDetails to null if it fails - store is optional
+        storeDetails = null;
+      }
+      
       print('DEBUG: API Response: $response');
       
       setState(() {
@@ -5737,6 +5749,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: Text(provider.text('my_profile'), style: const TextStyle(color: kPrimaryColor, fontSize: 24, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.switch_account, color: kPrimaryColor),
+            tooltip: 'Switch Account',
+            onPressed: () => _showAccountSwitcherDialog(context),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadUserProfile,
@@ -5989,11 +6008,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showEditProfileDialog(BuildContext context, String currentName, String currentEmail, String phone) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final nameController = TextEditingController(text: currentName);
-    final emailController = TextEditingController(text: currentEmail);
 
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
         title: Text(provider.text('edit_profile')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -6006,16 +6025,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 hintText: 'Enter your name',
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(
-                labelText: provider.text('email'),
-                border: const OutlineInputBorder(),
-                hintText: 'Enter your email (optional)',
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
           ],
         ),
         actions: [
@@ -6026,7 +6035,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
-              final email = emailController.text.trim();
               
               if (name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -6046,11 +6054,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   builder: (_) => const Center(child: CircularProgressIndicator()),
                 );
 
-                // Update profile via API
+                // Update profile via API (email set to null since we removed it)
                 await ApiService.updateUserProfile(
                   phone,
                   name,
-                  email.isEmpty ? null : email,
+                  null,
                 );
 
                 if (context.mounted) {
@@ -6160,12 +6168,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showAccountSwitcherDialog(BuildContext context) async {
+    final savedAccounts = await SharedPrefsService.getSavedAccounts();
+    
+    // Get the currently active phone number from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final currentPhone = prefs.getString('userPhone') ?? '';
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Switch Account', style: TextStyle(fontWeight: FontWeight.bold)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // List of saved accounts
+              if (savedAccounts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('No saved accounts', style: TextStyle(color: Colors.grey)),
+                )
+              else
+                ...savedAccounts.map((account) {
+                  final isCurrentAccount = account.phoneNumber == currentPhone;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.phone_android,
+                      color: kPrimaryColor,
+                    ),
+                    title: Text(account.phoneNumber),
+                    trailing: isCurrentAccount
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : const Icon(Icons.chevron_right, color: Colors.grey),
+                    onTap: isCurrentAccount
+                        ? null
+                        : () async {
+                            Navigator.pop(dialogContext); // Close dialog
+                            
+                            // Switch account by updating SharedPreferences (no re-authentication needed)
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('userPhone', account.phoneNumber);
+                            
+                            // Show loading
+                            if (context.mounted) {
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => const Center(
+                                  child: CircularProgressIndicator(color: kPrimaryColor),
+                                ),
+                              );
+                            }
+                            
+                            // Wait a moment for the preference to be saved
+                            await Future.delayed(const Duration(milliseconds: 300));
+                            
+                            // Navigate to MainScreen and refresh (without key to avoid duplicates)
+                            if (context.mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => const MainScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                          },
+                  );
+                }).toList(),
+              const Divider(),
+              // Add Account button
+              ListTile(
+                leading: const Icon(Icons.add_circle, color: kPrimaryColor),
+                title: const Text('Add Account', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  Navigator.pop(dialogContext); // Close dialog
+                  
+                  // Navigate to PhoneAuthScreen with cancel button (keep navigation stack)
+                  if (context.mounted) {
+                    final result = await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PhoneAuthScreen(showCancelButton: true),
+                      ),
+                    );
+                    
+                    // If login was successful, the PhoneAuthScreen will navigate away
+                    // If user canceled, we just stay here (result will be null)
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showLogoutDialog(BuildContext context) {
     final provider = Provider.of<AppProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
+        backgroundColor: Colors.white,
+        title: Text(provider.text('logout')),
         content: Text(provider.text('logout_confirm')),
         actions: [
           TextButton(
@@ -6194,7 +6310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+            child: Text(provider.text('logout'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),

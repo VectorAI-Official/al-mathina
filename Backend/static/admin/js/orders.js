@@ -452,46 +452,47 @@ async function shareInvoiceWhatsApp(orderId) {
         w.document.close();
         await new Promise(r => setTimeout(r, 800));
         const canvas = await html2canvas(w.document.body, { scale: 2, logging: false, useCORS: true });
-        const dataUrl = canvas.toDataURL('image/png');
         w.close();
+
+        // Convert canvas to blob for file sharing
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const file = new File([blob], `Invoice_${order.order_id}.png`, { type: 'image/png' });
 
         const caption = `Invoice - Order #${order.order_id}\nCustomer: ${order.user_name || 'Customer'}\nTotal: ₹${parseFloat(order.total_amount).toFixed(2)}\n- அல் மதீனா ஏஜென்சீஸ்`;
 
-        // Upload to backend to obtain shareable URL
-        let uploadedUrl = null;
-        try {
-            const res = await fetch(`/api/admin/orders/${order.order_id}/invoice-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image_data: dataUrl })
-            });
-            const json = await res.json();
-            if (json.success) uploadedUrl = json.url;
-        } catch (e) {
-            console.error('Upload failed, falling back to direct sharing:', e);
-        }
-
-        const message = uploadedUrl ? `${caption}\nInvoice: ${uploadedUrl}` : caption;
-
-        // Prefer Web Share API if available
-        if (navigator.share) {
+        // Try to share as image file using Web Share API
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
             try {
-                await navigator.share({ title: `Invoice - Order #${order.order_id}`, text: message });
+                await navigator.share({
+                    title: `Invoice - Order #${order.order_id}`,
+                    text: caption,
+                    files: [file]
+                });
+                console.log('✅ Invoice shared successfully as image');
                 return;
             } catch (err) {
-                if (err.name === 'AbortError') return; // user cancelled
-                console.warn('Web Share failed, fallback to WhatsApp link:', err);
+                if (err.name === 'AbortError') {
+                    console.log('Share cancelled by user');
+                    return;
+                }
+                console.warn('Web Share with file failed:', err);
             }
         }
 
-        // WhatsApp share link (cannot attach image directly via URL; user will see hosted link)
-        const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-        window.open(waUrl, '_blank');
+        // Fallback: Download the image file
+        console.log('Web Share API not available or failed, downloading image...');
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `Invoice_${order.order_id}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert('Invoice image downloaded! Please share it manually via WhatsApp.');
     } catch (error) {
         console.error('Error preparing WhatsApp share:', error);
-        alert('Failed to prepare WhatsApp share. Image will download instead.');
-        // Fallback: manual image download
-        shareInvoiceImageFallbackFromCanvas(orderId);
+        alert('Failed to prepare invoice image: ' + error.message);
     }
 }
 

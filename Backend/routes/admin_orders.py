@@ -6,6 +6,7 @@ Handles order listing, status updates, and stock management
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
+import base64, os, time, re
 from datetime import datetime
 from bson import ObjectId
 from database.mongodb_client import get_mongo_db
@@ -17,6 +18,9 @@ router = APIRouter(prefix="/api/admin/orders", tags=["Admin Orders"])
 
 class UpdateOrderStatusRequest(BaseModel):
     status: str  # 'delivered', 'cancelled', 'pending'
+
+class InvoiceImageUpload(BaseModel):
+    image_data: str  # base64 PNG data URL or raw base64 string
 
 # Get all orders for admin dashboard
 @router.get("")
@@ -302,6 +306,43 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
         raise
     except Exception as e:
         logger.error(f"Error updating order status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Upload invoice PNG generated client-side (used for WhatsApp sharing)
+@router.post("/{order_id}/invoice-image")
+async def upload_invoice_image(order_id: str, payload: InvoiceImageUpload, request: Request):
+    """Accept a base64-encoded PNG invoice image and store it under static/invoices.
+    Returns a public absolute URL suitable for sharing via WhatsApp.
+    Frontend should send data from canvas.toDataURL('image/png').
+    """
+    try:
+        raw_data = payload.image_data.strip()
+        # Strip data URL prefix if present
+        if "," in raw_data and raw_data.lower().startswith("data:image"):
+            raw_data = raw_data.split(",", 1)[1]
+        # Validate base64 (rough check)
+        raw_data = re.sub(r"\s+", "", raw_data)
+        try:
+            binary = base64.b64decode(raw_data, validate=True)
+        except Exception as decode_err:
+            raise HTTPException(status_code=400, detail=f"Invalid base64 image data: {decode_err}")
+        if len(binary) < 1000:  # Sanity minimum size
+            raise HTTPException(status_code=400, detail="Image too small or corrupted")
+        # Ensure directory exists
+        invoices_dir = os.path.join("static", "invoices")
+        os.makedirs(invoices_dir, exist_ok=True)
+        filename = f"invoice_{order_id}_{int(time.time())}.png"
+        file_path = os.path.join(invoices_dir, filename)
+        with open(file_path, "wb") as f:
+            f.write(binary)
+        public_url = str(request.base_url) + f"static/invoices/{filename}"
+        logger.info(f"Stored invoice image for order {order_id} at {public_url}")
+        return {"success": True, "url": public_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving invoice image for order {order_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class UpdateOrderItemsRequest(BaseModel):

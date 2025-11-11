@@ -411,423 +411,140 @@ async function updateOrderStatus(orderId, newStatus) {
 function printInvoice(orderId) {
     const order = currentOrder;
     if (!order) return;
-    
-    // Create print window
-    const printWindow = window.open('', '_blank');
-    
-    const invoiceHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Invoice - Order #${order.order_id}</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                    font-family: Arial, sans-serif;
-                    padding: 20px;
-                    color: #333;
-                    max-width: 800px;
-                    margin: 0 auto;
-                }
-                .invoice-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    margin-bottom: 30px;
-                    border-bottom: 3px solid #004D40;
-                    padding-bottom: 20px;
-                    flex-wrap: wrap;
-                }
-                .invoice-header-left {
-                    text-align: left;
-                    flex: 1;
-                    min-width: 250px;
-                }
-                .invoice-header-left h1 {
-                    color: #004D40;
-                    font-size: 28px;
-                    margin-bottom: 5px;
-                }
-                .invoice-header-left .subtitle {
-                    color: #2e7d32;
-                    font-size: 13px;
-                    margin-bottom: 10px;
-                    font-weight: 600;
-                }
-                .invoice-header-left .invoice-title {
-                    color: #004D40;
-                    font-size: 16px;
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                }
-                .invoice-header-left .address {
-                    color: #666;
-                    font-size: 11px;
-                    line-height: 1.6;
-                }
-                .invoice-header-right {
-                    text-align: right;
-                    flex: 0 0 auto;
-                }
-                .invoice-header-right p {
-                    color: #333;
-                    font-size: 13px;
-                    margin: 5px 0;
-                    font-weight: 600;
-                }
-                .invoice-header-right .emergency {
-                    color: #d32f2f;
-                    font-weight: bold;
-                }
-                .invoice-info {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 30px;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                }
-                .info-block {
-                    flex: 1;
-                    min-width: 200px;
-                }
-                .info-block h3 {
-                    color: #004D40;
-                    margin-bottom: 10px;
-                    font-size: 14px;
-                }
-                .info-block p {
-                    margin: 5px 0;
-                    font-size: 13px;
-                    line-height: 1.6;
-                }
-                .invoice-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 20px 0;
-                }
-                .invoice-table th {
-                    background: #004D40;
-                    color: white;
-                    padding: 10px 8px;
-                    text-align: left;
-                    font-size: 12px;
-                }
-                .invoice-table td {
-                    padding: 8px;
-                    border-bottom: 1px solid #ddd;
-                    font-size: 12px;
-                }
-                .invoice-table tr:hover {
-                    background: #f5f5f5;
-                }
-                .invoice-total {
-                    text-align: right;
-                    margin-top: 20px;
-                    font-size: 16px;
-                }
-                .invoice-total strong {
-                    color: #004D40;
-                }
-                .invoice-footer {
-                    margin-top: 50px;
-                    text-align: center;
-                    color: #666;
-                    font-size: 11px;
-                    border-top: 2px solid #ddd;
-                    padding-top: 20px;
-                }
-                
-                /* Print Styles */
-                @media print {
-                    body { 
-                        padding: 10px;
-                        max-width: 100%;
-                    }
-                    .no-print { display: none; }
-                    .invoice-header-left h1 { font-size: 24px; }
-                    .invoice-header-left .subtitle { font-size: 12px; }
-                    .invoice-table th, .invoice-table td { 
-                        padding: 6px 4px;
-                        font-size: 11px;
-                    }
-                    @page {
-                        margin: 0.5cm;
-                        size: A4;
-                    }
-                }
-                
-                /* Mobile Responsive */
-                @media screen and (max-width: 600px) {
-                    body { padding: 10px; }
-                    .invoice-header { flex-direction: column; }
-                    .invoice-header-right { 
-                        text-align: left; 
-                        margin-top: 15px;
-                    }
-                    .invoice-info { flex-direction: column; }
-                    .invoice-header-left h1 { font-size: 22px; }
-                    .invoice-table th, .invoice-table td { 
-                        padding: 6px 4px;
-                        font-size: 11px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="invoice-header">
-                <div class="invoice-header-left">
-                    <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
-                    <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
-                    <div class="invoice-title">பில்</div>
-                    <div class="address">பாரிநகர் 2வது தெரு, அன்னா நகர்,<br>வடக்கு காட்டூர், திருச்சி - 620019.</div>
-                </div>
-                <div class="invoice-header-right">
-                    <p>7339051541</p>
-                    <p>8754144759</p>
-                    <p><span class="emergency">(அவசரம்)</span> 8870503350</p>
-                </div>
-            </div>
-            
-            <div class="invoice-info">
-                <div class="info-block">
-                    <h3>Bill To:</h3>
-                    <p><strong>${order.user_name || 'Customer'}</strong></p>
-                    <p>Phone: ${order.user_phone}</p>
-                    ${order.user_store_name ? `<p>Store: ${order.user_store_name}</p>` : ''}
-                    ${order.user_store_address && (order.user_store_address.street || order.user_store_address.city) ? `
-                        <p style="margin-top: 10px;">
-                            ${order.user_store_address.street || ''}<br>
-                            ${order.user_store_address.city || ''}, ${order.user_store_address.state || ''}<br>
-                            ${order.user_store_address.pincode || ''}
-                        </p>
-                    ` : order.delivery_address && (order.delivery_address.street || order.delivery_address.city) ? `
-                        <p style="margin-top: 10px;">
-                            ${order.delivery_address.street || ''}<br>
-                            ${order.delivery_address.city || ''}, ${order.delivery_address.state || ''}<br>
-                            ${order.delivery_address.pincode || ''}
-                        </p>
-                    ` : ''}
-                </div>
-                
-                <div class="info-block" style="text-align: right;">
-                    <h3>Invoice Details:</h3>
-                    <p><strong>Order ID:</strong> ${order.order_id}</p>
-                    <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
-                    <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
-                </div>
-            </div>
-            
-            <table class="invoice-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Product Name</th>
-                        <th>Weight</th>
-                        <th>Price</th>
-                        <th>Quantity</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${order.items.map((item, index) => `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${item.product_name}</td>
-                            <td>${item.weight || '-'}</td>
-                            <td>₹${parseFloat(item.price).toFixed(2)}</td>
-                            <td>${item.quantity}</td>
-                            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            
-            <div class="invoice-total">
-                <p><strong>Grand Total: ₹${parseFloat(order.total_amount).toFixed(2)}</strong></p>
-            </div>
-            
-            <div class="invoice-footer">
-                <p>Thank you for your business!</p>
-                <p>This is a computer-generated invoice.</p>
-            </div>
-            
-            <script>
-                window.onload = function() {
-                    window.print();
-                    setTimeout(function() {
-                        window.close();
-                    }, 500);
-                };
-            </script>
-        </body>
-        </html>
-    `;
-    
-    printWindow.document.write(invoiceHTML);
-    printWindow.document.close();
+
+    const invoiceHTML = generateInvoiceHTML(order, { printMode: true });
+
+    // Use hidden iframe to avoid popup blockers & stuck preview
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(invoiceHTML);
+    iframe.contentDocument.close();
+    iframe.onload = () => {
+        try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+        } catch (e) {
+            console.error('Print failed, opening new window fallback:', e);
+            const win = window.open('', '_blank');
+            win.document.write(invoiceHTML);
+            win.document.close();
+            win.onload = () => win.print();
+        }
+        setTimeout(() => document.body.removeChild(iframe), 1500);
+    };
 }
 
 // Share invoice on WhatsApp
 async function shareInvoiceWhatsApp(orderId) {
     const order = currentOrder;
     if (!order) return;
-    
     try {
-        // Create invoice HTML
-        const invoiceHTML = generateInvoiceHTML(order);
-        
-        // Convert HTML to canvas using html2canvas library
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
-        printWindow.document.write(invoiceHTML);
-        printWindow.document.close();
-        
-        // Wait for content to load
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Use html2canvas to capture the invoice
-        const canvas = await html2canvas(printWindow.document.body, {
-            scale: 2,
-            logging: false,
-            useCORS: true
-        });
-        
-        // Convert canvas to blob
-        canvas.toBlob(async (blob) => {
-            // Close the preview window
-            printWindow.close();
-            
-            // Create file from blob
-            const file = new File([blob], `invoice_${order.order_id}.png`, { type: 'image/png' });
-            
-            // Create WhatsApp message caption
-            const caption = `Invoice - Order #${order.order_id}\n` +
-                          `Customer: ${order.user_name || 'Customer'}\n` +
-                          `Total: ₹${parseFloat(order.total_amount).toFixed(2)}\n` +
-                          `- அல் மதீனா ஏஜென்சீஸ்`;
-            
-            // Try to share as image using Web Share API
+        const invoiceHTML = generateInvoiceHTML(order, { shareMode: true });
+        const w = window.open('', '_blank', 'width=800,height=1000');
+        w.document.write(invoiceHTML);
+        w.document.close();
+        await new Promise(r => setTimeout(r, 800));
+        const canvas = await html2canvas(w.document.body, { scale: 2, logging: false, useCORS: true });
+        const dataUrl = canvas.toDataURL('image/png');
+        w.close();
+
+        const caption = `Invoice - Order #${order.order_id}\nCustomer: ${order.user_name || 'Customer'}\nTotal: ₹${parseFloat(order.total_amount).toFixed(2)}\n- அல் மதீனா ஏஜென்சீஸ்`;
+
+        // Upload to backend to obtain shareable URL
+        let uploadedUrl = null;
+        try {
+            const res = await fetch(`/api/admin/orders/${order.order_id}/invoice-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_data: dataUrl })
+            });
+            const json = await res.json();
+            if (json.success) uploadedUrl = json.url;
+        } catch (e) {
+            console.error('Upload failed, falling back to direct sharing:', e);
+        }
+
+        const message = uploadedUrl ? `${caption}\nInvoice: ${uploadedUrl}` : caption;
+
+        // Prefer Web Share API if available
+        if (navigator.share) {
             try {
-                if (navigator.share && navigator.canShare) {
-                    // Check if files can be shared
-                    const canShareFiles = navigator.canShare({ files: [file] });
-                    
-                    if (canShareFiles) {
-                        // Share with image
-                        await navigator.share({
-                            title: `Invoice - Order #${order.order_id}`,
-                            text: caption,
-                            files: [file]
-                        });
-                    } else {
-                        // Share text only via Web Share API
-                        await navigator.share({
-                            title: `Invoice - Order #${order.order_id}`,
-                            text: caption
-                        });
-                    }
-                } else {
-                    // Create download link for image and open WhatsApp
-                    shareInvoiceImageFallback(file, caption, order);
-                }
+                await navigator.share({ title: `Invoice - Order #${order.order_id}`, text: message });
+                return;
             } catch (err) {
-                if (err.name !== 'AbortError') {
-                    console.error('Error sharing:', err);
-                    // Download image and open WhatsApp
-                    shareInvoiceImageFallback(file, caption, order);
-                }
+                if (err.name === 'AbortError') return; // user cancelled
+                console.warn('Web Share failed, fallback to WhatsApp link:', err);
             }
-        }, 'image/png');
-        
+        }
+
+        // WhatsApp share link (cannot attach image directly via URL; user will see hosted link)
+        const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        window.open(waUrl, '_blank');
     } catch (error) {
-        console.error('Error creating invoice image:', error);
-        alert('Error creating invoice image. Please try printing instead.');
+        console.error('Error preparing WhatsApp share:', error);
+        alert('Failed to prepare WhatsApp share. Image will download instead.');
+        // Fallback: manual image download
+        shareInvoiceImageFallbackFromCanvas(orderId);
     }
 }
 
-// Fallback: Download image and open WhatsApp
-function shareInvoiceImageFallback(file, caption, order) {
-    // Create download link for the image
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice_${order.order_id}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    // Show instructions and open WhatsApp
-    setTimeout(() => {
-        alert('Invoice image has been downloaded. You can now share it manually via WhatsApp.');
-        
-        // Open WhatsApp Web (no phone number to avoid errors)
-        const encodedCaption = encodeURIComponent(caption);
-        window.open(`https://web.whatsapp.com/`, '_blank');
-    }, 500);
+function shareInvoiceImageFallbackFromCanvas(orderId) {
+    const order = currentOrder;
+    if (!order) return;
+    const invoiceHTML = generateInvoiceHTML(order, { shareMode: true });
+    const w = window.open('', '_blank', 'width=800,height=1000');
+    w.document.write(invoiceHTML);
+    w.document.close();
+    setTimeout(async () => {
+        const canvas = await html2canvas(w.document.body, { scale: 2 });
+        w.close();
+        canvas.toBlob(blob => {
+            const file = new File([blob], `invoice_${order.order_id}.png`, { type: 'image/png' });
+            shareInvoiceImageFallback(file, `Invoice - Order #${order.order_id}`, order);
+        });
+    }, 800);
 }
+
+// Note: generateInvoiceHTML(order) is defined later in this file.
+// Calls that pass an extra opts parameter will be ignored by that function.
 
 // Toggle edit mode for order quantities
 let isEditMode = false;
 
 function toggleEditMode() {
     isEditMode = true;
-    
-    // Show input boxes, hide display spans
     document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.qty-input').forEach(el => {
-        el.style.display = 'inline-block';
+        el.style.display = 'inline';
         el.style.width = '60px';
-        el.style.padding = '5px';
+        el.style.padding = '4px';
         el.style.textAlign = 'center';
         el.style.border = '2px solid #4CAF50';
-        el.style.borderRadius = '4px';
     });
-    
-    // Add input event listeners to update totals dynamically
-    document.querySelectorAll('.qty-input').forEach(input => {
-        input.addEventListener('input', updateItemTotal);
-    });
-    
-    // Show save/cancel buttons
-    document.getElementById('saveButtonContainer').style.display = 'block';
-    
-    // Disable action buttons
-    document.querySelectorAll('.action-btn').forEach(btn => {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'not-allowed';
-    });
-    
-    // Hide edit button
-    document.querySelector('.btn-edit-items').style.display = 'none';
+    document.querySelectorAll('.qty-input').forEach(input => input.addEventListener('input', updateItemTotal));
+    const saveContainer = document.getElementById('saveButtonContainer');
+    if (saveContainer) saveContainer.style.display = 'block';
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = true; btn.style.opacity='0.5'; btn.style.cursor='not-allowed'; });
+    const editBtn = document.querySelector('.btn-edit-items');
+    if (editBtn) editBtn.style.display='none';
 }
 
 function cancelEditMode() {
     isEditMode = false;
-    
-    // Restore original quantities
-    document.querySelectorAll('.qty-input').forEach(input => {
-        input.value = input.dataset.original;
-    });
-    
-    // Hide input boxes, show display spans
-    document.querySelectorAll('.qty-input').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'inline');
-    
-    // Hide save/cancel buttons
-    document.getElementById('saveButtonContainer').style.display = 'none';
-    
-    // Enable action buttons
-    document.querySelectorAll('.action-btn').forEach(btn => {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-    });
-    
-    // Show edit button
-    document.querySelector('.btn-edit-items').style.display = 'inline-block';
-    
-    // Recalculate totals with original values
+    document.querySelectorAll('.qty-input').forEach(input => { input.value = input.dataset.original; input.style.display='none'; });
+    document.querySelectorAll('.qty-display').forEach(el => el.style.display='inline');
+    const saveContainer = document.getElementById('saveButtonContainer');
+    if (saveContainer) saveContainer.style.display='none';
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = false; btn.style.opacity='1'; btn.style.cursor='pointer'; });
+    const editBtn = document.querySelector('.btn-edit-items');
+    if (editBtn) editBtn.style.display='inline-block';
     recalculateGrandTotal();
 }
 
@@ -836,12 +553,9 @@ function updateItemTotal(event) {
     const row = input.closest('tr');
     const price = parseFloat(row.dataset.price);
     const quantity = parseInt(input.value) || 0;
-    
-    // Update item total
     const itemTotal = price * quantity;
-    row.querySelector('.item-total strong').textContent = `₹${itemTotal.toFixed(2)}`;
-    
-    // Update grand total
+    const totalCell = row.querySelector('.item-total strong');
+    if (totalCell) totalCell.textContent = `₹${itemTotal.toFixed(2)}`;
     recalculateGrandTotal();
 }
 
@@ -850,13 +564,12 @@ function recalculateGrandTotal() {
     document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
         const price = parseFloat(row.dataset.price);
         const qtyInput = row.querySelector('.qty-input');
-        const quantity = parseInt(qtyInput.value) || 0;
+        const quantity = parseInt(qtyInput?.value) || parseInt(qtyInput?.dataset.original) || 0;
         grandTotal += price * quantity;
     });
-    
-    document.querySelector('.total-amount').textContent = `₹${grandTotal.toFixed(2)}`;
+    const totalEl = document.querySelector('.total-amount');
+    if (totalEl) totalEl.textContent = `₹${grandTotal.toFixed(2)}`;
 }
-
 async function saveOrderChanges(orderId) {
     if (!confirm('Are you sure you want to save these changes? This will update the order in the database.')) {
         return;
@@ -937,203 +650,123 @@ async function saveOrderChanges(orderId) {
 }
 
 // Generate invoice HTML (reusable function)
-function generateInvoiceHTML(order) {
+function generateInvoiceHTML(order, opts = {}) {
+    const { printMode = false, shareMode = false } = opts || {};
+    // Narrow width when sharing so screenshot fits mobile screen nicely
+    const containerMaxWidth = shareMode ? 430 : 860;
+    // Base font sizes tuned for readability; slightly smaller for share to reduce wrapping
+    const baseFont = shareMode ? 13 : 14;
+    const smallFont = shareMode ? 11 : 12;
+    const h1Size = shareMode ? 24 : 28;
+    const tableHeaderFont = shareMode ? 11 : 12;
+    const tableBodyFont = shareMode ? 11 : 12;
     return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Invoice - Order #${order.order_id}</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                    font-family: Arial, sans-serif;
-                    padding: 20px;
-                    color: #333;
-                    max-width: 800px;
-                    margin: 0 auto;
-                    background: white;
-                }
-                .invoice-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    margin-bottom: 30px;
-                    border-bottom: 3px solid #004D40;
-                    padding-bottom: 20px;
-                }
-                .invoice-header-left {
-                    text-align: left;
-                    flex: 1;
-                }
-                .invoice-header-left h1 {
-                    color: #004D40;
-                    font-size: 28px;
-                    margin-bottom: 5px;
-                }
-                .invoice-header-left .subtitle {
-                    color: #2e7d32;
-                    font-size: 13px;
-                    margin-bottom: 10px;
-                    font-weight: 600;
-                }
-                .invoice-header-left .invoice-title {
-                    color: #004D40;
-                    font-size: 16px;
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                }
-                .invoice-header-left .address {
-                    color: #666;
-                    font-size: 11px;
-                    line-height: 1.6;
-                }
-                .invoice-header-right {
-                    text-align: right;
-                }
-                .invoice-header-right p {
-                    color: #333;
-                    font-size: 13px;
-                    margin: 5px 0;
-                    font-weight: 600;
-                }
-                .invoice-header-right .emergency {
-                    color: #d32f2f;
-                    font-weight: bold;
-                }
-                .invoice-info {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 30px;
-                }
-                .info-block {
-                    flex: 1;
-                }
-                .info-block h3 {
-                    color: #004D40;
-                    margin-bottom: 10px;
-                    font-size: 14px;
-                }
-                .info-block p {
-                    margin: 5px 0;
-                    font-size: 13px;
-                    line-height: 1.6;
-                }
-                .invoice-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 20px 0;
-                }
-                .invoice-table th {
-                    background: #004D40;
-                    color: white;
-                    padding: 10px 8px;
-                    text-align: left;
-                    font-size: 12px;
-                }
-                .invoice-table td {
-                    padding: 8px;
-                    border-bottom: 1px solid #ddd;
-                    font-size: 12px;
-                }
-                .invoice-total {
-                    text-align: right;
-                    margin-top: 20px;
-                    font-size: 16px;
-                }
-                .invoice-total strong {
-                    color: #004D40;
-                }
-                .invoice-footer {
-                    margin-top: 50px;
-                    text-align: center;
-                    color: #666;
-                    font-size: 11px;
-                    border-top: 2px solid #ddd;
-                    padding-top: 20px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="invoice-header">
-                <div class="invoice-header-left">
-                    <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
-                    <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
-                    <div class="invoice-title">பில்</div>
-                    <div class="address">பாரிநகர் 2வது தெரு, அன்னா நகர்,<br>வடக்கு காட்டூர், திருச்சி - 620019.</div>
-                </div>
-                <div class="invoice-header-right">
-                    <p>7339051541</p>
-                    <p>8754144759</p>
-                    <p>8870503350 <span class="emergency">(அவசரம்)</span></p>
-                </div>
-            </div>
-            
-            <div class="invoice-info">
-                <div class="info-block">
-                    <h3>Bill To:</h3>
-                    <p><strong>${order.user_name || 'Customer'}</strong></p>
-                    <p>Phone: ${order.user_phone}</p>
-                    ${order.user_store_name ? `<p>Store: ${order.user_store_name}</p>` : ''}
-                    ${order.user_store_address && (order.user_store_address.street || order.user_store_address.city) ? `
-                        <p style="margin-top: 10px;">
-                            ${order.user_store_address.street || ''}<br>
-                            ${order.user_store_address.city || ''}, ${order.user_store_address.state || ''}<br>
-                            ${order.user_store_address.pincode || ''}
-                        </p>
-                    ` : order.delivery_address && (order.delivery_address.street || order.delivery_address.city) ? `
-                        <p style="margin-top: 10px;">
-                            ${order.delivery_address.street || ''}<br>
-                            ${order.delivery_address.city || ''}, ${order.delivery_address.state || ''}<br>
-                            ${order.delivery_address.pincode || ''}
-                        </p>
-                    ` : ''}
-                </div>
-                
-                <div class="info-block" style="text-align: right;">
-                    <h3>Invoice Details:</h3>
-                    <p><strong>Order ID:</strong> ${order.order_id}</p>
-                    <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
-                    <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
-                </div>
-            </div>
-            
-            <table class="invoice-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Product Name</th>
-                        <th>Weight</th>
-                        <th>Price</th>
-                        <th>Quantity</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${order.items.map((item, index) => `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${item.product_name}</td>
-                            <td>${item.weight || '-'}</td>
-                            <td>₹${parseFloat(item.price).toFixed(2)}</td>
-                            <td>${item.quantity}</td>
-                            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            
-            <div class="invoice-total">
-                <p><strong>Grand Total: ₹${parseFloat(order.total_amount).toFixed(2)}</strong></p>
-            </div>
-            
-            <div class="invoice-footer">
-                <p>Thank you for your business!</p>
-                <p>This is a computer-generated invoice.</p>
-            </div>
-        </body>
-        </html>
-    `;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Invoice - Order #${order.order_id}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin:0; padding:16px; background:#ffffff; color:#222; }
+    .invoice-wrapper { max-width:${containerMaxWidth}px; margin:0 auto; }
+    h1 { font-size:${h1Size}px; color:#004D40; margin:0 0 4px 0; }
+    .subtitle { color:#2e7d32; font-size:${smallFont}px; font-weight:600; margin-bottom:6px; }
+    .invoice-title { color:#004D40; font-size:${baseFont + 1}px; font-weight:700; margin-bottom:8px; }
+    .address { color:#555; font-size:${smallFont}px; line-height:1.5; }
+    .header { display:flex; gap:12px; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #004D40; padding-bottom:14px; margin-bottom:18px; }
+    .header-right p { margin:2px 0; font-size:${smallFont + 1}px; font-weight:600; }
+    .emergency { color:#d32f2f; font-weight:700; }
+    .info-row { display:flex; flex-wrap:wrap; justify-content:space-between; gap:18px; margin-bottom:18px; }
+    .info-block { flex:1 1 220px; min-width:200px; }
+    .info-block h3 { font-size:${baseFont}px; color:#004D40; margin:0 0 6px 0; }
+    .info-block p { font-size:${smallFont + 1}px; margin:4px 0; line-height:1.4; }
+    table { width:100%; border-collapse:collapse; margin-top:4px; }
+    thead th { background:#004D40; color:#fff; padding:8px 6px; text-align:left; font-size:${tableHeaderFont}px; }
+    tbody td { padding:6px 6px; border-bottom:1px solid #ddd; font-size:${tableBodyFont}px; vertical-align:top; }
+    tbody tr:last-child td { border-bottom:2px solid #004D40; }
+    .totals { text-align:right; margin-top:14px; font-size:${baseFont + 2}px; font-weight:700; color:#004D40; }
+    .footer { margin-top:26px; text-align:center; font-size:${smallFont}px; color:#666; border-top:2px solid #ddd; padding-top:14px; }
+    /* Prevent awkward page breaks inside rows when printing */
+    @media print { 
+      body { padding:0 8px; }
+      .invoice-wrapper { max-width:100%; }
+      tr, td, th { page-break-inside:avoid; }
+      .footer { page-break-inside:avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-wrapper">
+    <div class="header">
+      <div class="header-left">
+        <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
+        <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
+        <div class="invoice-title">பில்</div>
+        <div class="address">பாரிநகர் 2வது தெரு, அன்னா நகர்,<br/>வடக்கு காட்டூர், திருச்சி - 620019.</div>
+      </div>
+      <div class="header-right">
+        <p>7339051541</p>
+        <p>8754144759</p>
+        <p>8870503350 <span class="emergency">(அவசரம்)</span></p>
+      </div>
+    </div>
+    <div class="info-row">
+      <div class="info-block">
+        <h3>Bill To:</h3>
+        <p><strong>${order.user_name || 'Customer'}</strong></p>
+        <p>Phone: ${order.user_phone}</p>
+        ${order.user_store_name ? `<p>Store: ${order.user_store_name}</p>` : ''}
+        ${order.user_store_address && (order.user_store_address.street || order.user_store_address.city) ? `
+           <p style="margin-top:6px;">
+             ${order.user_store_address.street || ''}<br/>
+             ${order.user_store_address.city || ''}, ${order.user_store_address.state || ''}<br/>
+             ${order.user_store_address.pincode || ''}
+           </p>
+        ` : order.delivery_address && (order.delivery_address.street || order.delivery_address.city) ? `
+           <p style="margin-top:6px;">
+             ${order.delivery_address.street || ''}<br/>
+             ${order.delivery_address.city || ''}, ${order.delivery_address.state || ''}<br/>
+             ${order.delivery_address.pincode || ''}
+           </p>
+        ` : ''}
+      </div>
+      <div class="info-block" style="text-align:right;">
+        <h3>Invoice Details:</h3>
+        <p><strong>Order ID:</strong> ${order.order_id}</p>
+        <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
+        <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Product Name</th><th>Weight</th><th>Price</th><th>Qty</th><th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${order.items.map((item, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${item.product_name}</td>
+            <td>${item.weight || '-'}</td>
+            <td>₹${parseFloat(item.price).toFixed(2)}</td>
+            <td>${item.quantity}</td>
+            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div class="totals">Grand Total: ₹${parseFloat(order.total_amount).toFixed(2)}</div>
+    <div class="footer">
+      <p>Thank you for your business!</p>
+      <p>This is a computer-generated invoice.</p>
+    </div>
+  </div>
+  ${printMode ? `<script>window.onload = () => setTimeout(()=> window.print(), 150);</script>` : ''}
+</body>
+</html>`;
 }
 
 // Filter orders

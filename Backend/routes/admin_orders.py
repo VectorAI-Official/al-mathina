@@ -304,6 +304,112 @@ async def update_order_status(order_id: str, status_update: UpdateOrderStatusReq
         logger.error(f"Error updating order status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class UpdateOrderItemsRequest(BaseModel):
+    items: List[dict]
+    total_amount: float
+
+@router.put("/{order_id}/update-items")
+async def update_order_items(order_id: str, update_data: UpdateOrderItemsRequest, request: Request):
+    """Update order items and total amount"""
+    try:
+        db = get_mongo_db()
+        orders_collection = db['orders']
+        
+        # Find the order
+        try:
+            order_obj_id = ObjectId(order_id)
+            order = orders_collection.find_one({"_id": order_obj_id})
+        except:
+            order = orders_collection.find_one({"order_id": order_id})
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Update order items and total
+        orders_collection.update_one(
+            {"_id": ObjectId(order['_id']) if isinstance(order['_id'], str) else order['_id']},
+            {
+                "$set": {
+                    "items": update_data.items,
+                    "total_amount": update_data.total_amount,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        logger.info(f"Order {order_id} items updated - New total: ₹{update_data.total_amount}")
+        
+        return {
+            "success": True,
+            "message": "Order items updated successfully",
+            "order_id": order_id,
+            "new_total": update_data.total_amount
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating order items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Delete order
+@router.delete("/{order_id}")
+async def delete_order(order_id: str, request: Request):
+    """Delete an order by order_id"""
+    try:
+        db = get_mongo_db()
+        orders_collection = db['orders']
+        
+        logger.info(f"🗑️ DELETING ORDER:")
+        logger.info(f"   Order ID: {order_id}")
+        
+        # Find the order first to get details for logging
+        order = orders_collection.find_one({"order_id": order_id})
+        
+        if not order:
+            # Try finding by _id as fallback
+            try:
+                order = orders_collection.find_one({"_id": ObjectId(order_id)})
+            except:
+                pass
+        
+        if not order:
+            logger.warning(f"   ⚠ Order not found: {order_id}")
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Log order details
+        logger.info(f"   Customer: {order.get('user_name', 'Unknown')}")
+        logger.info(f"   Phone: {order.get('user_phone', 'N/A')}")
+        logger.info(f"   Total Amount: ₹{order.get('total_amount', 0)}")
+        logger.info(f"   Status: {order.get('status', 'unknown')}")
+        logger.info(f"   Items Count: {len(order.get('items', []))}")
+        
+        # Delete the order
+        result = orders_collection.delete_one({"order_id": order_id})
+        
+        if result.deleted_count == 0:
+            # Try deleting by _id as fallback
+            try:
+                result = orders_collection.delete_one({"_id": ObjectId(order_id)})
+            except:
+                pass
+        
+        if result.deleted_count > 0:
+            logger.info(f"   ✓ Order document deleted from database")
+            logger.info(f"✅ ORDER DELETION COMPLETE: {order_id}")
+            return {
+                "success": True,
+                "message": f"Order {order_id} deleted successfully"
+            }
+        else:
+            logger.error(f"   ✗ Failed to delete order: {order_id}")
+            raise HTTPException(status_code=500, detail="Failed to delete order")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"✗ Error deleting order {order_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Get order statistics
 @router.get("/stats/summary")
 async def get_order_statistics(request: Request):

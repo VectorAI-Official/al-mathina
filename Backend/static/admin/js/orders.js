@@ -92,8 +92,8 @@ function displayOrders(orders) {
     
     try {
         container.innerHTML = orders.map(order => `
-            <div class="order-card" onclick="viewOrderDetails('${order.order_id}')">
-                <div class="order-card-header">
+            <div class="order-card">
+                <div class="order-card-header" onclick="viewOrderDetails('${order.order_id}')">
                     <div class="order-info">
                         <h3>Order #${order.order_id}</h3>
                         <p class="order-date">
@@ -104,7 +104,7 @@ function displayOrders(orders) {
                     <span class="status-badge status-${order.status}">${order.status.toUpperCase()}</span>
                 </div>
                 
-                <div class="order-card-body">
+                <div class="order-card-body" onclick="viewOrderDetails('${order.order_id}')">
                     <div class="customer-info">
                         <div class="info-row">
                             <i class="fas fa-user"></i>
@@ -135,11 +135,16 @@ function displayOrders(orders) {
                 </div>
                 
                 <div class="order-card-footer">
-                    <span class="payment-method">
-                        <i class="fas fa-credit-card"></i>
-                        ${order.payment_method || 'COD'}
-                    </span>
-                    <span class="view-link">
+                    <div class="footer-left">
+                        <span class="payment-method">
+                            <i class="fas fa-credit-card"></i>
+                            ${order.payment_method || 'COD'}
+                        </span>
+                        <button class="delete-order-btn" onclick="event.stopPropagation(); deleteOrder('${order.order_id}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                    <span class="view-link" onclick="viewOrderDetails('${order.order_id}')">
                         View Details <i class="fas fa-chevron-right"></i>
                     </span>
                 </div>
@@ -280,9 +285,14 @@ function showOrderDetailsModal(order) {
                 
                 <!-- Order Items -->
                 <div class="detail-section">
-                    <h3><i class="fas fa-box-open"></i> Order Items</h3>
+                    <h3>
+                        <i class="fas fa-box-open"></i> Order Items
+                        <button class="btn-edit-items" onclick="toggleEditMode()" title="Edit Quantities">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </h3>
                     <div class="items-table">
-                        <table>
+                        <table id="orderItemsTable">
                             <thead>
                                 <tr>
                                     <th>Product</th>
@@ -293,13 +303,16 @@ function showOrderDetailsModal(order) {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${order.items.map(item => `
-                                    <tr>
+                                ${order.items.map((item, index) => `
+                                    <tr data-item-index="${index}" data-product-id="${item.product_id || ''}" data-price="${item.price}">
                                         <td><strong>${item.product_name}</strong></td>
                                         <td>${item.weight || '-'}</td>
                                         <td>₹${parseFloat(item.price).toFixed(2)}</td>
-                                        <td><strong>×${item.quantity}</strong></td>
-                                        <td><strong>₹${(item.price * item.quantity).toFixed(2)}</strong></td>
+                                        <td class="qty-cell">
+                                            <span class="qty-display">×${item.quantity}</span>
+                                            <input type="number" class="qty-input" value="${item.quantity}" min="1" style="display: none;" data-original="${item.quantity}">
+                                        </td>
+                                        <td class="item-total"><strong>₹${(item.price * item.quantity).toFixed(2)}</strong></td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -310,6 +323,14 @@ function showOrderDetailsModal(order) {
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+                    <div id="saveButtonContainer" style="display: none; margin-top: 15px; text-align: right;">
+                        <button class="btn btn-primary" onclick="saveOrderChanges('${order.order_id}')" style="margin-right: 10px;">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                        <button class="btn btn-secondary" onclick="cancelEditMode()">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
                     </div>
                 </div>
                 
@@ -331,12 +352,12 @@ function showOrderDetailsModal(order) {
         </div>
         
         <!-- Action Buttons -->
-        <div class="order-actions">
+        <div class="order-actions" id="orderActionButtons">
             ${order.status === 'pending' ? `
-                <button class="btn btn-success" onclick="updateOrderStatus('${order.order_id}', 'delivered')">
+                <button class="btn btn-success action-btn" onclick="updateOrderStatus('${order.order_id}', 'delivered')">
                     <i class="fas fa-check-circle"></i> Mark as Delivered
                 </button>
-                <button class="btn btn-danger" onclick="updateOrderStatus('${order.order_id}', 'cancelled')">
+                <button class="btn btn-danger action-btn" onclick="updateOrderStatus('${order.order_id}', 'cancelled')">
                     <i class="fas fa-times-circle"></i> Cancel Order
                 </button>
             ` : `
@@ -344,7 +365,10 @@ function showOrderDetailsModal(order) {
                     Order is ${order.status}
                 </div>
             `}
-            <button class="btn btn-primary" onclick="printInvoice('${order.order_id}')">
+            <button class="btn btn-success action-btn" onclick="shareInvoiceWhatsApp('${order.order_id}')" style="margin-right: 10px;">
+                <i class="fab fa-whatsapp"></i> Share on WhatsApp
+            </button>
+            <button class="btn btn-primary action-btn" onclick="printInvoice('${order.order_id}')">
                 <i class="fas fa-print"></i> Print Invoice
             </button>
         </div>
@@ -402,38 +426,78 @@ function printInvoice(orderId) {
                     font-family: Arial, sans-serif;
                     padding: 20px;
                     color: #333;
+                    max-width: 800px;
+                    margin: 0 auto;
                 }
                 .invoice-header {
-                    text-align: center;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
                     margin-bottom: 30px;
                     border-bottom: 3px solid #004D40;
                     padding-bottom: 20px;
+                    flex-wrap: wrap;
                 }
-                .invoice-header h1 {
+                .invoice-header-left {
+                    text-align: left;
+                    flex: 1;
+                    min-width: 250px;
+                }
+                .invoice-header-left h1 {
                     color: #004D40;
-                    font-size: 32px;
+                    font-size: 28px;
+                    margin-bottom: 5px;
+                }
+                .invoice-header-left .subtitle {
+                    color: #2e7d32;
+                    font-size: 13px;
+                    margin-bottom: 10px;
+                    font-weight: 600;
+                }
+                .invoice-header-left .invoice-title {
+                    color: #004D40;
+                    font-size: 16px;
+                    font-weight: bold;
                     margin-bottom: 10px;
                 }
-                .invoice-header p {
+                .invoice-header-left .address {
                     color: #666;
-                    font-size: 14px;
+                    font-size: 11px;
+                    line-height: 1.6;
+                }
+                .invoice-header-right {
+                    text-align: right;
+                    flex: 0 0 auto;
+                }
+                .invoice-header-right p {
+                    color: #333;
+                    font-size: 13px;
+                    margin: 5px 0;
+                    font-weight: 600;
+                }
+                .invoice-header-right .emergency {
+                    color: #d32f2f;
+                    font-weight: bold;
                 }
                 .invoice-info {
                     display: flex;
                     justify-content: space-between;
                     margin-bottom: 30px;
+                    flex-wrap: wrap;
+                    gap: 20px;
                 }
                 .info-block {
                     flex: 1;
+                    min-width: 200px;
                 }
                 .info-block h3 {
                     color: #004D40;
                     margin-bottom: 10px;
-                    font-size: 16px;
+                    font-size: 14px;
                 }
                 .info-block p {
                     margin: 5px 0;
-                    font-size: 14px;
+                    font-size: 13px;
                     line-height: 1.6;
                 }
                 .invoice-table {
@@ -444,14 +508,14 @@ function printInvoice(orderId) {
                 .invoice-table th {
                     background: #004D40;
                     color: white;
-                    padding: 12px;
+                    padding: 10px 8px;
                     text-align: left;
-                    font-size: 14px;
+                    font-size: 12px;
                 }
                 .invoice-table td {
-                    padding: 10px 12px;
+                    padding: 8px;
                     border-bottom: 1px solid #ddd;
-                    font-size: 14px;
+                    font-size: 12px;
                 }
                 .invoice-table tr:hover {
                     background: #f5f5f5;
@@ -459,7 +523,7 @@ function printInvoice(orderId) {
                 .invoice-total {
                     text-align: right;
                     margin-top: 20px;
-                    font-size: 18px;
+                    font-size: 16px;
                 }
                 .invoice-total strong {
                     color: #004D40;
@@ -468,20 +532,60 @@ function printInvoice(orderId) {
                     margin-top: 50px;
                     text-align: center;
                     color: #666;
-                    font-size: 12px;
+                    font-size: 11px;
                     border-top: 2px solid #ddd;
                     padding-top: 20px;
                 }
+                
+                /* Print Styles */
                 @media print {
-                    body { padding: 0; }
+                    body { 
+                        padding: 10px;
+                        max-width: 100%;
+                    }
                     .no-print { display: none; }
+                    .invoice-header-left h1 { font-size: 24px; }
+                    .invoice-header-left .subtitle { font-size: 12px; }
+                    .invoice-table th, .invoice-table td { 
+                        padding: 6px 4px;
+                        font-size: 11px;
+                    }
+                    @page {
+                        margin: 0.5cm;
+                        size: A4;
+                    }
+                }
+                
+                /* Mobile Responsive */
+                @media screen and (max-width: 600px) {
+                    body { padding: 10px; }
+                    .invoice-header { flex-direction: column; }
+                    .invoice-header-right { 
+                        text-align: left; 
+                        margin-top: 15px;
+                    }
+                    .invoice-info { flex-direction: column; }
+                    .invoice-header-left h1 { font-size: 22px; }
+                    .invoice-table th, .invoice-table td { 
+                        padding: 6px 4px;
+                        font-size: 11px;
+                    }
                 }
             </style>
         </head>
         <body>
             <div class="invoice-header">
-                <h1>AL-MADHINA</h1>
-                <p>INVOICE</p>
+                <div class="invoice-header-left">
+                    <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
+                    <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
+                    <div class="invoice-title">பில்</div>
+                    <div class="address">பாரிநகர் 2வது தெரு, அன்னா நகர்,<br>வடக்கு காட்டூர், திருச்சி - 620019.</div>
+                </div>
+                <div class="invoice-header-right">
+                    <p>7339051541</p>
+                    <p>8754144759</p>
+                    <p><span class="emergency">(அவசரம்)</span> 8870503350</p>
+                </div>
             </div>
             
             <div class="invoice-info">
@@ -509,7 +613,6 @@ function printInvoice(orderId) {
                     <h3>Invoice Details:</h3>
                     <p><strong>Order ID:</strong> ${order.order_id}</p>
                     <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
-                    <p><strong>Status:</strong> ${order.status.toUpperCase()}</p>
                     <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
                 </div>
             </div>
@@ -562,6 +665,475 @@ function printInvoice(orderId) {
     
     printWindow.document.write(invoiceHTML);
     printWindow.document.close();
+}
+
+// Share invoice on WhatsApp
+async function shareInvoiceWhatsApp(orderId) {
+    const order = currentOrder;
+    if (!order) return;
+    
+    try {
+        // Create invoice HTML
+        const invoiceHTML = generateInvoiceHTML(order);
+        
+        // Convert HTML to canvas using html2canvas library
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        printWindow.document.write(invoiceHTML);
+        printWindow.document.close();
+        
+        // Wait for content to load
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Use html2canvas to capture the invoice
+        const canvas = await html2canvas(printWindow.document.body, {
+            scale: 2,
+            logging: false,
+            useCORS: true
+        });
+        
+        // Convert canvas to blob
+        canvas.toBlob(async (blob) => {
+            // Close the preview window
+            printWindow.close();
+            
+            // Create file from blob
+            const file = new File([blob], `invoice_${order.order_id}.png`, { type: 'image/png' });
+            
+            // Create WhatsApp message caption
+            const caption = `Invoice - Order #${order.order_id}\n` +
+                          `Customer: ${order.user_name || 'Customer'}\n` +
+                          `Total: ₹${parseFloat(order.total_amount).toFixed(2)}\n` +
+                          `- அல் மதீனா ஏஜென்சீஸ்`;
+            
+            // Try to share as image using Web Share API
+            try {
+                if (navigator.share && navigator.canShare) {
+                    // Check if files can be shared
+                    const canShareFiles = navigator.canShare({ files: [file] });
+                    
+                    if (canShareFiles) {
+                        // Share with image
+                        await navigator.share({
+                            title: `Invoice - Order #${order.order_id}`,
+                            text: caption,
+                            files: [file]
+                        });
+                    } else {
+                        // Share text only via Web Share API
+                        await navigator.share({
+                            title: `Invoice - Order #${order.order_id}`,
+                            text: caption
+                        });
+                    }
+                } else {
+                    // Create download link for image and open WhatsApp
+                    shareInvoiceImageFallback(file, caption, order);
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error sharing:', err);
+                    // Download image and open WhatsApp
+                    shareInvoiceImageFallback(file, caption, order);
+                }
+            }
+        }, 'image/png');
+        
+    } catch (error) {
+        console.error('Error creating invoice image:', error);
+        alert('Error creating invoice image. Please try printing instead.');
+    }
+}
+
+// Fallback: Download image and open WhatsApp
+function shareInvoiceImageFallback(file, caption, order) {
+    // Create download link for the image
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoice_${order.order_id}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Show instructions and open WhatsApp
+    setTimeout(() => {
+        alert('Invoice image has been downloaded. You can now share it manually via WhatsApp.');
+        
+        // Open WhatsApp Web (no phone number to avoid errors)
+        const encodedCaption = encodeURIComponent(caption);
+        window.open(`https://web.whatsapp.com/`, '_blank');
+    }, 500);
+}
+
+// Toggle edit mode for order quantities
+let isEditMode = false;
+
+function toggleEditMode() {
+    isEditMode = true;
+    
+    // Show input boxes, hide display spans
+    document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.qty-input').forEach(el => {
+        el.style.display = 'inline-block';
+        el.style.width = '60px';
+        el.style.padding = '5px';
+        el.style.textAlign = 'center';
+        el.style.border = '2px solid #4CAF50';
+        el.style.borderRadius = '4px';
+    });
+    
+    // Add input event listeners to update totals dynamically
+    document.querySelectorAll('.qty-input').forEach(input => {
+        input.addEventListener('input', updateItemTotal);
+    });
+    
+    // Show save/cancel buttons
+    document.getElementById('saveButtonContainer').style.display = 'block';
+    
+    // Disable action buttons
+    document.querySelectorAll('.action-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+    
+    // Hide edit button
+    document.querySelector('.btn-edit-items').style.display = 'none';
+}
+
+function cancelEditMode() {
+    isEditMode = false;
+    
+    // Restore original quantities
+    document.querySelectorAll('.qty-input').forEach(input => {
+        input.value = input.dataset.original;
+    });
+    
+    // Hide input boxes, show display spans
+    document.querySelectorAll('.qty-input').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'inline');
+    
+    // Hide save/cancel buttons
+    document.getElementById('saveButtonContainer').style.display = 'none';
+    
+    // Enable action buttons
+    document.querySelectorAll('.action-btn').forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    });
+    
+    // Show edit button
+    document.querySelector('.btn-edit-items').style.display = 'inline-block';
+    
+    // Recalculate totals with original values
+    recalculateGrandTotal();
+}
+
+function updateItemTotal(event) {
+    const input = event.target;
+    const row = input.closest('tr');
+    const price = parseFloat(row.dataset.price);
+    const quantity = parseInt(input.value) || 0;
+    
+    // Update item total
+    const itemTotal = price * quantity;
+    row.querySelector('.item-total strong').textContent = `₹${itemTotal.toFixed(2)}`;
+    
+    // Update grand total
+    recalculateGrandTotal();
+}
+
+function recalculateGrandTotal() {
+    let grandTotal = 0;
+    document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
+        const price = parseFloat(row.dataset.price);
+        const qtyInput = row.querySelector('.qty-input');
+        const quantity = parseInt(qtyInput.value) || 0;
+        grandTotal += price * quantity;
+    });
+    
+    document.querySelector('.total-amount').textContent = `₹${grandTotal.toFixed(2)}`;
+}
+
+async function saveOrderChanges(orderId) {
+    if (!confirm('Are you sure you want to save these changes? This will update the order in the database.')) {
+        return;
+    }
+    
+    // Collect updated items
+    const updatedItems = [];
+    let hasChanges = false;
+    
+    document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
+        const qtyInput = row.querySelector('.qty-input');
+        const newQuantity = parseInt(qtyInput.value) || 0;
+        const originalQuantity = parseInt(qtyInput.dataset.original);
+        
+        if (newQuantity !== originalQuantity) {
+            hasChanges = true;
+        }
+        
+        updatedItems.push({
+            product_id: row.dataset.productId,
+            product_name: row.querySelector('td:first-child strong').textContent,
+            weight: row.querySelector('td:nth-child(2)').textContent,
+            price: parseFloat(row.dataset.price),
+            quantity: newQuantity
+        });
+    });
+    
+    if (!hasChanges) {
+        alert('No changes were made to the quantities.');
+        cancelEditMode();
+        return;
+    }
+    
+    // Calculate new total
+    const newTotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    try {
+        const response = await fetch(`/api/admin/orders/${orderId}/update-items`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                items: updatedItems,
+                total_amount: newTotal
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Order updated successfully!');
+            
+            // Update current order data
+            currentOrder.items = updatedItems;
+            currentOrder.total_amount = newTotal;
+            
+            // Update display spans with new quantities
+            document.querySelectorAll('.qty-input').forEach(input => {
+                const newQty = input.value;
+                input.dataset.original = newQty;
+                const display = input.parentElement.querySelector('.qty-display');
+                display.textContent = `×${newQty}`;
+            });
+            
+            // Exit edit mode
+            cancelEditMode();
+            
+            // Refresh order list
+            loadOrders();
+        } else {
+            throw new Error(data.error || 'Failed to update order');
+        }
+    } catch (error) {
+        console.error('Error updating order:', error);
+        alert('Error updating order: ' + error.message);
+    }
+}
+
+// Generate invoice HTML (reusable function)
+function generateInvoiceHTML(order) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Invoice - Order #${order.order_id}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: Arial, sans-serif;
+                    padding: 20px;
+                    color: #333;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background: white;
+                }
+                .invoice-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 30px;
+                    border-bottom: 3px solid #004D40;
+                    padding-bottom: 20px;
+                }
+                .invoice-header-left {
+                    text-align: left;
+                    flex: 1;
+                }
+                .invoice-header-left h1 {
+                    color: #004D40;
+                    font-size: 28px;
+                    margin-bottom: 5px;
+                }
+                .invoice-header-left .subtitle {
+                    color: #2e7d32;
+                    font-size: 13px;
+                    margin-bottom: 10px;
+                    font-weight: 600;
+                }
+                .invoice-header-left .invoice-title {
+                    color: #004D40;
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }
+                .invoice-header-left .address {
+                    color: #666;
+                    font-size: 11px;
+                    line-height: 1.6;
+                }
+                .invoice-header-right {
+                    text-align: right;
+                }
+                .invoice-header-right p {
+                    color: #333;
+                    font-size: 13px;
+                    margin: 5px 0;
+                    font-weight: 600;
+                }
+                .invoice-header-right .emergency {
+                    color: #d32f2f;
+                    font-weight: bold;
+                }
+                .invoice-info {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 30px;
+                }
+                .info-block {
+                    flex: 1;
+                }
+                .info-block h3 {
+                    color: #004D40;
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                }
+                .info-block p {
+                    margin: 5px 0;
+                    font-size: 13px;
+                    line-height: 1.6;
+                }
+                .invoice-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 20px 0;
+                }
+                .invoice-table th {
+                    background: #004D40;
+                    color: white;
+                    padding: 10px 8px;
+                    text-align: left;
+                    font-size: 12px;
+                }
+                .invoice-table td {
+                    padding: 8px;
+                    border-bottom: 1px solid #ddd;
+                    font-size: 12px;
+                }
+                .invoice-total {
+                    text-align: right;
+                    margin-top: 20px;
+                    font-size: 16px;
+                }
+                .invoice-total strong {
+                    color: #004D40;
+                }
+                .invoice-footer {
+                    margin-top: 50px;
+                    text-align: center;
+                    color: #666;
+                    font-size: 11px;
+                    border-top: 2px solid #ddd;
+                    padding-top: 20px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="invoice-header">
+                <div class="invoice-header-left">
+                    <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
+                    <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
+                    <div class="invoice-title">பில்</div>
+                    <div class="address">பாரிநகர் 2வது தெரு, அன்னா நகர்,<br>வடக்கு காட்டூர், திருச்சி - 620019.</div>
+                </div>
+                <div class="invoice-header-right">
+                    <p>7339051541</p>
+                    <p>8754144759</p>
+                    <p>8870503350 <span class="emergency">(அவசரம்)</span></p>
+                </div>
+            </div>
+            
+            <div class="invoice-info">
+                <div class="info-block">
+                    <h3>Bill To:</h3>
+                    <p><strong>${order.user_name || 'Customer'}</strong></p>
+                    <p>Phone: ${order.user_phone}</p>
+                    ${order.user_store_name ? `<p>Store: ${order.user_store_name}</p>` : ''}
+                    ${order.user_store_address && (order.user_store_address.street || order.user_store_address.city) ? `
+                        <p style="margin-top: 10px;">
+                            ${order.user_store_address.street || ''}<br>
+                            ${order.user_store_address.city || ''}, ${order.user_store_address.state || ''}<br>
+                            ${order.user_store_address.pincode || ''}
+                        </p>
+                    ` : order.delivery_address && (order.delivery_address.street || order.delivery_address.city) ? `
+                        <p style="margin-top: 10px;">
+                            ${order.delivery_address.street || ''}<br>
+                            ${order.delivery_address.city || ''}, ${order.delivery_address.state || ''}<br>
+                            ${order.delivery_address.pincode || ''}
+                        </p>
+                    ` : ''}
+                </div>
+                
+                <div class="info-block" style="text-align: right;">
+                    <h3>Invoice Details:</h3>
+                    <p><strong>Order ID:</strong> ${order.order_id}</p>
+                    <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
+                    <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
+                </div>
+            </div>
+            
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Product Name</th>
+                        <th>Weight</th>
+                        <th>Price</th>
+                        <th>Quantity</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${order.items.map((item, index) => `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${item.product_name}</td>
+                            <td>${item.weight || '-'}</td>
+                            <td>₹${parseFloat(item.price).toFixed(2)}</td>
+                            <td>${item.quantity}</td>
+                            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div class="invoice-total">
+                <p><strong>Grand Total: ₹${parseFloat(order.total_amount).toFixed(2)}</strong></p>
+            </div>
+            
+            <div class="invoice-footer">
+                <p>Thank you for your business!</p>
+                <p>This is a computer-generated invoice.</p>
+            </div>
+        </body>
+        </html>
+    `;
 }
 
 // Filter orders
@@ -791,4 +1363,69 @@ function updateClearButtonVisibility() {
             clearBtn.style.display = 'none';
         }
     }
+}
+
+// Delete order function
+async function deleteOrder(orderId) {
+    console.log(`🗑️ Attempting to delete order: ${orderId}`);
+    
+    if (!confirm(`Are you sure you want to delete Order #${orderId}?\n\nThis action cannot be undone.`)) {
+        console.log('   ❌ Deletion cancelled by user');
+        return;
+    }
+    
+    try {
+        console.log(`   📡 Sending DELETE request for order ${orderId}...`);
+        
+        const response = await fetch(`/api/admin/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            console.log(`   ✅ Order ${orderId} deleted successfully`);
+            
+            // Remove from allOrders array
+            allOrders = allOrders.filter(order => order.order_id !== orderId);
+            
+            // Refresh display
+            filterOrders();
+            updateOrderStats();
+            
+            // Show success message
+            showToast('Order deleted successfully', 'success');
+        } else {
+            throw new Error(data.message || 'Failed to delete order');
+        }
+    } catch (error) {
+        console.error(`   ❌ Error deleting order ${orderId}:`, error);
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+// Show toast notification
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    // Add to body
+    document.body.appendChild(toast);
+    
+    // Show toast
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Remove toast after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }

@@ -10,17 +10,19 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Order Management - AL-Madhina Admin</title>
-    <link rel="stylesheet" href="css/orders.css">
+    <link rel="stylesheet" href="css/orders.css?v=2.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="orders-page">
         <!-- Header -->
-        <div class="orders-header">
-            <h1><i class="fas fa-shopping-cart"></i> Order Management</h1>
-            <button class="btn btn-primary" onclick="window.location.href='/admin/dashboard'" style="padding: 10px 20px;">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
-            </button>
+        <div class="orders-header" style="background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%) !important; padding: 35px 40px 40px 40px !important; border-radius: 0 !important; box-shadow: 0 4px 20px rgba(27, 94, 32, 0.25) !important;">
+            <div class="header-content">
+                <h1 style="color: white !important;"><i class="fas fa-shopping-cart"></i> Order Management</h1>
+                <button class="btn btn-primary back-to-dashboard-btn" onclick="window.location.href='/admin/dashboard'" style="background: white !important; color: #1B5E20 !important; padding: 14px 28px !important;">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </button>
+            </div>
         </div>
 
         <!-- Order Statistics -->
@@ -123,6 +125,9 @@
         </div>
     </div>
 
+    <!-- html2canvas library for WhatsApp image sharing -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    
     <script src="js/orders.js"></script>
 </body>
 </html>

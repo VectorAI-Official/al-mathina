@@ -744,9 +744,6 @@ function generateInvoiceHTML(order, opts = {}) {
     
     /* Header Section */
     .invoice-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
       padding-bottom: 20px;
       border-bottom: 4px solid #004D40;
       margin-bottom: 30px;
@@ -759,6 +756,7 @@ function generateInvoiceHTML(order, opts = {}) {
       font-weight: 700;
       margin-bottom: 8px;
       letter-spacing: 0.5px;
+      white-space: nowrap;
     }
     
     .company-info .subtitle {
@@ -768,34 +766,23 @@ function generateInvoiceHTML(order, opts = {}) {
       margin-bottom: 8px;
     }
     
-    .company-info .invoice-label {
-      color: #004D40;
-      font-size: ${shareMode ? '18px' : '20px'};
-      font-weight: 700;
+    .company-info .phone-numbers {
+      color: #000000;
+      font-size: ${shareMode ? '14px' : '15px'};
+      font-weight: 600;
       margin: 12px 0 8px 0;
+    }
+    
+    .company-info .phone-numbers .emergency-number {
+      color: #D32F2F;
+      font-weight: 700;
+      font-size: ${shareMode ? '15px' : '16px'};
     }
     
     .company-info .address {
       color: #555555;
       font-size: ${shareMode ? '13px' : '14px'};
       line-height: 1.8;
-    }
-    
-    .contact-info {
-      text-align: right;
-    }
-    
-    .contact-info p {
-      font-size: ${shareMode ? '14px' : '15px'};
-      color: #000000;
-      font-weight: 600;
-      margin: 6px 0;
-      letter-spacing: 0.3px;
-    }
-    
-    .contact-info .emergency {
-      color: #D32F2F;
-      font-weight: 700;
     }
     
     /* Invoice Details Section */
@@ -985,16 +972,11 @@ function generateInvoiceHTML(order, opts = {}) {
       <div class="company-info">
         <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
         <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
-        <div class="invoice-label">பில்</div>
+        <div class="phone-numbers">7339051541, 8754144759, <span class="emergency-number">8870503350</span></div>
         <div class="address">
           பாரிநகர் 2வது தெரு, அன்னா நகர்,<br/>
           வடக்கு காட்டூர், திருச்சி - 620019.
         </div>
-      </div>
-      <div class="contact-info">
-        <p>7339051541</p>
-        <p>8754144759</p>
-        <p>8870503350 <span class="emergency">(அவசரம்)</span></p>
       </div>
     </div>
     
@@ -1062,9 +1044,7 @@ function generateInvoiceHTML(order, opts = {}) {
     
     <!-- Footer -->
     <div class="invoice-footer">
-      <p class="thank-you">Thank you for your business!</p>
-      <p>This is a computer-generated invoice and does not require a signature.</p>
-      <p>For any queries, please contact us at the numbers listed above.</p>
+      <!-- Footer text removed as per user request -->
     </div>
   </div>
   

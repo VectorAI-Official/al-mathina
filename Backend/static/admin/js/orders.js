@@ -414,31 +414,55 @@ function printInvoice(orderId) {
 
     const invoiceHTML = generateInvoiceHTML(order, { printMode: true });
 
-    // Use hidden iframe to avoid popup blockers & stuck preview
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(invoiceHTML);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-        try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-        } catch (e) {
-            console.error('Print failed, opening new window fallback:', e);
-            const win = window.open('', '_blank');
-            win.document.write(invoiceHTML);
-            win.document.close();
-            win.onload = () => win.print();
-        }
-        setTimeout(() => document.body.removeChild(iframe), 1500);
-    };
+    // Hide the modal to prevent it from being printed
+    const modal = document.getElementById('orderDetailsModal');
+    const modalWasVisible = modal && modal.style.display !== 'none';
+    if (modalWasVisible) {
+        modal.style.display = 'none';
+    }
+
+    // Small delay to ensure modal is hidden before creating iframe
+    setTimeout(() => {
+        // Use hidden iframe to avoid popup blockers & stuck preview
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '-9999px';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'hidden';
+        document.body.appendChild(iframe);
+        
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(invoiceHTML);
+        iframeDoc.close();
+        
+        // Wait for content to load before printing
+        iframe.onload = () => {
+            setTimeout(() => {
+                try {
+                    iframe.contentWindow.focus();
+                    iframe.contentWindow.print();
+                } catch (e) {
+                    console.error('Print failed:', e);
+                    alert('Print failed. Please try again.');
+                }
+                
+                // Clean up after printing
+                setTimeout(() => {
+                    if (iframe.parentNode) {
+                        document.body.removeChild(iframe);
+                    }
+                    // Restore modal visibility
+                    if (modalWasVisible && modal) {
+                        modal.style.display = 'block';
+                    }
+                }, 1000);
+            }, 500);
+        };
+    }, 100);
 }
 
 // Share invoice on WhatsApp
@@ -678,9 +702,9 @@ async function saveOrderChanges(orderId) {
 function generateInvoiceHTML(order, opts = {}) {
     const { printMode = false, shareMode = false } = opts || {};
     // Standard A4-like dimensions for consistent PDF appearance
-    // For share mode, use exact pixel dimensions that match typical mobile screenshot
-    const pageWidth = shareMode ? 794 : 210; // 794px = A4 width at 96dpi
-    const pagePadding = shareMode ? 40 : 20;
+    // For share mode, use wider canvas for better content visibility
+    const pageWidth = shareMode ? 1000 : 210;
+    const pagePadding = shareMode ? 30 : 20;
     
     return `
 <!DOCTYPE html>
@@ -706,13 +730,14 @@ function generateInvoiceHTML(order, opts = {}) {
       background: #ffffff;
       color: #000000;
       line-height: 1.6;
+      margin: 0;
+      padding: 0;
       ${shareMode ? `width: ${pageWidth}px; margin: 0 auto;` : ''}
     }
     
     .invoice-container {
-      ${shareMode ? `width: ${pageWidth}px;` : 'max-width: 210mm;'}
+      ${shareMode ? `width: 100%; padding: ${pagePadding}px; box-sizing: border-box;` : 'max-width: 1000px; padding: 40px; box-sizing: border-box;'}
       margin: 0 auto;
-      padding: ${pagePadding}px;
       background: #ffffff;
       ${shareMode ? 'min-height: 100vh;' : ''}
     }
@@ -725,6 +750,7 @@ function generateInvoiceHTML(order, opts = {}) {
       padding-bottom: 20px;
       border-bottom: 4px solid #004D40;
       margin-bottom: 30px;
+      width: 100%;
     }
     
     .company-info h1 {
@@ -778,6 +804,7 @@ function generateInvoiceHTML(order, opts = {}) {
       justify-content: space-between;
       margin-bottom: 30px;
       gap: 30px;
+      width: 100%;
     }
     
     .bill-to,
@@ -882,6 +909,8 @@ function generateInvoiceHTML(order, opts = {}) {
       border: 2px solid #004D40;
       border-radius: 8px;
       text-align: right;
+      width: 100%;
+      box-sizing: border-box;
     }
     
     .total-section .grand-total {
@@ -903,6 +932,7 @@ function generateInvoiceHTML(order, opts = {}) {
       padding-top: 25px;
       border-top: 3px solid #E0E0E0;
       text-align: center;
+      width: 100%;
     }
     
     .invoice-footer p {

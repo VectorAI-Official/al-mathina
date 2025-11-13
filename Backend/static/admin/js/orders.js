@@ -6,6 +6,12 @@
 // Global state
 let allOrders = [];
 let currentOrder = null;
+let selectedDateFilter = {
+    type: 'all', // 'all', 'single', 'range'
+    singleDate: null,
+    startDate: null,
+    endDate: null
+};
 
 // Initialize orders management
 document.addEventListener('DOMContentLoaded', function() {
@@ -108,18 +114,12 @@ function displayOrders(orders) {
                     <div class="customer-info">
                         <div class="info-row">
                             <i class="fas fa-user"></i>
-                            <span><strong>${order.user_name || 'Unknown Customer'}</strong></span>
+                            <span><strong>${order.user_name || 'Unknown Customer'}</strong>${order.user_store_name ? ` - <span style="color: #2E7D32; font-weight: 600;">${order.user_store_name}</span>` : ''}</span>
                         </div>
                         <div class="info-row">
                             <i class="fas fa-phone"></i>
                             <span>${order.user_phone}</span>
                         </div>
-                        ${order.user_store_name ? `
-                            <div class="info-row">
-                                <i class="fas fa-store"></i>
-                                <span>${order.user_store_name}</span>
-                            </div>
-                        ` : ''}
                     </div>
                     
                     <div class="order-summary">
@@ -307,7 +307,10 @@ function showOrderDetailsModal(order) {
                                     <tr data-item-index="${index}" data-product-id="${item.product_id || ''}" data-price="${item.price}">
                                         <td><strong>${item.product_name}</strong></td>
                                         <td>${item.weight || '-'}</td>
-                                        <td>₹${parseFloat(item.price).toFixed(2)}</td>
+                                        <td class="price-cell">
+                                            <span class="price-display">₹${parseFloat(item.price).toFixed(2)}</span>
+                                            <input type="number" class="price-input" value="${item.price}" min="0" step="0.01" style="display: none;" data-original="${item.price}">
+                                        </td>
                                         <td class="qty-cell">
                                             <span class="qty-display">×${item.quantity}</span>
                                             <input type="number" class="qty-input" value="${item.quantity}" min="1" style="display: none;" data-original="${item.quantity}">
@@ -465,14 +468,17 @@ function printInvoice(orderId) {
     }, 100);
 }
 
-// Share invoice on WhatsApp
+// Share invoice on WhatsApp (generates PDF)
 async function shareInvoiceWhatsApp(orderId) {
     const order = currentOrder;
     if (!order) return;
+    
     try {
+        console.log('📄 Generating PDF invoice for WhatsApp share...');
+        
         const invoiceHTML = generateInvoiceHTML(order, { shareMode: true });
         
-        // Create a hidden container with exact dimensions for rendering
+        // Create a hidden container with A4 dimensions for rendering
         const container = document.createElement('div');
         container.style.position = 'fixed';
         container.style.left = '-9999px';
@@ -486,9 +492,9 @@ async function shareInvoiceWhatsApp(orderId) {
         // Wait for fonts and rendering
         await new Promise(r => setTimeout(r, 1000));
         
-        // Capture with high quality settings
+        // Capture invoice as canvas with high quality
         const canvas = await html2canvas(container.querySelector('.invoice-container'), {
-            scale: 3, // Higher scale for better quality
+            scale: 2,
             useCORS: true,
             allowTaint: false,
             backgroundColor: '#ffffff',
@@ -499,48 +505,69 @@ async function shareInvoiceWhatsApp(orderId) {
             scrollX: -window.scrollX
         });
         
-        // Clean up
+        // Clean up container
         document.body.removeChild(container);
 
-        // Convert canvas to blob for file sharing
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
-        const file = new File([blob], `Invoice_${order.order_id}.png`, { type: 'image/png' });
+        // Convert canvas to PDF using jsPDF
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+            compress: true
+        });
+        
+        // Get PDF dimensions
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        // Calculate image dimensions to fit A4
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        // Add image to PDF
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+        
+        // Generate PDF blob
+        const pdfBlob = pdf.output('blob');
+        const pdfFile = new File([pdfBlob], `Al-Mathina_Invoice_${order.order_id}.pdf`, { type: 'application/pdf' });
+        
+        console.log('✅ PDF generated successfully:', pdfFile.size, 'bytes');
 
-        const caption = `Invoice - Order #${order.order_id}\nCustomer: ${order.user_name || 'Customer'}\nTotal: ₹${parseFloat(order.total_amount).toFixed(2)}\n- அல் மதீனா ஏஜென்சீஸ்`;
-
-        // Try to share as image file using Web Share API
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Try to share PDF using Web Share API
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             try {
                 await navigator.share({
-                    title: `Invoice - Order #${order.order_id}`,
-                    text: caption,
-                    files: [file]
+                    title: `Al-Mathina Invoice - Order #${order.order_id}`,
+                    text: `Invoice for Order #${order.order_id}\nCustomer: ${order.user_name || 'Customer'}\nTotal: ₹${parseFloat(order.total_amount).toFixed(2)}\n- அல் மதீனா ஏஜென்சீஸ்`,
+                    files: [pdfFile]
                 });
-                console.log('✅ Invoice shared successfully as image');
+                console.log('✅ PDF shared successfully via WhatsApp');
                 return;
             } catch (err) {
                 if (err.name === 'AbortError') {
                     console.log('Share cancelled by user');
                     return;
                 }
-                console.warn('Web Share with file failed:', err);
+                console.warn('Web Share API failed:', err);
             }
         }
 
-        // Fallback: Download the image file
-        console.log('Web Share API not available or failed, downloading image...');
-        const dataUrl = canvas.toDataURL('image/png');
+        // Fallback: Download the PDF file
+        console.log('Web Share API not available, downloading PDF...');
         const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = `Invoice_${order.order_id}.png`;
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = `Al-Mathina_Invoice_${order.order_id}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
         
-        alert('Invoice image downloaded! Please share it manually via WhatsApp.');
+        alert('Invoice PDF downloaded! You can now share it via WhatsApp.');
     } catch (error) {
-        console.error('Error preparing WhatsApp share:', error);
-        alert('Failed to prepare invoice image: ' + error.message);
+        console.error('❌ Error generating PDF for WhatsApp:', error);
+        alert('Failed to generate PDF: ' + error.message);
     }
 }
 
@@ -569,6 +596,8 @@ let isEditMode = false;
 
 function toggleEditMode() {
     isEditMode = true;
+    
+    // Show quantity inputs
     document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.qty-input').forEach(el => {
         el.style.display = 'inline';
@@ -577,7 +606,21 @@ function toggleEditMode() {
         el.style.textAlign = 'center';
         el.style.border = '2px solid #4CAF50';
     });
+    
+    // Show price inputs
+    document.querySelectorAll('.price-display').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.price-input').forEach(el => {
+        el.style.display = 'inline';
+        el.style.width = '80px';
+        el.style.padding = '4px';
+        el.style.textAlign = 'center';
+        el.style.border = '2px solid #4CAF50';
+    });
+    
+    // Add event listeners
     document.querySelectorAll('.qty-input').forEach(input => input.addEventListener('input', updateItemTotal));
+    document.querySelectorAll('.price-input').forEach(input => input.addEventListener('input', updateItemTotal));
+    
     const saveContainer = document.getElementById('saveButtonContainer');
     if (saveContainer) saveContainer.style.display = 'block';
     document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = true; btn.style.opacity='0.5'; btn.style.cursor='not-allowed'; });
@@ -587,8 +630,15 @@ function toggleEditMode() {
 
 function cancelEditMode() {
     isEditMode = false;
+    
+    // Reset quantity inputs
     document.querySelectorAll('.qty-input').forEach(input => { input.value = input.dataset.original; input.style.display='none'; });
     document.querySelectorAll('.qty-display').forEach(el => el.style.display='inline');
+    
+    // Reset price inputs
+    document.querySelectorAll('.price-input').forEach(input => { input.value = input.dataset.original; input.style.display='none'; });
+    document.querySelectorAll('.price-display').forEach(el => el.style.display='inline');
+    
     const saveContainer = document.getElementById('saveButtonContainer');
     if (saveContainer) saveContainer.style.display='none';
     document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = false; btn.style.opacity='1'; btn.style.cursor='pointer'; });
@@ -600,20 +650,34 @@ function cancelEditMode() {
 function updateItemTotal(event) {
     const input = event.target;
     const row = input.closest('tr');
-    const price = parseFloat(row.dataset.price);
-    const quantity = parseInt(input.value) || 0;
+    
+    // Get current price (from input if in edit mode, otherwise from data attribute)
+    const priceInput = row.querySelector('.price-input');
+    const price = priceInput ? parseFloat(priceInput.value) || 0 : parseFloat(row.dataset.price);
+    
+    // Get current quantity
+    const qtyInput = row.querySelector('.qty-input');
+    const quantity = parseInt(qtyInput.value) || 0;
+    
+    // Calculate and update item total
     const itemTotal = price * quantity;
     const totalCell = row.querySelector('.item-total strong');
     if (totalCell) totalCell.textContent = `₹${itemTotal.toFixed(2)}`;
+    
     recalculateGrandTotal();
 }
 
 function recalculateGrandTotal() {
     let grandTotal = 0;
     document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
-        const price = parseFloat(row.dataset.price);
+        // Get price (from input if exists, otherwise from data attribute)
+        const priceInput = row.querySelector('.price-input');
+        const price = priceInput ? (parseFloat(priceInput.value) || parseFloat(priceInput.dataset.original)) : parseFloat(row.dataset.price);
+        
+        // Get quantity
         const qtyInput = row.querySelector('.qty-input');
         const quantity = parseInt(qtyInput?.value) || parseInt(qtyInput?.dataset.original) || 0;
+        
         grandTotal += price * quantity;
     });
     const totalEl = document.querySelector('.total-amount');
@@ -630,10 +694,15 @@ async function saveOrderChanges(orderId) {
     
     document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
         const qtyInput = row.querySelector('.qty-input');
+        const priceInput = row.querySelector('.price-input');
+        
         const newQuantity = parseInt(qtyInput.value) || 0;
         const originalQuantity = parseInt(qtyInput.dataset.original);
         
-        if (newQuantity !== originalQuantity) {
+        const newPrice = parseFloat(priceInput.value) || 0;
+        const originalPrice = parseFloat(priceInput.dataset.original);
+        
+        if (newQuantity !== originalQuantity || newPrice !== originalPrice) {
             hasChanges = true;
         }
         
@@ -641,7 +710,7 @@ async function saveOrderChanges(orderId) {
             product_id: row.dataset.productId,
             product_name: row.querySelector('td:first-child strong').textContent,
             weight: row.querySelector('td:nth-child(2)').textContent,
-            price: parseFloat(row.dataset.price),
+            price: newPrice,
             quantity: newQuantity
         });
     });
@@ -682,6 +751,18 @@ async function saveOrderChanges(orderId) {
                 input.dataset.original = newQty;
                 const display = input.parentElement.querySelector('.qty-display');
                 display.textContent = `×${newQty}`;
+            });
+            
+            // Update display spans with new prices
+            document.querySelectorAll('.price-input').forEach(input => {
+                const newPrice = input.value;
+                input.dataset.original = newPrice;
+                const display = input.parentElement.querySelector('.price-display');
+                display.textContent = `₹${parseFloat(newPrice).toFixed(2)}`;
+                
+                // Update row data attribute
+                const row = input.closest('tr');
+                if (row) row.dataset.price = newPrice;
             });
             
             // Exit edit mode
@@ -1102,7 +1183,10 @@ function filterOrders() {
                 // Match status filter
                 const matchesStatus = !statusFilter || orderStatus === statusFilter.toLowerCase();
                 
-                return matchesSearch && matchesStatus;
+                // Match date filter
+                const matchesDate = matchesDateFilter(order);
+                
+                return matchesSearch && matchesStatus && matchesDate;
             } catch (orderError) {
                 console.error(`❌ Error processing order at index ${index}:`, orderError);
                 return false;
@@ -1345,4 +1429,182 @@ function showToast(message, type = 'info') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ============ DATE FILTER FUNCTIONS ============
+
+// Handle date filter dropdown change
+function handleDateFilterChange() {
+    const dateFilter = document.getElementById('dateFilter').value;
+    
+    if (dateFilter === 'all') {
+        selectedDateFilter.type = 'all';
+        selectedDateFilter.singleDate = null;
+        selectedDateFilter.startDate = null;
+        selectedDateFilter.endDate = null;
+        document.getElementById('dateDisplayGroup').style.display = 'none';
+        filterOrders();
+    } else if (dateFilter === 'single') {
+        openSingleDateModal();
+    } else if (dateFilter === 'range') {
+        openRangeDateModal();
+    }
+}
+
+// Open single date picker modal
+function openSingleDateModal() {
+    const modal = document.getElementById('singleDateModal');
+    const datePicker = document.getElementById('singleDatePicker');
+    
+    // Set max date to today
+    const today = new Date().toISOString().split('T')[0];
+    datePicker.max = today;
+    
+    // Set current value if exists
+    if (selectedDateFilter.singleDate) {
+        datePicker.value = selectedDateFilter.singleDate;
+    } else {
+        datePicker.value = today;
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Open date range picker modal
+function openRangeDateModal() {
+    const modal = document.getElementById('rangeDateModal');
+    const startPicker = document.getElementById('startDatePicker');
+    const endPicker = document.getElementById('endDatePicker');
+    
+    // Set max date to today
+    const today = new Date().toISOString().split('T')[0];
+    startPicker.max = today;
+    endPicker.max = today;
+    
+    // Set current values if exist
+    if (selectedDateFilter.startDate && selectedDateFilter.endDate) {
+        startPicker.value = selectedDateFilter.startDate;
+        endPicker.value = selectedDateFilter.endDate;
+    } else {
+        // Default to last 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        startPicker.value = sevenDaysAgo.toISOString().split('T')[0];
+        endPicker.value = today;
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Close date modals
+function closeDateModal() {
+    document.getElementById('singleDateModal').style.display = 'none';
+    document.getElementById('rangeDateModal').style.display = 'none';
+    
+    // Reset dropdown if user cancels
+    if (selectedDateFilter.type === 'all') {
+        document.getElementById('dateFilter').value = 'all';
+    }
+}
+
+// Apply single date filter
+function applySingleDate() {
+    const datePicker = document.getElementById('singleDatePicker');
+    const selectedDate = datePicker.value;
+    
+    if (!selectedDate) {
+        alert('Please select a date');
+        return;
+    }
+    
+    selectedDateFilter.type = 'single';
+    selectedDateFilter.singleDate = selectedDate;
+    selectedDateFilter.startDate = null;
+    selectedDateFilter.endDate = null;
+    
+    // Update display
+    const dateObj = new Date(selectedDate);
+    const dateDisplay = dateObj.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    closeDateModal();
+    filterOrders();
+}
+
+// Apply date range filter
+function applyDateRange() {
+    const startPicker = document.getElementById('startDatePicker');
+    const endPicker = document.getElementById('endDatePicker');
+    const startDate = startPicker.value;
+    const endDate = endPicker.value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select both start and end dates');
+        return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+        alert('Start date must be before or equal to end date');
+        return;
+    }
+    
+    selectedDateFilter.type = 'range';
+    selectedDateFilter.singleDate = null;
+    selectedDateFilter.startDate = startDate;
+    selectedDateFilter.endDate = endDate;
+    
+    // Update display
+    const startObj = new Date(startDate);
+    const endObj = new Date(endDate);
+    const dateDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    closeDateModal();
+    filterOrders();
+}
+
+// Clear date filter
+function clearDateFilter() {
+    selectedDateFilter.type = 'all';
+    selectedDateFilter.singleDate = null;
+    selectedDateFilter.startDate = null;
+    selectedDateFilter.endDate = null;
+    
+    document.getElementById('dateFilter').value = 'all';
+    document.getElementById('dateDisplayGroup').style.display = 'none';
+    
+    filterOrders();
+}
+
+// Check if order matches date filter
+function matchesDateFilter(order) {
+    if (selectedDateFilter.type === 'all') {
+        return true;
+    }
+    
+    const orderDate = new Date(order.created_at);
+    orderDate.setHours(0, 0, 0, 0); // Reset to start of day for comparison
+    
+    if (selectedDateFilter.type === 'single') {
+        const filterDate = new Date(selectedDateFilter.singleDate);
+        filterDate.setHours(0, 0, 0, 0);
+        return orderDate.getTime() === filterDate.getTime();
+    }
+    
+    if (selectedDateFilter.type === 'range') {
+        const startDate = new Date(selectedDateFilter.startDate);
+        const endDate = new Date(selectedDateFilter.endDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999); // End of day
+        
+        return orderDate >= startDate && orderDate <= endDate;
+    }
+    
+    return true;
 }

@@ -25,7 +25,7 @@ class InvoiceImageUpload(BaseModel):
 # Get all orders for admin dashboard
 @router.get("")
 async def get_all_orders(request: Request):
-    """Get all orders with user details and product information"""
+    """Get all orders with user details and product information - OPTIMIZED"""
     try:
         db = get_mongo_db()
         orders_collection = db['orders']
@@ -35,7 +35,60 @@ async def get_all_orders(request: Request):
         # Get all orders sorted by created_at (newest first)
         orders = list(orders_collection.find().sort("created_at", -1))
         
-        # Enrich orders with user and product details
+        if not orders:
+            return {"success": True, "orders": []}
+        
+        # OPTIMIZATION: Collect all unique user phones/IDs and product keys
+        user_phones = set()
+        user_ids = set()
+        product_keys = set()
+        
+        for order in orders:
+            if order.get('user_phone'):
+                user_phones.add(order['user_phone'])
+            if order.get('user_id'):
+                user_ids.add(order['user_id'])
+            
+            for item in order.get('items', []):
+                # Create unique key for product lookup
+                key = f"{item.get('section')}|{item.get('main_category')}|{item.get('subcategory')}|{item.get('item_id')}"
+                product_keys.add(key)
+        
+        # BATCH QUERY 1: Fetch all users at once
+        user_lookup = {}
+        if user_phones or user_ids:
+            all_user_identifiers = list(user_phones | user_ids)
+            users = users_collection.find({
+                "$or": [
+                    {"phone": {"$in": all_user_identifiers}},
+                    {"user_id": {"$in": all_user_identifiers}}
+                ]
+            })
+            for user in users:
+                phone = user.get('phone')
+                user_id = user.get('user_id')
+                if phone:
+                    user_lookup[phone] = user
+                if user_id:
+                    user_lookup[user_id] = user
+        
+        # BATCH QUERY 2: Fetch all products at once
+        product_lookup = {}
+        if product_keys:
+            # Extract unique combinations for query
+            section_set = set()
+            for order in orders:
+                for item in order.get('items', []):
+                    if item.get('section'):
+                        section_set.add(item.get('section'))
+            
+            # Fetch products (all if reasonable count, otherwise we'd need more complex query)
+            products = products_collection.find({})
+            for product in products:
+                key = f"{product.get('section')}|{product.get('main_category')}|{product.get('subcategory')}|{product.get('item_id')}"
+                product_lookup[key] = product
+        
+        # ENRICH: Now process orders with pre-loaded data (no more DB queries in loop)
         enriched_orders = []
         for order in orders:
             order['_id'] = str(order['_id'])
@@ -44,21 +97,15 @@ async def get_all_orders(request: Request):
             if 'order_id' not in order:
                 order['order_id'] = str(order['_id'])
             
-            # Get user details - support both user_phone and user_id fields
+            # Get user details from pre-loaded lookup
             user_phone = order.get('user_phone')
             user_id = order.get('user_id')
             
-            user = None
-            if user_phone:
-                user = users_collection.find_one({"phone": user_phone})
-            elif user_id:
-                # Try to find by user_id or phone (user_id might be phone)
-                user = users_collection.find_one({"user_id": user_id}) or users_collection.find_one({"phone": user_id})
+            user = user_lookup.get(user_phone) or user_lookup.get(user_id)
             
             if user:
                 order['user_name'] = user.get('name', 'Unknown')
                 order['user_store_name'] = user.get('store_name', '')
-                # Ensure user_phone is set for display
                 if not user_phone:
                     order['user_phone'] = user.get('phone', user_id)
             else:
@@ -66,16 +113,11 @@ async def get_all_orders(request: Request):
                 order['user_store_name'] = ''
                 order['user_phone'] = user_phone or user_id or 'N/A'
             
-            # Enrich items with product details and images
+            # Enrich items with product details from pre-loaded lookup
             enriched_items = []
             for item in order.get('items', []):
-                # Find the product to get current stock and image
-                product = products_collection.find_one({
-                    "section": item.get('section'),
-                    "main_category": item.get('main_category'),
-                    "subcategory": item.get('subcategory'),
-                    "item_id": item.get('item_id')
-                })
+                key = f"{item.get('section')}|{item.get('main_category')}|{item.get('subcategory')}|{item.get('item_id')}"
+                product = product_lookup.get(key)
                 
                 if product:
                     item['current_stock'] = product.get('stock', 0)
@@ -89,7 +131,7 @@ async def get_all_orders(request: Request):
             order['items'] = enriched_items
             enriched_orders.append(order)
         
-        logger.info(f"Retrieved {len(enriched_orders)} orders for admin dashboard")
+        logger.info(f"Retrieved {len(enriched_orders)} orders for admin dashboard (OPTIMIZED)")
         
         return {
             "success": True,

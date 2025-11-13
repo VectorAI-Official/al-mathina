@@ -20,7 +20,6 @@ body {
     width: 100%;
     box-sizing: border-box;
 }
-}
 
 .orders-header {
     margin-bottom: 40px;
@@ -1274,5 +1273,154 @@ body {
         right: 20px;
         left: 20px;
         max-width: calc(100% - 40px);
+    }
+}
+
+/* Date Filter Modals */
+#singleDateModal,
+#rangeDateModal {
+    display: none;
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    animation: fadeIn 0.3s;
+}
+
+#singleDateModal > div,
+#rangeDateModal > div {
+    background: white;
+    margin: 15% auto;
+    padding: 30px;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#singleDateModal h3,
+#rangeDateModal h3 {
+    margin: 0 0 20px 0;
+    color: #1B5E20;
+    font-size: 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#singleDateModal input[type="date"],
+#rangeDateModal input[type="date"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #4CAF50;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 15px;
+    transition: all 0.3s;
+}
+
+#singleDateModal input[type="date"]:focus,
+#rangeDateModal input[type="date"]:focus {
+    outline: none;
+    border-color: #2E7D32;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+#rangeDateModal .date-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#rangeDateModal .date-input-group {
+    display: flex;
+    flex-direction: column;
+}
+
+#rangeDateModal .date-input-group label {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.date-modal-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.date-modal-buttons button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.date-modal-buttons .btn-apply {
+    background: #4CAF50;
+    color: white;
+}
+
+.date-modal-buttons .btn-apply:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.date-modal-buttons .btn-cancel {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.date-modal-buttons .btn-cancel:hover {
+    background: #e0e0e0;
+}
+
+#dateDisplayGroup {
+    background: #E8F5E9;
+    padding: 8px 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#dateDisplay {
+    color: #2E7D32;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+#dateDisplayGroup button {
+    background: transparent;
+    border: none;
+    color: #d32f2f;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+#dateDisplayGroup button:hover {
+    background: rgba(211, 47, 47, 0.1);
+}
+
+@media (max-width: 768px) {
+    #singleDateModal > div,
+    #rangeDateModal > div {
+        margin: 30% auto;
+        width: 85%;
     }
 }

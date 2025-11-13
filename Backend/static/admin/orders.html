@@ -101,6 +101,27 @@
                     <option value="cancelled">Cancelled</option>
                 </select>
             </div>
+            <div class="filter-group">
+                <label for="dateFilter">
+                    <i class="fas fa-calendar-alt"></i> Filter by Date
+                </label>
+                <select id="dateFilter" onchange="handleDateFilterChange()">
+                    <option value="all">All Days</option>
+                    <option value="single">Select Date</option>
+                    <option value="range">Date Range</option>
+                </select>
+            </div>
+            <div class="filter-group" id="dateDisplayGroup" style="display: none;">
+                <label>
+                    <i class="fas fa-calendar-check"></i> Selected Date(s)
+                </label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="dateDisplay" style="padding: 8px 12px; background: #f5f5f5; border-radius: 4px; font-size: 14px;"></span>
+                    <button onclick="clearDateFilter()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Orders Container -->
@@ -125,8 +146,51 @@
         </div>
     </div>
 
-    <!-- html2canvas library for WhatsApp image sharing -->
+    <!-- Single Date Picker Modal -->
+    <div id="singleDateModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-calendar"></i> Select Date</h2>
+                <span class="close-modal" onclick="closeDateModal()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <input type="date" id="singleDatePicker" class="date-picker-input" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #4CAF50; border-radius: 4px;">
+                <div style="margin-top: 20px; text-align: right;">
+                    <button onclick="closeDateModal()" class="btn btn-secondary" style="margin-right: 10px;">Cancel</button>
+                    <button onclick="applySingleDate()" class="btn btn-primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Range Picker Modal -->
+    <div id="rangeDateModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-calendar-week"></i> Select Date Range</h2>
+                <span class="close-modal" onclick="closeDateModal()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">From Date:</label>
+                    <input type="date" id="startDatePicker" class="date-picker-input" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #4CAF50; border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">To Date:</label>
+                    <input type="date" id="endDatePicker" class="date-picker-input" style="width: 100%; padding: 10px; font-size: 16px; border: 2px solid #4CAF50; border-radius: 4px;">
+                </div>
+                <div style="text-align: right;">
+                    <button onclick="closeDateModal()" class="btn btn-secondary" style="margin-right: 10px;">Cancel</button>
+                    <button onclick="applyDateRange()" class="btn btn-primary">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- html2canvas library for PDF generation -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <!-- jsPDF library for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <script src="js/orders.js"></script>
 </body>

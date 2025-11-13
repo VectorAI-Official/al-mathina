@@ -8007,31 +8007,15 @@ class FloatingCartButton extends StatelessWidget {
     // Calculate proper bottom position: bottom nav bar height (56) + desired gap (5)
     final calculatedBottom = bottomPosition ?? (kBottomNavigationBarHeight + 5);
 
-    return Positioned(
+  return Positioned(
       bottom: calculatedBottom,
       left: (screenWidth - buttonWidth) / 2,
       child: GestureDetector(
         onTap: () {
-          // Try to find MainScreen in the widget tree first
-          final mainScreenState = context.findAncestorStateOfType<_MainScreenState>();
-          
-          if (mainScreenState != null) {
-            // We're inside MainScreen, just switch tab
-            mainScreenState.setState(() {
-              mainScreenState.currentIndex = 3; // Switch to cart tab (index 3)
-            });
-          } else {
-            // We're in a pushed route (like subcategory page)
-            // Use the global key to access MainScreen and pop back to it
-            if (mainScreenKey.currentState != null) {
-              // Pop back to MainScreen
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              // Switch to cart tab
-              mainScreenKey.currentState!.setState(() {
-                mainScreenKey.currentState!.currentIndex = 3;
-              });
-            }
-          }
+          // Always push CartScreen so system back returns to the previous page
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CartScreen()),
+          );
         },
         child: Container(
           width: buttonWidth,

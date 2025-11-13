@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/saved_account.dart';
 import '../services/shared_prefs_service.dart';
 import '../screens/phone_auth_screen.dart';
@@ -27,11 +27,22 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
     
     try {
       final accounts = await SharedPrefsService.getSavedAccounts();
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final prefs = await SharedPreferences.getInstance();
+      final currentPhone = prefs.getString('userPhone');
+      
+      // Find current user UID from phone number
+      String? currentUid;
+      if (currentPhone != null) {
+        final currentAccount = accounts.firstWhere(
+          (acc) => acc.phoneNumber == currentPhone,
+          orElse: () => SavedAccount(uid: '', phoneNumber: ''),
+        );
+        currentUid = currentAccount.uid.isNotEmpty ? currentAccount.uid : null;
+      }
       
       setState(() {
         _savedAccounts = accounts;
-        _currentUserUid = currentUser?.uid;
+        _currentUserUid = currentUid;
         _isLoading = false;
       });
     } catch (e) {
@@ -57,8 +68,10 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
     }
 
     try {
-      // Sign out from current account
-      await FirebaseAuth.instance.signOut();
+      // Clear current user session
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('userPhone');
+      await prefs.remove('isOldUser');
       
       // Close loading dialog
       if (mounted) {

@@ -7,9 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart';
 import 'api_service.dart';
 import 'screens/phone_auth_screen.dart';
 import 'screens/account_switcher_page.dart';
@@ -66,21 +63,13 @@ const Map<String, Map<String, String>> translations = {
     'al_mathina': 'Al-Mathina',
     'traders': 'Traders',
     'welcome_back': 'Welcome Back',
-    'enter_otp': 'Enter OTP',
     'phone_number': 'Phone Number',
     'enter_the_number': 'Enter the Number',
-    'enter_6_digit_otp': 'Enter 6-Digit OTP',
-    'otp_sent_to': 'OTP sent to',
     'change_phone_number': 'Change Phone Number',
     'invalid_phone_number': 'Invalid phone number',
     'please_enter_10_digit': 'Please enter the 10 digit number',
-    'invalid_otp': 'Invalid OTP. Please try again.',
-    'otp_expired': 'OTP expired. Please request a new one.',
     'verification_failed': 'Verification failed',
     'connection_error': 'Connection error. Please try again.',
-    'too_many_attempts': 'Too many attempts. Please try again later',
-    'sms_quota_exceeded': 'SMS quota exceeded',
-    'auto_signin_failed': 'Auto sign-in failed',
     
     // Payment & Checkout
     'payment_upi': 'Pay via UPI/Apps',
@@ -229,21 +218,13 @@ const Map<String, Map<String, String>> translations = {
     'al_mathina': 'அல்-மதீனா',
     'traders': 'வணிகர்கள்',
     'welcome_back': 'மீண்டும் வருக',
-    'enter_otp': 'OTP ஐ உள்ளிடவும்',
     'phone_number': 'தொலைபேசி எண்',
     'enter_the_number': 'எண்ணை உள்ளிடவும்',
-    'enter_6_digit_otp': '6-இலக்க OTP உள்ளிடவும்',
-    'otp_sent_to': 'OTP அனுப்பப்பட்டது',
     'change_phone_number': 'தொலைபேசி எண்ணை மாற்று',
     'invalid_phone_number': 'தவறான தொலைபேசி எண்',
     'please_enter_10_digit': 'தயவுசெய்து 10 இலக்க எண்ணை உள்ளிடவும்',
-    'invalid_otp': 'தவறான OTP. மீண்டும் முயற்சிக்கவும்.',
-    'otp_expired': 'OTP காலாவதியானது. புதிய ஒன்றைக் கோரவும்.',
     'verification_failed': 'சரிபார்ப்பு தோல்வியடைந்தது',
     'connection_error': 'இணைப்பு பிழை. மீண்டும் முயற்சிக்கவும்.',
-    'too_many_attempts': 'பல முயற்சிகள். பிறகு முயற்சிக்கவும்',
-    'sms_quota_exceeded': 'SMS ஒதுக்கீடு மீறப்பட்டது',
-    'auto_signin_failed': 'தானியங்கி உள்நுழைவு தோல்வியடைந்தது',
     
     // Cart
     'total': 'தொகை:',
@@ -586,15 +567,12 @@ class AppProvider with ChangeNotifier {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 
   // Create AppProvider and load saved language preference
   final appProvider = AppProvider();
-  await appProvider.loadLanguage();  runApp(
+  await appProvider.loadLanguage();
+  
+  runApp(
     ChangeNotifierProvider(
       create: (context) => appProvider,
       child: const MyApp(),
@@ -6290,13 +6268,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // Sign out from Firebase
-              try {
-                await FirebaseAuth.instance.signOut();
-              } catch (e) {
-                print('Firebase sign out error: $e');
-              }
-              
               // Clear local storage
               final prefs = await SharedPreferences.getInstance();
               await prefs.remove('isOldUser');

@@ -1053,7 +1053,7 @@ function generateInvoiceHTML(order, opts = {}) {
       <div class="company-info">
         <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
         <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
-        <div class="phone-numbers">7339051541, 8754144759, <span class="emergency-number">8870503350</span></div>
+        <div class="phone-numbers">7339651541, 8754144759, <span class="emergency-number">8870503350</span></div>
         <div class="address">
           பாரிநகர் 2வது தெரு, அன்னா நகர்,<br/>
           வடக்கு காட்டூர், திருச்சி - 620019.
@@ -1272,9 +1272,10 @@ function formatDateTime(dateString) {
         month: 'short', 
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: true
     };
-    return date.toLocaleDateString('en-US', options);
+    return date.toLocaleString('en-US', options);
 }
 
 // Show loading state

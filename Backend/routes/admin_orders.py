@@ -526,3 +526,50 @@ async def get_order_statistics(request: Request):
     except Exception as e:
         logger.error(f"Error fetching order statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Search products for adding to orders
+@router.get("/products/search", tags=["Admin Products"])
+async def search_products(q: str, request: Request):
+    """Search products by name for adding to orders"""
+    try:
+        if not q or len(q.strip()) < 2:
+            return {"success": False, "message": "Search query too short", "products": []}
+        
+        db = get_mongo_db()
+        products_collection = db['products']
+        
+        # Search products by name (case-insensitive)
+        search_query = {
+            "$or": [
+                {"product_name": {"$regex": q, "$options": "i"}},
+                {"product_name_tamil": {"$regex": q, "$options": "i"}}
+            ]
+        }
+        
+        products = list(products_collection.find(search_query).limit(20))
+        
+        # Format products for response
+        formatted_products = []
+        for product in products:
+            formatted_products.append({
+                "item_id": product.get('item_id', ''),
+                "product_name": product.get('product_name', 'Unknown'),
+                "product_name_tamil": product.get('product_name_tamil', ''),
+                "weight": product.get('weight', ''),
+                "price": float(product.get('price', 0)),
+                "section": product.get('section', ''),
+                "main_category": product.get('main_category', ''),
+                "subcategory": product.get('subcategory', '')
+            })
+        
+        logger.info(f"Product search for '{q}': Found {len(formatted_products)} products")
+        
+        return {
+            "success": True,
+            "products": formatted_products,
+            "count": len(formatted_products)
+        }
+    
+    except Exception as e:
+        logger.error(f"Error searching products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

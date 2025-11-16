@@ -291,6 +291,21 @@ function showOrderDetailsModal(order) {
                             <i class="fas fa-edit"></i> Edit
                         </button>
                     </h3>
+                    <!-- Add Product Search (hidden by default, shown in edit mode) -->
+                    <div id="addProductContainer" style="display: none; margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1B5E20;"><i class="fas fa-plus-circle"></i> Add Product to Order</h4>
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <div style="flex: 1; position: relative;">
+                                <input type="text" id="productSearchInput" placeholder="Search product by name..." 
+                                    style="width: 100%; padding: 10px; border: 2px solid #4CAF50; border-radius: 6px; font-size: 14px;"
+                                    onkeyup="searchProducts(this.value)">
+                                <div id="productSearchResults" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"></div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="clearProductSearch()" style="padding: 10px 20px;">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                    </div>
                     <div class="items-table">
                         <table id="orderItemsTable">
                             <thead>
@@ -300,11 +315,12 @@ function showOrderDetailsModal(order) {
                                     <th>Price</th>
                                     <th>Qty</th>
                                     <th>Total</th>
+                                    <th style="display: none;" class="edit-only-column">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${order.items.map((item, index) => `
-                                    <tr data-item-index="${index}" data-product-id="${item.product_id || ''}" data-price="${item.price}">
+                                    <tr data-item-index="${index}" data-product-id="${item.product_id || ''}" data-price="${item.price}" data-weight="${item.weight || ''}">
                                         <td><strong>${item.product_name}</strong></td>
                                         <td>${item.weight || '-'}</td>
                                         <td class="price-cell">
@@ -316,6 +332,11 @@ function showOrderDetailsModal(order) {
                                             <input type="number" class="qty-input" value="${item.quantity}" min="1" style="display: none;" data-original="${item.quantity}">
                                         </td>
                                         <td class="item-total"><strong>₹${(item.price * item.quantity).toFixed(2)}</strong></td>
+                                        <td style="display: none;" class="edit-only-column">
+                                            <button class="btn-delete-item" onclick="removeOrderItem(this)" style="display: none; background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" title="Remove item">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -617,6 +638,14 @@ function toggleEditMode() {
         el.style.border = '2px solid #4CAF50';
     });
     
+    // Show add product container
+    const addProductContainer = document.getElementById('addProductContainer');
+    if (addProductContainer) addProductContainer.style.display = 'block';
+    
+    // Show delete buttons and action column
+    document.querySelectorAll('.edit-only-column').forEach(el => el.style.display = 'table-cell');
+    document.querySelectorAll('.btn-delete-item').forEach(btn => btn.style.display = 'inline-block');
+    
     // Add event listeners
     document.querySelectorAll('.qty-input').forEach(input => input.addEventListener('input', updateItemTotal));
     document.querySelectorAll('.price-input').forEach(input => input.addEventListener('input', updateItemTotal));
@@ -638,6 +667,15 @@ function cancelEditMode() {
     // Reset price inputs
     document.querySelectorAll('.price-input').forEach(input => { input.value = input.dataset.original; input.style.display='none'; });
     document.querySelectorAll('.price-display').forEach(el => el.style.display='inline');
+    
+    // Hide add product container
+    const addProductContainer = document.getElementById('addProductContainer');
+    if (addProductContainer) addProductContainer.style.display = 'none';
+    clearProductSearch();
+    
+    // Hide delete buttons and action column
+    document.querySelectorAll('.edit-only-column').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.btn-delete-item').forEach(btn => btn.style.display = 'none');
     
     const saveContainer = document.getElementById('saveButtonContainer');
     if (saveContainer) saveContainer.style.display='none';
@@ -1609,3 +1647,194 @@ function matchesDateFilter(order) {
     
     return true;
 }
+
+// ============ PRODUCT SEARCH AND ADD FUNCTIONS ============
+
+let searchTimeout = null;
+let allProducts = [];
+
+// Search products from backend
+async function searchProducts(query) {
+    clearTimeout(searchTimeout);
+    
+    if (query.trim().length < 2) {
+        document.getElementById('productSearchResults').style.display = 'none';
+        return;
+    }
+    
+    // Show loading indicator
+    const resultsContainer = document.getElementById('productSearchResults');
+    resultsContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Searching...</div>';
+    resultsContainer.style.display = 'block';
+    
+    searchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/admin/orders/products/search?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            
+            if (data.success && data.products.length > 0) {
+                displaySearchResults(data.products);
+            } else {
+                resultsContainer.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <i class="fas fa-search" style="font-size: 32px; color: #ccc; margin-bottom: 8px;"></i>
+                        <div style="font-size: 14px;">No products found for "${query}"</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;">Try a different search term</div>
+                    </div>
+                `;
+                resultsContainer.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error searching products:', error);
+            resultsContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #f44336;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 8px;"></i>
+                    <div style="font-size: 14px;">Error loading products</div>
+                    <div style="font-size: 12px; color: #999; margin-top: 4px;">${error.message}</div>
+                </div>
+            `;
+            resultsContainer.style.display = 'block';
+        }
+    }, 300);
+}
+
+// Display search results
+function displaySearchResults(products) {
+    const resultsContainer = document.getElementById('productSearchResults');
+    
+    resultsContainer.innerHTML = products.map(product => {
+        const tamilName = product.product_name_tamil || '';
+        const displayName = tamilName ? `${product.product_name} / ${tamilName}` : product.product_name;
+        
+        return `
+            <div class="product-search-item" 
+                onclick="addProductToOrder('${product.item_id}', '${product.product_name.replace(/'/g, "\\'")}', '${product.weight || ''}', ${product.price})" 
+                style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;" 
+                onmouseover="this.style.background='#f5f5f5'" 
+                onmouseout="this.style.background='white'">
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 4px;">
+                        <strong style="color: #1B5E20; font-size: 14px;">${product.product_name}</strong>
+                        ${tamilName ? `<span style="color: #666; font-size: 13px; margin-left: 6px;">/ ${tamilName}</span>` : ''}
+                    </div>
+                    <div style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 12px;">
+                        <span><i class="fas fa-weight-hanging" style="margin-right: 4px;"></i>${product.weight || 'N/A'}</span>
+                        <span><i class="fas fa-rupee-sign" style="margin-right: 4px;"></i>${parseFloat(product.price).toFixed(2)}</span>
+                        ${product.section ? `<span style="background: #E8F5E9; padding: 2px 8px; border-radius: 12px; color: #2E7D32; font-size: 11px;">${product.section}</span>` : ''}
+                    </div>
+                </div>
+                <i class="fas fa-plus-circle" style="color: #4CAF50; font-size: 20px;"></i>
+            </div>
+        `;
+    }).join('');
+    
+    resultsContainer.style.display = 'block';
+}
+
+// Add product to order items table
+function addProductToOrder(itemId, productName, weight, price) {
+    const tbody = document.querySelector('#orderItemsTable tbody');
+    
+    // Check if product already exists
+    const existingRow = Array.from(tbody.querySelectorAll('tr')).find(row => {
+        const existingName = row.querySelector('td:first-child strong')?.textContent;
+        const existingWeight = row.dataset.weight;
+        return existingName === productName && existingWeight === weight;
+    });
+    
+    if (existingRow) {
+        // Increment quantity if product already exists
+        const qtyInput = existingRow.querySelector('.qty-input');
+        if (qtyInput) {
+            const currentQty = parseInt(qtyInput.value) || 0;
+            qtyInput.value = currentQty + 1;
+            qtyInput.dataset.original = qtyInput.value;
+            
+            // Update display
+            const qtyDisplay = existingRow.querySelector('.qty-display');
+            if (qtyDisplay) qtyDisplay.textContent = `×${qtyInput.value}`;
+            
+            // Recalculate totals
+            updateItemTotal({ target: qtyInput });
+        }
+        
+        showToast(`Quantity increased for ${productName}`, 'success');
+    } else {
+        // Add new row
+        const newIndex = tbody.children.length;
+        const newRow = document.createElement('tr');
+        newRow.dataset.itemIndex = newIndex;
+        newRow.dataset.productId = itemId;
+        newRow.dataset.price = price;
+        newRow.dataset.weight = weight;
+        
+        newRow.innerHTML = `
+            <td><strong>${productName}</strong></td>
+            <td>${weight || '-'}</td>
+            <td class="price-cell">
+                <span class="price-display" style="display: none;">₹${parseFloat(price).toFixed(2)}</span>
+                <input type="number" class="price-input" value="${price}" min="0" step="0.01" style="display: inline; width: 80px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="${price}">
+            </td>
+            <td class="qty-cell">
+                <span class="qty-display" style="display: none;">×1</span>
+                <input type="number" class="qty-input" value="1" min="1" style="display: inline; width: 60px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="1">
+            </td>
+            <td class="item-total"><strong>₹${parseFloat(price).toFixed(2)}</strong></td>
+            <td style="display: table-cell;" class="edit-only-column">
+                <button class="btn-delete-item" onclick="removeOrderItem(this)" style="display: inline-block; background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" title="Remove item">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(newRow);
+        
+        // Add event listeners to new inputs
+        const priceInput = newRow.querySelector('.price-input');
+        const qtyInput = newRow.querySelector('.qty-input');
+        if (priceInput) priceInput.addEventListener('input', updateItemTotal);
+        if (qtyInput) qtyInput.addEventListener('input', updateItemTotal);
+        
+        showToast(`${productName} added to order`, 'success');
+    }
+    
+    // Clear search
+    clearProductSearch();
+    
+    // Recalculate grand total
+    recalculateGrandTotal();
+}
+
+// Remove item from order
+function removeOrderItem(button) {
+    if (!confirm('Are you sure you want to remove this item?')) {
+        return;
+    }
+    
+    const row = button.closest('tr');
+    const productName = row.querySelector('td:first-child strong')?.textContent || 'Product';
+    
+    row.remove();
+    recalculateGrandTotal();
+    
+    showToast(`${productName} removed from order`, 'info');
+}
+
+// Clear product search
+function clearProductSearch() {
+    document.getElementById('productSearchInput').value = '';
+    document.getElementById('productSearchResults').style.display = 'none';
+    document.getElementById('productSearchResults').innerHTML = '';
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', function(event) {
+    const searchInput = document.getElementById('productSearchInput');
+    const searchResults = document.getElementById('productSearchResults');
+    
+    if (searchInput && searchResults && 
+        !searchInput.contains(event.target) && 
+        !searchResults.contains(event.target)) {
+        searchResults.style.display = 'none';
+    }
+});

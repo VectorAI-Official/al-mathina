@@ -130,8 +130,14 @@ function displayOrders(orders) {
                     <div class="customer-info">
                         <div class="info-row">
                             <i class="fas fa-user"></i>
-                            <span><strong>${order.user_name || 'Unknown Customer'}</strong>${order.user_store_name ? ` - <span style="color: #2E7D32; font-weight: 600;">${order.user_store_name}</span>` : ''}</span>
+                            <span><strong>${order.user_name || 'Unknown Customer'}</strong></span>
                         </div>
+                        ${order.user_store_name ? `
+                        <div class="info-row">
+                            <i class="fas fa-store"></i>
+                            <span style="color: #2E7D32; font-weight: 600;">${order.user_store_name}</span>
+                        </div>
+                        ` : ''}
                         <div class="info-row">
                             <i class="fas fa-phone"></i>
                             <span>${order.user_phone}</span>

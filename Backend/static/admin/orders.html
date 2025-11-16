@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Order Management - AL-Madhina Admin</title>
-    <link rel="stylesheet" href="css/orders.css?v=2.0">
+    <link rel="stylesheet" href="css/orders.css?v=2.2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -54,7 +54,7 @@
                     <p id="deliveredOrders">-</p>
                 </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" onclick="showRevenueDetails()" style="cursor: pointer;" title="Click to see revenue breakdown">
                 <div class="stat-icon purple">
                     <i class="fas fa-rupee-sign"></i>
                 </div>
@@ -187,11 +187,62 @@
         </div>
     </div>
 
+    <!-- Revenue Details Modal -->
+    <div id="revenueModal" class="modal" style="display: none;" onclick="if(event.target === this) closeRevenueModal();">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #7B1FA2 0%, #9C27B0 100%); color: white;">
+                <h2><i class="fas fa-chart-line"></i> Revenue Breakdown</h2>
+                <span class="close-modal" onclick="closeRevenueModal()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 30px;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <p style="color: #666; font-size: 14px; margin: 0;" id="revenueDateRange">All Time</p>
+                </div>
+                
+                <div style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <i class="fas fa-shopping-cart" style="color: #2196F3; font-size: 24px; margin-right: 10px;"></i>
+                            <span style="color: #666; font-size: 14px;">Total Orders Revenue</span>
+                        </div>
+                        <div style="font-size: 24px; font-weight: 700; color: #2196F3;" id="revenueTotalOrders">₹0.00</div>
+                    </div>
+                </div>
+                
+                <div style="background: #fff3e0; border-radius: 12px; padding: 20px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <i class="fas fa-clock" style="color: #FF9800; font-size: 24px; margin-right: 10px;"></i>
+                            <span style="color: #666; font-size: 14px;">Pending Revenue</span>
+                        </div>
+                        <div style="font-size: 24px; font-weight: 700; color: #FF9800;" id="revenuePending">₹0.00</div>
+                    </div>
+                </div>
+                
+                <div style="background: #e8f5e9; border-radius: 12px; padding: 20px; border-left: 4px solid #4CAF50;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <i class="fas fa-check-circle" style="color: #4CAF50; font-size: 24px; margin-right: 10px;"></i>
+                            <span style="color: #666; font-size: 14px;">Delivered Revenue</span>
+                        </div>
+                        <div style="font-size: 24px; font-weight: 700; color: #4CAF50;" id="revenueDelivered">₹0.00</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 25px; text-align: center;">
+                    <button onclick="closeRevenueModal()" class="btn btn-primary" style="padding: 12px 40px; font-size: 16px;">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- html2canvas library for PDF generation -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- jsPDF library for PDF generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <script src="js/orders.js?v=2.0"></script>
+    <script src="js/orders.js?v=2.3"></script></script>
 </body>
 </html>

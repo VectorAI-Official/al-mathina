@@ -435,6 +435,9 @@ body {
     background: rgba(0,0,0,0.6);
     overflow-y: auto;
     animation: fadeIn 0.3s;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
 @keyframes fadeIn {
@@ -444,7 +447,7 @@ body {
 
 .modal-content {
     background: white;
-    margin: 40px auto;
+    margin: auto;
     padding: 0;
     border-radius: 20px;
     width: 90%;

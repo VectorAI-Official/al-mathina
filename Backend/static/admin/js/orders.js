@@ -5,6 +5,7 @@
 
 // Global state
 let allOrders = [];
+let filteredOrders = []; // Currently filtered/displayed orders
 let currentOrder = null;
 let selectedDateFilter = {
     type: 'all', // 'all', 'single', 'range'
@@ -46,6 +47,20 @@ function setupEventListeners() {
     } else {
         console.warn('   ⚠️  Status filter not found');
     }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const revenueModal = document.getElementById('revenueModal');
+            const orderModal = document.getElementById('orderDetailsModal');
+            
+            if (revenueModal && revenueModal.style.display !== 'none') {
+                closeRevenueModal();
+            } else if (orderModal && orderModal.style.display !== 'none') {
+                closeOrderDetailsModal();
+            }
+        }
+    });
 }
 
 // Load all orders
@@ -65,6 +80,7 @@ async function loadOrders() {
         
         if (data.success) {
             allOrders = data.orders;
+            filteredOrders = data.orders; // Initialize filtered orders with all orders
             displayOrders(allOrders);
             updateOrderStats();
         } else {
@@ -1233,6 +1249,9 @@ function filterOrders() {
         
         console.log(`   ✅ Filtered: ${filtered.length} orders match criteria`);
         
+        // Store filtered orders globally
+        filteredOrders = filtered;
+        
         // Display filtered results
         displayOrders(filtered);
         
@@ -1270,6 +1289,9 @@ function updateFilteredStats(orders) {
         if (pendingOrdersEl) pendingOrdersEl.textContent = pending;
         if (deliveredOrdersEl) deliveredOrdersEl.textContent = delivered;
         if (totalRevenueEl) totalRevenueEl.textContent = `₹${totalRevenue.toFixed(2)}`;
+        
+        // Update revenue modal if it's open
+        updateRevenueModalIfOpen(orders);
     } catch (error) {
         console.error('❌ Error in updateFilteredStats:', error);
     }
@@ -1299,6 +1321,121 @@ async function updateOrderStats() {
 function closeOrderDetailsModal() {
     document.getElementById('orderDetailsModal').style.display = 'none';
     currentOrder = null;
+}
+
+// Get filtered orders based on current date filter
+function getFilteredOrders() {
+    let ordersToCalculate = allOrders;
+    
+    // Apply date filter if active
+    const dateFilterBtn = document.querySelector('.date-filter-btn');
+    if (dateFilterBtn && dateFilterBtn.textContent.includes('Single Date')) {
+        const selectedDate = dateFilterBtn.getAttribute('data-date');
+        if (selectedDate) {
+            ordersToCalculate = allOrders.filter(order => {
+                const orderDate = new Date(order.created_at).toISOString().split('T')[0];
+                return orderDate === selectedDate;
+            });
+        }
+    } else if (dateFilterBtn && dateFilterBtn.textContent.includes('Date Range')) {
+        const startDate = dateFilterBtn.getAttribute('data-start');
+        const endDate = dateFilterBtn.getAttribute('data-end');
+        if (startDate && endDate) {
+            ordersToCalculate = allOrders.filter(order => {
+                const orderDate = new Date(order.created_at).toISOString().split('T')[0];
+                return orderDate >= startDate && orderDate <= endDate;
+            });
+        }
+    }
+    
+    return ordersToCalculate;
+}
+
+// Calculate revenue breakdown
+function calculateRevenueBreakdown(orders) {
+    const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+    const pendingRevenue = orders
+        .filter(o => o.status === 'pending')
+        .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+    const deliveredRevenue = orders
+        .filter(o => o.status === 'delivered')
+        .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+    
+    return { totalRevenue, pendingRevenue, deliveredRevenue };
+}
+
+// Update date range display in revenue modal
+function updateRevenueDateDisplay() {
+    const dateRangeEl = document.getElementById('revenueDateRange');
+    if (!dateRangeEl) return;
+    
+    const dateFilterBtn = document.querySelector('.date-filter-btn');
+    if (dateFilterBtn) {
+        const filterText = dateFilterBtn.textContent.trim();
+        if (filterText.includes('Single Date')) {
+            const selectedDate = dateFilterBtn.getAttribute('data-date');
+            if (selectedDate) {
+                const date = new Date(selectedDate);
+                dateRangeEl.textContent = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+        } else if (filterText.includes('Date Range')) {
+            const startDate = dateFilterBtn.getAttribute('data-start');
+            const endDate = dateFilterBtn.getAttribute('data-end');
+            if (startDate && endDate) {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                dateRangeEl.textContent = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            }
+        } else {
+            dateRangeEl.textContent = 'All Time';
+        }
+    } else {
+        dateRangeEl.textContent = 'All Time';
+    }
+}
+
+// Update revenue modal if it's currently open
+function updateRevenueModalIfOpen(orders) {
+    const modal = document.getElementById('revenueModal');
+    if (!modal || modal.style.display === 'none') return;
+    
+    // Recalculate and update revenue values
+    const { totalRevenue, pendingRevenue, deliveredRevenue } = calculateRevenueBreakdown(orders);
+    
+    const totalEl = document.getElementById('revenueTotalOrders');
+    const pendingEl = document.getElementById('revenuePending');
+    const deliveredEl = document.getElementById('revenueDelivered');
+    
+    if (totalEl) totalEl.textContent = `₹${totalRevenue.toFixed(2)}`;
+    if (pendingEl) pendingEl.textContent = `₹${pendingRevenue.toFixed(2)}`;
+    if (deliveredEl) deliveredEl.textContent = `₹${deliveredRevenue.toFixed(2)}`;
+    
+    // Update date display
+    updateRevenueDateDisplay();
+}
+
+// Show revenue details modal
+function showRevenueDetails() {
+    const modal = document.getElementById('revenueModal');
+    
+    // Use currently filtered orders
+    const ordersToCalculate = filteredOrders.length > 0 ? filteredOrders : allOrders;
+    const { totalRevenue, pendingRevenue, deliveredRevenue } = calculateRevenueBreakdown(ordersToCalculate);
+    
+    // Update modal content
+    document.getElementById('revenueTotalOrders').textContent = `₹${totalRevenue.toFixed(2)}`;
+    document.getElementById('revenuePending').textContent = `₹${pendingRevenue.toFixed(2)}`;
+    document.getElementById('revenueDelivered').textContent = `₹${deliveredRevenue.toFixed(2)}`;
+    
+    // Update date range display
+    updateRevenueDateDisplay();
+    
+    modal.style.display = 'flex';
+}
+
+// Close revenue modal
+function closeRevenueModal() {
+    document.getElementById('revenueModal').style.display = 'none';
 }
 
 // Format date and time

@@ -130,14 +130,11 @@ function displayOrders(orders) {
                     <div class="customer-info">
                         <div class="info-row">
                             <i class="fas fa-user"></i>
-                            <span><strong>${order.user_name || 'Unknown Customer'}</strong></span>
+                            <span>
+                                <strong>${order.user_name || 'Unknown Customer'}</strong>
+                                ${order.user_store_name ? `<span style="color: #2E7D32; font-weight: 600; margin-left: 8px;">(<i class="fas fa-store" style="margin-right: 4px;"></i>${order.user_store_name})</span>` : ''}
+                            </span>
                         </div>
-                        ${order.user_store_name ? `
-                        <div class="info-row">
-                            <i class="fas fa-store"></i>
-                            <span style="color: #2E7D32; font-weight: 600;">${order.user_store_name}</span>
-                        </div>
-                        ` : ''}
                         <div class="info-row">
                             <i class="fas fa-phone"></i>
                             <span>${order.user_phone}</span>
@@ -928,6 +925,7 @@ function generateInvoiceHTML(order, opts = {}) {
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
       ${shareMode ? `padding: ${pagePadding}px;` : 'max-width: 1000px; padding: 40px;'}
+      ${shareMode || printMode ? `padding-bottom: 60px;` : ''} /* Add bottom spacing for share and print */
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1140,6 +1138,7 @@ function generateInvoiceHTML(order, opts = {}) {
         width: 100%;
         max-width: 100%;
         padding: 15mm;
+        padding-bottom: 20mm; /* Bottom spacing for print */
       }
       
       .items-table tbody tr:hover {
@@ -1153,6 +1152,11 @@ function generateInvoiceHTML(order, opts = {}) {
       .total-section,
       .invoice-footer {
         page-break-inside: avoid;
+      }
+      
+      /* Add page break after large tables */
+      .items-table tbody tr:nth-child(15) {
+        page-break-after: auto;
       }
     }
   </style>

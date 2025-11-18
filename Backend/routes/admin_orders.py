@@ -118,7 +118,9 @@ async def get_all_orders(request: Request):
             
             if user:
                 order['user_name'] = user.get('name', 'Unknown')
-                order['user_store_name'] = user.get('store_name', '')
+                # Get store_name from store_details nested object
+                store_details = user.get('store_details', {})
+                order['user_store_name'] = store_details.get('store_name', '') if isinstance(store_details, dict) else ''
                 if not user_phone:
                     order['user_phone'] = user.get('phone', user_id)
             else:

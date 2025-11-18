@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 import base64, os, time, re
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from database.mongodb_client import get_mongo_db
 import logging
@@ -15,6 +15,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/orders", tags=["Admin Orders"])
+
+# Utility: Convert datetime to ISO8601 string with UTC timezone suffix 'Z'
+def _iso(dt):
+    try:
+        if isinstance(dt, datetime):
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            else:
+                dt = dt.astimezone(timezone.utc)
+            return dt.isoformat().replace("+00:00", "Z")
+        return dt
+    except Exception:
+        return dt
 
 class UpdateOrderStatusRequest(BaseModel):
     status: str  # 'delivered', 'cancelled', 'pending'
@@ -129,6 +142,14 @@ async def get_all_orders(request: Request):
                 enriched_items.append(item)
             
             order['items'] = enriched_items
+
+            # Normalize datetime fields for consistent frontend parsing
+            if 'created_at' in order:
+                order['created_at'] = _iso(order.get('created_at'))
+            if 'updated_at' in order:
+                order['updated_at'] = _iso(order.get('updated_at'))
+            if 'estimated_delivery' in order:
+                order['estimated_delivery'] = _iso(order.get('estimated_delivery'))
             enriched_orders.append(order)
         
         logger.info(f"Retrieved {len(enriched_orders)} orders for admin dashboard (OPTIMIZED)")
@@ -219,6 +240,14 @@ async def get_order_by_id(order_id: str, request: Request):
             enriched_items.append(item)
         
         order['items'] = enriched_items
+
+        # Normalize datetime fields for consistent frontend parsing
+        if 'created_at' in order:
+            order['created_at'] = _iso(order.get('created_at'))
+        if 'updated_at' in order:
+            order['updated_at'] = _iso(order.get('updated_at'))
+        if 'estimated_delivery' in order:
+            order['estimated_delivery'] = _iso(order.get('estimated_delivery'))
         
         logger.info(f"Retrieved order details: {order_id}")
         

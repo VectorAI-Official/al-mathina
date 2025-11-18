@@ -521,6 +521,9 @@ async function shareInvoiceWhatsApp(orderId) {
         
         const invoiceHTML = generateInvoiceHTML(order, { shareMode: true });
         
+        // Detect mobile device
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
         // Create a hidden container with A4 dimensions for rendering
         const container = document.createElement('div');
         container.style.position = 'fixed';
@@ -528,24 +531,39 @@ async function shareInvoiceWhatsApp(orderId) {
         container.style.top = '0';
         container.style.width = '794px'; // A4 width at 96dpi
         container.style.background = '#ffffff';
+        container.style.overflow = 'visible';
+        // Force proper scaling on mobile
+        if (isMobile) {
+            container.style.transform = 'scale(1)';
+            container.style.transformOrigin = 'top left';
+        }
         document.body.appendChild(container);
         
         container.innerHTML = invoiceHTML;
         
-        // Wait for fonts and rendering
-        await new Promise(r => setTimeout(r, 1000));
+        // Wait longer on mobile for proper rendering
+        await new Promise(r => setTimeout(r, isMobile ? 1500 : 1000));
+        
+        // Get actual rendered dimensions
+        const invoiceElement = container.querySelector('.invoice-container');
+        const actualWidth = invoiceElement.offsetWidth || 794;
+        
+        console.log(`Rendering canvas at ${actualWidth}px width (mobile: ${isMobile})`);
         
         // Capture invoice as canvas with high quality
-        const canvas = await html2canvas(container.querySelector('.invoice-container'), {
-            scale: 2,
+        const canvas = await html2canvas(invoiceElement, {
+            scale: 2, // Always use 2x for quality
             useCORS: true,
             allowTaint: false,
             backgroundColor: '#ffffff',
             logging: false,
-            width: 794,
-            windowWidth: 794,
+            width: actualWidth,
+            windowWidth: actualWidth,
             scrollY: -window.scrollY,
-            scrollX: -window.scrollX
+            scrollX: -window.scrollX,
+            // Force proper rendering on mobile
+            foreignObjectRendering: false,
+            imageTimeout: 0
         });
         
         // Clean up container
@@ -877,7 +895,7 @@ function generateInvoiceHTML(order, opts = {}) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Invoice - Order #${order.order_id}</title>
   <style>
     * { 
@@ -891,6 +909,11 @@ function generateInvoiceHTML(order, opts = {}) {
       margin: 0;
     }
     
+    html {
+      width: ${shareMode ? pageWidth : 'auto'}px;
+      ${shareMode ? 'overflow-x: hidden;' : ''}
+    }
+    
     body { 
       font-family: 'Arial', 'Helvetica', sans-serif;
       background: #ffffff;
@@ -898,11 +921,14 @@ function generateInvoiceHTML(order, opts = {}) {
       line-height: 1.6;
       margin: 0;
       padding: 0;
-      ${shareMode ? `width: ${pageWidth}px; margin: 0 auto;` : ''}
+      width: ${shareMode ? pageWidth : 'auto'}px;
+      ${shareMode ? 'overflow-x: hidden;' : ''}
     }
     
     .invoice-container {
-      ${shareMode ? `width: 100%; padding: ${pagePadding}px; box-sizing: border-box;` : 'max-width: 1000px; padding: 40px; box-sizing: border-box;'}
+      width: ${shareMode ? pageWidth : 'auto'}px;
+      ${shareMode ? `padding: ${pagePadding}px;` : 'max-width: 1000px; padding: 40px;'}
+      box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
       ${shareMode ? 'min-height: 100vh;' : ''}

@@ -551,7 +551,7 @@ async function shareInvoiceWhatsApp(orderId) {
         // Clean up container
         document.body.removeChild(container);
 
-        // Convert canvas to PDF using jsPDF
+        // Convert canvas to PDF using jsPDF with automatic pagination
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({
             orientation: 'portrait',
@@ -560,17 +560,42 @@ async function shareInvoiceWhatsApp(orderId) {
             compress: true
         });
         
-        // Get PDF dimensions
+        // Get PDF dimensions (A4: 210mm x 297mm)
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
-        // Calculate image dimensions to fit A4
+        // Calculate image dimensions
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
         
-        // Add image to PDF
+        // Convert canvas to image data
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+        
+        // Check if content fits on one page
+        if (imgHeight <= pdfHeight) {
+            // Single page - add directly
+            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+        } else {
+            // Multi-page - split content across pages
+            let heightLeft = imgHeight;
+            let position = 0;
+            let page = 0;
+            
+            // Add first page
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pdfHeight;
+            
+            // Add subsequent pages
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight; // Negative offset to show next portion
+                pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
+                page++;
+            }
+            
+            console.log(`📄 Generated ${page + 1}-page PDF`);
+        }
         
         // Generate PDF blob
         const pdfBlob = pdf.output('blob');
@@ -843,9 +868,9 @@ async function saveOrderChanges(orderId) {
 function generateInvoiceHTML(order, opts = {}) {
     const { printMode = false, shareMode = false } = opts || {};
     // Standard A4-like dimensions for consistent PDF appearance
-    // For share mode, use wider canvas for better content visibility
-    const pageWidth = shareMode ? 1000 : 210;
-    const pagePadding = shareMode ? 30 : 20;
+    // Use 794px (A4 width at 96dpi) for share mode to match canvas container
+    const pageWidth = shareMode ? 794 : 210;
+    const pagePadding = shareMode ? 40 : 20;
     
     return `
 <!DOCTYPE html>
@@ -892,7 +917,7 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .company-info h1 {
-      font-size: ${shareMode ? '32px' : '36px'};
+      font-size: ${shareMode ? '28px' : '36px'};
       color: #004D40;
       font-weight: 700;
       margin-bottom: 8px;
@@ -902,14 +927,14 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .company-info .subtitle {
       color: #2E7D32;
-      font-size: ${shareMode ? '15px' : '16px'};
+      font-size: ${shareMode ? '14px' : '16px'};
       font-weight: 600;
       margin-bottom: 8px;
     }
     
     .company-info .phone-numbers {
       color: #000000;
-      font-size: ${shareMode ? '14px' : '15px'};
+      font-size: ${shareMode ? '13px' : '15px'};
       font-weight: 600;
       margin: 12px 0 8px 0;
     }
@@ -917,12 +942,12 @@ function generateInvoiceHTML(order, opts = {}) {
     .company-info .phone-numbers .emergency-number {
       color: #D32F2F;
       font-weight: 700;
-      font-size: ${shareMode ? '15px' : '16px'};
+      font-size: ${shareMode ? '14px' : '16px'};
     }
     
     .company-info .address {
       color: #555555;
-      font-size: ${shareMode ? '13px' : '14px'};
+      font-size: ${shareMode ? '12px' : '14px'};
       line-height: 1.8;
     }
     
@@ -941,7 +966,7 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .section-title {
-      font-size: ${shareMode ? '16px' : '17px'};
+      font-size: ${shareMode ? '14px' : '17px'};
       color: #004D40;
       font-weight: 700;
       margin-bottom: 12px;
@@ -950,7 +975,7 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .invoice-details p {
-      font-size: ${shareMode ? '13px' : '14px'};
+      font-size: ${shareMode ? '12px' : '14px'};
       margin: 6px 0;
       line-height: 1.6;
     }
@@ -976,10 +1001,10 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .items-table thead th {
       color: #ffffff;
-      font-size: ${shareMode ? '13px' : '14px'};
+      font-size: ${shareMode ? '11px' : '14px'};
       font-weight: 700;
       text-align: left;
-      padding: 14px 10px;
+      padding: ${shareMode ? '10px 8px' : '14px 10px'};
       text-transform: uppercase;
       letter-spacing: 0.5px;
       border: none;
@@ -1006,8 +1031,8 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .items-table tbody td {
-      padding: 12px 10px;
-      font-size: ${shareMode ? '13px' : '14px'};
+      padding: ${shareMode ? '10px 8px' : '12px 10px'};
+      font-size: ${shareMode ? '11px' : '14px'};
       color: #212121;
       vertical-align: middle;
     }
@@ -1042,14 +1067,14 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .total-section .grand-total {
-      font-size: ${shareMode ? '24px' : '28px'};
+      font-size: ${shareMode ? '20px' : '28px'};
       color: #004D40;
       font-weight: 700;
       letter-spacing: 0.5px;
     }
     
     .total-section .total-label {
-      font-size: ${shareMode ? '14px' : '16px'};
+      font-size: ${shareMode ? '13px' : '16px'};
       color: #555555;
       margin-right: 15px;
     }
@@ -1064,14 +1089,14 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .invoice-footer p {
-      font-size: ${shareMode ? '12px' : '13px'};
+      font-size: ${shareMode ? '10px' : '13px'};
       color: #757575;
       margin: 8px 0;
       line-height: 1.6;
     }
     
     .invoice-footer .thank-you {
-      font-size: ${shareMode ? '15px' : '16px'};
+      font-size: ${shareMode ? '13px' : '16px'};
       color: #004D40;
       font-weight: 600;
       margin-bottom: 10px;

@@ -963,10 +963,11 @@ function generateInvoiceHTML(order, opts = {}) {
       margin: 12px 0 8px 0;
     }
     
-    .company-info .phone-numbers .emergency-number {
-      color: #D32F2F;
-      font-weight: 700;
-      font-size: ${shareMode ? '14px' : '16px'};
+    .company-info .gst-number {
+      color: #004D40;
+      font-size: ${shareMode ? '12px' : '14px'};
+      font-weight: 600;
+      margin: 8px 0;
     }
     
     .company-info .address {
@@ -1168,7 +1169,8 @@ function generateInvoiceHTML(order, opts = {}) {
       <div class="company-info">
         <h1>அல் மதீனா ஏஜென்சீஸ்</h1>
         <div class="subtitle">மொத்தவிற்பனை மளிகை மற்றும் ஆயில்</div>
-        <div class="phone-numbers">7339651541, 8754144759, <span class="emergency-number">8870503350</span></div>
+        <div class="phone-numbers">7339651541, 8754144759, 8870503350</div>
+        <div class="gst-number">GST No: 33DLEPM3331L1Z5</div>
         <div class="address">
           பாரிநகர் 2வது தெரு, அன்னா நகர்,<br/>
           வடக்கு காட்டூர், திருச்சி - 620019.

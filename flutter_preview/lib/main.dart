@@ -7,11 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart';
 import 'api_service.dart';
 import 'screens/phone_auth_screen.dart';
+import 'screens/account_switcher_page.dart';
+import 'services/shared_prefs_service.dart';
 
 const Color kPrimaryColor = Color(0xFF66BB6A); // Colors.green[400]
 const String kAppName = 'AL-Madhina';
@@ -64,21 +63,13 @@ const Map<String, Map<String, String>> translations = {
     'al_mathina': 'Al-Mathina',
     'traders': 'Traders',
     'welcome_back': 'Welcome Back',
-    'enter_otp': 'Enter OTP',
     'phone_number': 'Phone Number',
     'enter_the_number': 'Enter the Number',
-    'enter_6_digit_otp': 'Enter 6-Digit OTP',
-    'otp_sent_to': 'OTP sent to',
     'change_phone_number': 'Change Phone Number',
     'invalid_phone_number': 'Invalid phone number',
-    'please_enter_10_digit': 'Please enter a 10-digit phone number',
-    'invalid_otp': 'Invalid OTP. Please try again.',
-    'otp_expired': 'OTP expired. Please request a new one.',
+    'please_enter_10_digit': 'Please enter the 10 digit number',
     'verification_failed': 'Verification failed',
     'connection_error': 'Connection error. Please try again.',
-    'too_many_attempts': 'Too many attempts. Please try again later',
-    'sms_quota_exceeded': 'SMS quota exceeded',
-    'auto_signin_failed': 'Auto sign-in failed',
     
     // Payment & Checkout
     'payment_upi': 'Pay via UPI/Apps',
@@ -227,21 +218,13 @@ const Map<String, Map<String, String>> translations = {
     'al_mathina': 'அல்-மதீனா',
     'traders': 'வணிகர்கள்',
     'welcome_back': 'மீண்டும் வருக',
-    'enter_otp': 'OTP ஐ உள்ளிடவும்',
     'phone_number': 'தொலைபேசி எண்',
     'enter_the_number': 'எண்ணை உள்ளிடவும்',
-    'enter_6_digit_otp': '6-இலக்க OTP உள்ளிடவும்',
-    'otp_sent_to': 'OTP அனுப்பப்பட்டது',
     'change_phone_number': 'தொலைபேசி எண்ணை மாற்று',
     'invalid_phone_number': 'தவறான தொலைபேசி எண்',
-    'please_enter_10_digit': '10-இலக்க தொலைபேசி எண்ணை உள்ளிடவும்',
-    'invalid_otp': 'தவறான OTP. மீண்டும் முயற்சிக்கவும்.',
-    'otp_expired': 'OTP காலாவதியானது. புதிய ஒன்றைக் கோரவும்.',
+    'please_enter_10_digit': 'தயவுசெய்து 10 இலக்க எண்ணை உள்ளிடவும்',
     'verification_failed': 'சரிபார்ப்பு தோல்வியடைந்தது',
     'connection_error': 'இணைப்பு பிழை. மீண்டும் முயற்சிக்கவும்.',
-    'too_many_attempts': 'பல முயற்சிகள். பிறகு முயற்சிக்கவும்',
-    'sms_quota_exceeded': 'SMS ஒதுக்கீடு மீறப்பட்டது',
-    'auto_signin_failed': 'தானியங்கி உள்நுழைவு தோல்வியடைந்தது',
     
     // Cart
     'total': 'தொகை:',
@@ -584,15 +567,12 @@ class AppProvider with ChangeNotifier {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 
   // Create AppProvider and load saved language preference
   final appProvider = AppProvider();
-  await appProvider.loadLanguage();  runApp(
+  await appProvider.loadLanguage();
+  
+  runApp(
     ChangeNotifierProvider(
       create: (context) => appProvider,
       child: const MyApp(),
@@ -1161,61 +1141,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: Border.all(color: const Color(0xFF4CAF50), width: 1.5),
                 ),
                 child: DropdownButton<String>(
-                value: provider.currentLanguage,
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.black87, size: 20),
-                underline: Container(),
-                isDense: true,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'en',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
+                  value: provider.currentLanguage,
+                  icon: const Icon(Icons.arrow_drop_down, color: Colors.black87, size: 20),
+                  underline: Container(),
+                  isDense: true,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'en',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'ta',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
+                    DropdownMenuItem(
+                      value: 'ta',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-                selectedItemBuilder: (BuildContext context) {
-                  return [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
-                        SizedBox(width: 6),
-                        Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                      ],
-                    ),
-                  ];
-                },
-                onChanged: (value) {
-                  if (value != null) provider.setLanguage(value);
-                },
+                  ],
+                  selectedItemBuilder: (BuildContext context) {
+                    return [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('English', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.language, color: Color(0xFF4CAF50), size: 18),
+                          SizedBox(width: 6),
+                          Text('தமிழ்', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                        ],
+                      ),
+                    ];
+                  },
+                  onChanged: (value) {
+                    if (value != null) provider.setLanguage(value);
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(70.0),
@@ -2830,11 +2810,34 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                           provider.updateCartQuantity(cartItem!, qty - 1);
                         },
                       ),
-                      Text(
-                        '$qty',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      // Quantity input field
+                      Container(
+                        width: 42,
+                        height: 28,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!, width: 1),
+                          borderRadius: BorderRadius.circular(6),
+                          color: Colors.white,
+                        ),
+                        alignment: Alignment.center,
+                        child: TextField(
+                          textAlign: TextAlign.center,
+                          textAlignVertical: TextAlignVertical.center,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 6),
+                            isDense: true,
+                          ),
+                          controller: TextEditingController(text: '$qty')..selection = TextSelection.fromPosition(TextPosition(offset: '$qty'.length)),
+                          onChanged: (value) {
+                            final newQty = int.tryParse(value);
+                            if (newQty != null && newQty >= 0) {
+                              provider.updateCartQuantity(cartItem!, newQty);
+                            }
+                          },
                         ),
                       ),
                       IconButton(
@@ -3266,11 +3269,34 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                                           provider.updateCartQuantity(item, item.quantity - 1);
                                         },
                                       ),
-                                      Text(
-                                        '${item.quantity}',
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
+                                      // Quantity input field
+                                      Container(
+                                        width: 50,
+                                        height: 32,
+                                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: Colors.grey[300]!, width: 1),
+                                          borderRadius: BorderRadius.circular(6),
+                                          color: Colors.white,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: TextField(
+                                          textAlign: TextAlign.center,
+                                          textAlignVertical: TextAlignVertical.center,
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
+                                          decoration: const InputDecoration(
+                                            border: InputBorder.none,
+                                            contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                            isDense: true,
+                                          ),
+                                          controller: TextEditingController(text: '${item.quantity}')..selection = TextSelection.fromPosition(TextPosition(offset: '${item.quantity}'.length)),
+                                          onChanged: (value) {
+                                            final newQty = int.tryParse(value);
+                                            if (newQty != null && newQty >= 0) {
+                                              provider.updateCartQuantity(item, newQty);
+                                            }
+                                          },
                                         ),
                                       ),
                                       IconButton(
@@ -4277,7 +4303,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                         Expanded(
                           child: _isLoadingProducts
                               ? GridView.builder(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 140), // Added extra bottom padding for floating cart
                                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 2,
                                     crossAxisSpacing: 10,
@@ -4299,7 +4325,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                       ),
                                     )
                                   : GridView.builder(
-                                      padding: const EdgeInsets.all(12),
+                                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 140), // Added extra bottom padding for floating cart
                                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 2,
                                         crossAxisSpacing: 10,
@@ -5036,20 +5062,138 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             Text(product.description!, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                             const SizedBox(height: 16),
                           ],
-                          SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: product.inStock
-                                  ? () {
-                                      provider.addToCart(product);
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${product.getLocalizedName(provider.currentLanguage)} ${provider.text('added_to_cart')}')));
-                                    }
-                                  : null,
-                              style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                              child: Text(product.inStock ? provider.text('buy') : provider.text('out_of_stock'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
+                          // Add to cart button or quantity controls
+                          Builder(builder: (context) {
+                            final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
+                            final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
+                            final int qty = cartItem?.quantity ?? 0;
+
+                            // Show "Add to cart" button when qty is 0
+                            if (qty == 0) {
+                              return SizedBox(
+                                width: double.infinity,
+                                height: 52,
+                                child: ElevatedButton.icon(
+                                  onPressed: product.inStock
+                                      ? () {
+                                          provider.addToCart(product);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('${product.getLocalizedName(provider.currentLanguage)} ${provider.text('added_to_cart')}'),
+                                              duration: const Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.shopping_cart_outlined, size: 20),
+                                  label: Text(
+                                    product.inStock ? provider.text('add_to_cart') : provider.text('out_of_stock'),
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kPrimaryColor,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 2,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // Show quantity controls when qty > 0
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kPrimaryColor.withOpacity(0.3), width: 2),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Decrement button
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFC8E6C9),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: IconButton(
+                                          onPressed: () {
+                                            provider.updateCartQuantity(cartItem!, qty - 1);
+                                          },
+                                          icon: const Icon(Icons.remove, size: 20, color: Color(0xFF2E7D32)),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                      ),
+                                      // Quantity input field
+                                      Container(
+                                        width: 80,
+                                        height: 44,
+                                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: kPrimaryColor, width: 2),
+                                          borderRadius: BorderRadius.circular(8),
+                                          color: Colors.white,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: TextField(
+                                          textAlign: TextAlign.center,
+                                          textAlignVertical: TextAlignVertical.center,
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
+                                          decoration: const InputDecoration(
+                                            border: InputBorder.none,
+                                            contentPadding: EdgeInsets.symmetric(vertical: 10),
+                                            isDense: true,
+                                          ),
+                                          controller: TextEditingController(text: '$qty')..selection = TextSelection.fromPosition(TextPosition(offset: '$qty'.length)),
+                                          onChanged: (value) {
+                                            final newQty = int.tryParse(value);
+                                            if (newQty != null && newQty >= 0) {
+                                              provider.updateCartQuantity(cartItem!, newQty);
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      // Increment button
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF4CAF50),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: IconButton(
+                                          onPressed: product.inStock
+                                              ? () {
+                                                  provider.addToCart(product);
+                                                }
+                                              : null,
+                                          icon: const Icon(Icons.add, size: 20, color: Colors.white),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Total price display
+                                  Text(
+                                    'Total: ₹${(product.price * qty).toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: kPrimaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     ),
@@ -5522,7 +5666,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             }
                           : null,
                       icon: const Icon(Icons.shopping_bag_outlined, size: 16),
-                      label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      label: Text(provider.text('buy'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
@@ -5551,11 +5695,34 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                             provider.updateCartQuantity(cartItem!, qty - 1);
                           },
                         ),
-                        Text(
-                          '$qty',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                        // Quantity input field
+                        Container(
+                          width: 42,
+                          height: 28,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!, width: 1),
+                            borderRadius: BorderRadius.circular(6),
+                            color: Colors.white,
+                          ),
+                          alignment: Alignment.center,
+                          child: TextField(
+                            textAlign: TextAlign.center,
+                            textAlignVertical: TextAlignVertical.center,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 6),
+                              isDense: true,
+                            ),
+                            controller: TextEditingController(text: '$qty')..selection = TextSelection.fromPosition(TextPosition(offset: '$qty'.length)),
+                            onChanged: (value) {
+                              final newQty = int.tryParse(value);
+                              if (newQty != null && newQty >= 0) {
+                                provider.updateCartQuantity(cartItem!, newQty);
+                              }
+                            },
                           ),
                         ),
                         IconButton(
@@ -5629,7 +5796,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       print('DEBUG: Calling API with phone: $phone');
       final response = await ApiService.getUserProfile(phone);
-      final storeDetails = await ApiService.getStoreDetails(phone);
+      
+      // Try to get store details, but don't fail if it errors
+      Map<String, dynamic>? storeDetails;
+      try {
+        storeDetails = await ApiService.getStoreDetails(phone);
+      } catch (storeError) {
+        print('DEBUG: Store details error (non-critical): $storeError');
+        // Set storeDetails to null if it fails - store is optional
+        storeDetails = null;
+      }
+      
       print('DEBUG: API Response: $response');
       
       setState(() {
@@ -5737,6 +5914,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: Text(provider.text('my_profile'), style: const TextStyle(color: kPrimaryColor, fontSize: 24, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.switch_account, color: kPrimaryColor),
+            tooltip: 'Switch Account',
+            onPressed: () => _showAccountSwitcherDialog(context),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadUserProfile,
@@ -5989,11 +6173,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showEditProfileDialog(BuildContext context, String currentName, String currentEmail, String phone) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final nameController = TextEditingController(text: currentName);
-    final emailController = TextEditingController(text: currentEmail);
 
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
         title: Text(provider.text('edit_profile')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -6006,16 +6190,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 hintText: 'Enter your name',
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(
-                labelText: provider.text('email'),
-                border: const OutlineInputBorder(),
-                hintText: 'Enter your email (optional)',
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
           ],
         ),
         actions: [
@@ -6026,7 +6200,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
-              final email = emailController.text.trim();
               
               if (name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -6046,11 +6219,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   builder: (_) => const Center(child: CircularProgressIndicator()),
                 );
 
-                // Update profile via API
+                // Update profile via API (email set to null since we removed it)
                 await ApiService.updateUserProfile(
                   phone,
                   name,
-                  email.isEmpty ? null : email,
+                  null,
                 );
 
                 if (context.mounted) {
@@ -6160,12 +6333,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showAccountSwitcherDialog(BuildContext context) async {
+    final savedAccounts = await SharedPrefsService.getSavedAccounts();
+    
+    // Get the currently active phone number from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final currentPhone = prefs.getString('userPhone') ?? '';
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Switch Account', style: TextStyle(fontWeight: FontWeight.bold)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // List of saved accounts
+              if (savedAccounts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('No saved accounts', style: TextStyle(color: Colors.grey)),
+                )
+              else
+                ...savedAccounts.map((account) {
+                  final isCurrentAccount = account.phoneNumber == currentPhone;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.phone_android,
+                      color: kPrimaryColor,
+                    ),
+                    title: Text(account.phoneNumber),
+                    trailing: isCurrentAccount
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : const Icon(Icons.chevron_right, color: Colors.grey),
+                    onTap: isCurrentAccount
+                        ? null
+                        : () async {
+                            Navigator.pop(dialogContext); // Close dialog
+                            
+                            // Switch account by updating SharedPreferences (no re-authentication needed)
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('userPhone', account.phoneNumber);
+                            
+                            // Show loading
+                            if (context.mounted) {
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (_) => const Center(
+                                  child: CircularProgressIndicator(color: kPrimaryColor),
+                                ),
+                              );
+                            }
+                            
+                            // Wait a moment for the preference to be saved
+                            await Future.delayed(const Duration(milliseconds: 300));
+                            
+                            // Navigate to MainScreen and refresh (without key to avoid duplicates)
+                            if (context.mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => const MainScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                          },
+                  );
+                }).toList(),
+              const Divider(),
+              // Add Account button
+              ListTile(
+                leading: const Icon(Icons.add_circle, color: kPrimaryColor),
+                title: const Text('Add Account', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  Navigator.pop(dialogContext); // Close dialog
+                  
+                  // Navigate to PhoneAuthScreen with cancel button (keep navigation stack)
+                  if (context.mounted) {
+                    final result = await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PhoneAuthScreen(showCancelButton: true),
+                      ),
+                    );
+                    
+                    // If login was successful, the PhoneAuthScreen will navigate away
+                    // If user canceled, we just stay here (result will be null)
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showLogoutDialog(BuildContext context) {
     final provider = Provider.of<AppProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
+        backgroundColor: Colors.white,
+        title: Text(provider.text('logout')),
         content: Text(provider.text('logout_confirm')),
         actions: [
           TextButton(
@@ -6174,13 +6455,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // Sign out from Firebase
-              try {
-                await FirebaseAuth.instance.signOut();
-              } catch (e) {
-                print('Firebase sign out error: $e');
-              }
-              
               // Clear local storage
               final prefs = await SharedPreferences.getInstance();
               await prefs.remove('isOldUser');
@@ -6194,7 +6468,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Logout', style: const TextStyle(color: Colors.white)),
+            child: Text(provider.text('logout'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -7891,31 +8165,15 @@ class FloatingCartButton extends StatelessWidget {
     // Calculate proper bottom position: bottom nav bar height (56) + desired gap (5)
     final calculatedBottom = bottomPosition ?? (kBottomNavigationBarHeight + 5);
 
-    return Positioned(
+  return Positioned(
       bottom: calculatedBottom,
       left: (screenWidth - buttonWidth) / 2,
       child: GestureDetector(
         onTap: () {
-          // Try to find MainScreen in the widget tree first
-          final mainScreenState = context.findAncestorStateOfType<_MainScreenState>();
-          
-          if (mainScreenState != null) {
-            // We're inside MainScreen, just switch tab
-            mainScreenState.setState(() {
-              mainScreenState.currentIndex = 3; // Switch to cart tab (index 3)
-            });
-          } else {
-            // We're in a pushed route (like subcategory page)
-            // Use the global key to access MainScreen and pop back to it
-            if (mainScreenKey.currentState != null) {
-              // Pop back to MainScreen
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              // Switch to cart tab
-              mainScreenKey.currentState!.setState(() {
-                mainScreenKey.currentState!.currentIndex = 3;
-              });
-            }
-          }
+          // Always push CartScreen so system back returns to the previous page
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CartScreen()),
+          );
         },
         child: Container(
           width: buttonWidth,

@@ -939,14 +939,28 @@ async def delete_product(product_id: str):
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
         
+        logger.info(f"🗑️ DELETING PRODUCT:")
+        logger.info(f"   Product ID: {product_id}")
+        logger.info(f"   Product Name: {product.get('name', 'Unknown')}")
+        logger.info(f"   Section: {product.get('category_section', 'N/A')}")
+        logger.info(f"   Main Category: {product.get('category_main', 'N/A')}")
+        logger.info(f"   Subcategory: {product.get('category_sub', 'N/A')}")
+        
         # Delete image from Cloudinary if exists
         if "image_url" in product and product["image_url"]:
-            delete_image_from_cloudinary(product["image_url"])
+            logger.info(f"   Image URL: {product['image_url']}")
+            if delete_image_from_cloudinary(product["image_url"]):
+                logger.info(f"   ✓ Image deleted from Cloudinary")
+            else:
+                logger.warning(f"   ⚠ Failed to delete image from Cloudinary")
+        else:
+            logger.info(f"   No image to delete")
         
         # Delete product
         result = products_collection.delete_one({"_id": ObjectId(product_id)})
         
-        logger.info(f"✓ Product deleted: {product_id}")
+        logger.info(f"   ✓ Product document deleted from database")
+        logger.info(f"✅ PRODUCT DELETION COMPLETE: {product.get('name', 'Unknown')}")
         return {"success": True, "message": "Product deleted successfully"}
     
     except HTTPException:
@@ -1934,11 +1948,12 @@ async def update_subcategory_compat(subcategory_name: str, data: dict):
 
 @router.delete("/categories/section/{section_name}")
 async def delete_section_compat(section_name: str):
-    """Delete section (compatibility endpoint)"""
+    """Delete section (compatibility endpoint with Cloudinary cleanup)"""
     try:
         db = get_mongo_db()
         
-        logger.info(f"🗑️ Deleting section: {section_name}")
+        logger.info(f"🗑️ DELETING SECTION:")
+        logger.info(f"   Section Name: {section_name}")
         logger.info(f"   Section name length: {len(section_name)} chars")
         logger.info(f"   Section name repr: {repr(section_name)}")
         
@@ -1950,32 +1965,69 @@ async def delete_section_compat(section_name: str):
             sections_array = doc.get('sections', [])
             logger.info(f"      {idx}. section='{section_in_db}' sections={sections_array}")
         
-        # Delete the section document from hierarchy (each document IS a section)
+        # === STEP 1: Delete all product images in this section ===
+        logger.info(f"   📦 Searching for products with images...")
+        products_with_images = db.products.find({
+            "category_section": section_name,
+            "image_url": {"$exists": True, "$ne": None}
+        })
+        
+        product_image_count = 0
+        for product in products_with_images:
+            if product.get("image_url"):
+                logger.info(f"      Deleting: {product.get('name', 'Unknown')} - {product['image_url']}")
+                if delete_image_from_cloudinary(product["image_url"]):
+                    product_image_count += 1
+                    logger.info(f"      ✓ Deleted successfully")
+                else:
+                    logger.warning(f"      ⚠ Failed to delete")
+        logger.info(f"   ✓ Product images deleted from Cloudinary: {product_image_count}")
+        
+        # === STEP 2: Delete all category metadata images (main + sub) ===
+        logger.info(f"   🖼️ Searching for category/subcategory images...")
+        metadata_with_images = db.category_metadata.find({
+            "section": section_name,
+            "image_url": {"$exists": True, "$ne": None}
+        })
+        
+        category_image_count = 0
+        for metadata in metadata_with_images:
+            if metadata.get("image_url"):
+                logger.info(f"      Deleting {metadata.get('type', 'category')}: {metadata.get('name', 'Unknown')} - {metadata['image_url']}")
+                if delete_image_from_cloudinary(metadata["image_url"]):
+                    category_image_count += 1
+                    logger.info(f"      ✓ Deleted successfully")
+                else:
+                    logger.warning(f"      ⚠ Failed to delete")
+        logger.info(f"   ✓ Category/subcategory images deleted from Cloudinary: {category_image_count}")
+        
+        # === STEP 3: Delete hierarchy document ===
         hierarchy_result = db.category_hierarchy.delete_one({"section": section_name})
         logger.info(f"   Hierarchy document deleted: {hierarchy_result.deleted_count} document(s)")
         
-        # ALSO remove from sections array (old structure compatibility)
+        # === STEP 4: Remove from sections array (old structure compatibility) ===
         array_result = db.category_hierarchy.update_many(
             {"sections": section_name},
             {"$pull": {"sections": section_name}}
         )
         logger.info(f"   Removed from sections arrays: {array_result.modified_count} document(s) updated")
         
-        # Delete metadata for this section
+        # === STEP 5: Delete metadata ===
         metadata_result = db.category_metadata.delete_many({"section": section_name})
         logger.info(f"   Metadata deleted: {metadata_result.deleted_count} document(s)")
         
-        # Delete products in this section
+        # === STEP 6: Delete products ===
         products_result = db.products.delete_many({"category_section": section_name})
         logger.info(f"   Products deleted: {products_result.deleted_count} document(s)")
         
-        # Also delete from most_bought if any categories from this section were starred
+        # === STEP 7: Delete from most_bought ===
         most_bought_result = db.most_bought.delete_many({"section": section_name})
         logger.info(f"   Most bought entries deleted: {most_bought_result.deleted_count} document(s)")
         
-        logger.info(f"✅ Section '{section_name}' deleted successfully")
+        total_images = product_image_count + category_image_count
+        logger.info(f"✅ Section '{section_name}' deleted with {total_images} images from Cloudinary")
         
-        return {"success": True, "message": "Section deleted"}
+        return {"success": True, "message": f"Section deleted with {total_images} images"}
     except Exception as e:
         logger.error(f"✗ Failed to delete section: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1983,7 +2035,7 @@ async def delete_section_compat(section_name: str):
 
 @router.delete("/categories/main/{section_name}/{main_category}")
 async def delete_main_category_compat(section_name: str, main_category: str):
-    """Delete main category and all its subcategories (cascading delete)"""
+    """Delete main category and all its subcategories (cascading delete with Cloudinary cleanup)"""
     try:
         db = get_mongo_db()
         
@@ -1991,16 +2043,70 @@ async def delete_main_category_compat(section_name: str, main_category: str):
         from urllib.parse import unquote
         main_category = unquote(main_category)
         
-        logger.info(f"🗑️ Deleting main category: {section_name} → {main_category}")
+        logger.info(f"🗑️ DELETING MAIN CATEGORY:")
+        logger.info(f"   Section: {section_name}")
+        logger.info(f"   Main Category: {main_category}")
         
-        # Remove from hierarchy - use $unset to remove the main category field
+        # === STEP 1: Delete all product images in this main category ===
+        logger.info(f"   📦 Searching for products with images...")
+        products_with_images = db.products.find({
+            "category_section": section_name,
+            "category_main": main_category,
+            "image_url": {"$exists": True, "$ne": None}
+        })
+        
+        image_delete_count = 0
+        for product in products_with_images:
+            if product.get("image_url"):
+                logger.info(f"      Deleting: {product.get('name', 'Unknown')} - {product['image_url']}")
+                if delete_image_from_cloudinary(product["image_url"]):
+                    image_delete_count += 1
+                    logger.info(f"      ✓ Deleted successfully")
+                else:
+                    logger.warning(f"      ⚠ Failed to delete")
+        logger.info(f"   ✓ Product images deleted from Cloudinary: {image_delete_count}")
+        
+        # === STEP 2: Delete main category image ===
+        main_metadata = db.category_metadata.find_one({
+            "section": section_name,
+            "name": main_category,
+            "type": "main_category"
+        })
+        if main_metadata and main_metadata.get("image_url"):
+            logger.info(f"   🖼️ Deleting main category image: {main_metadata['image_url']}")
+            if delete_image_from_cloudinary(main_metadata["image_url"]):
+                logger.info(f"   ✓ Main category image deleted from Cloudinary")
+            else:
+                logger.warning(f"   ⚠ Failed to delete main category image")
+        
+        # === STEP 3: Delete all subcategory images ===
+        logger.info(f"   📂 Searching for subcategory images...")
+        sub_metadata_with_images = db.category_metadata.find({
+            "section": section_name,
+            "main_category": main_category,
+            "type": "subcategory",
+            "image_url": {"$exists": True, "$ne": None}
+        })
+        
+        sub_image_delete_count = 0
+        for sub_meta in sub_metadata_with_images:
+            if sub_meta.get("image_url"):
+                logger.info(f"      Deleting: {sub_meta.get('name', 'Unknown')} - {sub_meta['image_url']}")
+                if delete_image_from_cloudinary(sub_meta["image_url"]):
+                    sub_image_delete_count += 1
+                    logger.info(f"      ✓ Deleted successfully")
+                else:
+                    logger.warning(f"      ⚠ Failed to delete")
+        logger.info(f"   ✓ Subcategory images deleted from Cloudinary: {sub_image_delete_count}")
+        
+        # === STEP 4: Remove from hierarchy ===
         result = db.category_hierarchy.update_one(
             {"section": section_name},
             {"$unset": {f"main_categories.{main_category}": ""}}
         )
         logger.info(f"   Hierarchy updated: matched={result.matched_count}, modified={result.modified_count}")
         
-        # Delete main category metadata
+        # === STEP 5: Delete main category metadata ===
         main_metadata_result = db.category_metadata.delete_many({
             "section": section_name,
             "name": main_category,
@@ -2008,7 +2114,7 @@ async def delete_main_category_compat(section_name: str, main_category: str):
         })
         logger.info(f"   Main category metadata deleted: {main_metadata_result.deleted_count} document(s)")
         
-        # Delete ALL subcategory metadata under this main category (cascading)
+        # === STEP 6: Delete ALL subcategory metadata (cascading) ===
         sub_metadata_result = db.category_metadata.delete_many({
             "section": section_name,
             "main_category": main_category,
@@ -2016,22 +2122,22 @@ async def delete_main_category_compat(section_name: str, main_category: str):
         })
         logger.info(f"   Subcategory metadata deleted (cascade): {sub_metadata_result.deleted_count} document(s)")
         
-        # Delete all products under this main category (cascading)
+        # === STEP 7: Delete all products (cascading) ===
         products_result = db.products.delete_many({
             "category_section": section_name,
             "category_main": main_category
         })
         logger.info(f"   Products deleted (cascade): {products_result.deleted_count} document(s)")
         
-        # Remove from most_bought if this main category was starred
+        # === STEP 8: Remove from most_bought ===
         most_bought_result = db.most_bought.delete_many({
             "section": section_name,
             "main_category": main_category
         })
         logger.info(f"   Most bought entries deleted: {most_bought_result.deleted_count} document(s)")
         
-        logger.info(f"✅ Main category '{main_category}' and all children deleted successfully")
-        return {"success": True, "message": "Main category deleted"}
+        logger.info(f"✅ Main category '{main_category}', all children, and {image_delete_count + sub_image_delete_count + 1} images deleted successfully")
+        return {"success": True, "message": "Main category deleted with all images"}
     except Exception as e:
         logger.error(f"✗ Failed to delete main category: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2039,7 +2145,7 @@ async def delete_main_category_compat(section_name: str, main_category: str):
 
 @router.delete("/categories/sub/{section_name}/{main_category}/{subcategory}")
 async def delete_subcategory_compat(section_name: str, main_category: str, subcategory: str):
-    """Delete subcategory and all its products (cascading delete)"""
+    """Delete subcategory and all its products (cascading delete with Cloudinary cleanup)"""
     try:
         db = get_mongo_db()
         
@@ -2049,16 +2155,53 @@ async def delete_subcategory_compat(section_name: str, main_category: str, subca
         main_category = unquote(main_category)
         subcategory = unquote(subcategory)
         
-        logger.info(f"🗑️ Deleting subcategory: {section_name} → {main_category} → {subcategory}")
+        logger.info(f"🗑️ DELETING SUBCATEGORY:")
+        logger.info(f"   Section: {section_name}")
+        logger.info(f"   Main Category: {main_category}")
+        logger.info(f"   Subcategory: {subcategory}")
         
-        # Remove from hierarchy - $pull from the subcategory array
+        # === STEP 1: Delete all product images in this subcategory ===
+        logger.info(f"   📦 Searching for products with images...")
+        products_with_images = db.products.find({
+            "category_section": section_name,
+            "category_main": main_category,
+            "category_sub": subcategory,
+            "image_url": {"$exists": True, "$ne": None}
+        })
+        
+        image_delete_count = 0
+        for product in products_with_images:
+            if product.get("image_url"):
+                logger.info(f"      Deleting: {product.get('name', 'Unknown')} - {product['image_url']}")
+                if delete_image_from_cloudinary(product["image_url"]):
+                    image_delete_count += 1
+                    logger.info(f"      ✓ Deleted successfully")
+                else:
+                    logger.warning(f"      ⚠ Failed to delete")
+        logger.info(f"   ✓ Product images deleted from Cloudinary: {image_delete_count}")
+        
+        # === STEP 2: Delete subcategory image ===
+        sub_metadata = db.category_metadata.find_one({
+            "section": section_name,
+            "main_category": main_category,
+            "name": subcategory,
+            "type": "subcategory"
+        })
+        if sub_metadata and sub_metadata.get("image_url"):
+            logger.info(f"   🖼️ Deleting subcategory image: {sub_metadata['image_url']}")
+            if delete_image_from_cloudinary(sub_metadata["image_url"]):
+                logger.info(f"   ✓ Subcategory image deleted from Cloudinary")
+            else:
+                logger.warning(f"   ⚠ Failed to delete subcategory image")
+        
+        # === STEP 3: Remove from hierarchy ===
         result = db.category_hierarchy.update_one(
-            {"section": section_name},  # Filter by section
-            {"$pull": {f"main_categories.{main_category}": subcategory}}  # Remove subcategory from array
+            {"section": section_name},
+            {"$pull": {f"main_categories.{main_category}": subcategory}}
         )
         logger.info(f"   Hierarchy updated: matched={result.matched_count}, modified={result.modified_count}")
         
-        # Delete subcategory metadata
+        # === STEP 4: Delete subcategory metadata ===
         metadata_result = db.category_metadata.delete_many({
             "section": section_name,
             "main_category": main_category,
@@ -2067,7 +2210,7 @@ async def delete_subcategory_compat(section_name: str, main_category: str, subca
         })
         logger.info(f"   Subcategory metadata deleted: {metadata_result.deleted_count} document(s)")
         
-        # Delete all products in this subcategory (cascading)
+        # === STEP 5: Delete all products (cascading) ===
         products_result = db.products.delete_many({
             "category_section": section_name,
             "category_main": main_category,
@@ -2075,8 +2218,8 @@ async def delete_subcategory_compat(section_name: str, main_category: str, subca
         })
         logger.info(f"   Products deleted (cascade): {products_result.deleted_count} document(s)")
         
-        logger.info(f"✅ Subcategory '{subcategory}' and all products deleted successfully")
-        return {"success": True, "message": "Subcategory deleted"}
+        logger.info(f"✅ Subcategory '{subcategory}', all products, and {image_delete_count + 1} images deleted successfully")
+        return {"success": True, "message": "Subcategory deleted with all images"}
     except Exception as e:
         logger.error(f"✗ Failed to delete subcategory: {e}")
         raise HTTPException(status_code=500, detail=str(e))

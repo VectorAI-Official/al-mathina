@@ -71,9 +71,9 @@ async def lifespan(app: FastAPI):
         logger.warning("⚠ Cloudinary not configured - image uploads will be disabled")
     
     logger.info("=" * 60)
-    logger.info(f"✅ Backend Ready - http://localhost:8080")
-    logger.info(f"📖 API Docs: http://localhost:8080/docs")
-    logger.info(f"🎨 Admin Dashboard: http://localhost:8080/admin")
+    logger.info(f"✅ Backend Ready - http://localhost:8000")
+    logger.info(f"📖 API Docs: http://localhost:8000/docs")
+    logger.info(f"🎨 Admin Dashboard: http://localhost:8000/admin")
     logger.info("=" * 60)
     
     yield

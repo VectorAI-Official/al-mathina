@@ -913,6 +913,14 @@ async function saveOrderChanges(orderId) {
     const updatedItems = [];
     let hasChanges = false;
     
+    // Check if number of items changed (products added or deleted)
+    const currentRowCount = document.querySelectorAll('#orderItemsTable tbody tr').length;
+    const originalItemCount = currentOrder.items.length;
+    
+    if (currentRowCount !== originalItemCount) {
+        hasChanges = true;
+    }
+    
     document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
         const qtyInput = row.querySelector('.qty-input');
         const priceInput = row.querySelector('.price-input');
@@ -937,7 +945,7 @@ async function saveOrderChanges(orderId) {
     });
     
     if (!hasChanges) {
-        alert('No changes were made to the quantities.');
+        alert('No changes were made. Add or remove products, or change quantities.');
         cancelEditMode();
         return;
     }

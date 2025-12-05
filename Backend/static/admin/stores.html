@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Store Management - AL-Madhina Admin</title>
+    <link rel="stylesheet" href="/static/admin/css/stores.css?v=1.9">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="stores-page">
+        <!-- Header -->
+        <div class="stores-header">
+            <div class="header-content">
+                <h1><i class="fas fa-store"></i> Store Management</h1>
+                <button class="btn btn-primary back-to-dashboard-btn" onclick="window.location.href='/admin/dashboard'">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Store Statistics -->
+        <div class="store-stats">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-store-alt"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Total Stores</h3>
+                    <p id="totalStores">-</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-shopping-cart"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Total Orders</h3>
+                    <p id="totalOrders">-</p>
+                </div>
+            </div>
+            <div class="stat-card" onclick="showRevenueDetails()" style="cursor: pointer;" title="Click for details">
+                <div class="stat-icon green">
+                    <i class="fas fa-rupee-sign"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Total Revenue</h3>
+                    <p id="totalRevenue">-</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>Avg per Store</h3>
+                    <p id="avgPerStore">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="stores-filters">
+            <div class="filter-group">
+                <label for="searchInput">
+                    <i class="fas fa-search"></i> Search
+                </label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Search by Store Name, Phone, Customer Name..."
+                        oninput="handleSearchInput()"
+                    >
+                    <button 
+                        id="clearSearchBtn" 
+                        onclick="clearSearch()" 
+                        style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; color: #666; display: none;"
+                        title="Clear search"
+                    >
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="filter-group">
+                <label for="startDateFilter">
+                    <i class="fas fa-calendar-alt"></i> From Date
+                </label>
+                <input type="date" id="startDateFilter" onchange="filterStores()">
+            </div>
+            <div class="filter-group">
+                <label for="endDateFilter">
+                    <i class="fas fa-calendar-check"></i> To Date
+                </label>
+                <input type="date" id="endDateFilter" onchange="filterStores()">
+            </div>
+            <div class="filter-group">
+                <button class="btn btn-secondary" onclick="clearFilters()">
+                    <i class="fas fa-redo"></i> Reset Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <i class="fas fa-spinner fa-spin"></i> Loading stores...
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <i class="fas fa-store-slash"></i>
+            <p>No stores found</p>
+        </div>
+
+        <!-- Stores Grid -->
+        <div id="storesGrid" class="stores-grid">
+            <!-- Store cards will be inserted here -->
+        </div>
+
+        <!-- Store Detail Modal -->
+        <div id="storeDetailModal" class="modal">
+            <div class="modal-content modal-lg">
+                <div class="modal-header">
+                    <h2><i class="fas fa-store"></i> Store Details</h2>
+                    <button class="modal-close" onclick="closeStoreDetail()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <!-- Personal Details Section -->
+                    <div class="detail-section">
+                        <h3><i class="fas fa-user"></i> Personal Information</h3>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>Store Name</label>
+                                <span id="detailStoreName">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Owner Name</label>
+                                <span id="detailOwnerName">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Phone</label>
+                                <span id="detailPhone">-</span>
+                            </div>
+                            <div class="detail-item full-width">
+                                <label>Address</label>
+                                <span id="detailAddress">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>City</label>
+                                <span id="detailCity">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>State</label>
+                                <span id="detailState">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Pincode</label>
+                                <span id="detailPincode">-</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Member Since</label>
+                                <span id="detailMemberSince">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Revenue Section -->
+                    <div class="detail-section">
+                        <h3><i class="fas fa-chart-bar"></i> Revenue Statistics</h3>
+                        <div class="revenue-stats">
+                            <div class="revenue-card">
+                                <div class="revenue-icon blue">
+                                    <i class="fas fa-shopping-bag"></i>
+                                </div>
+                                <div class="revenue-info">
+                                    <label>Total Orders</label>
+                                    <span id="detailTotalOrders">0</span>
+                                </div>
+                            </div>
+                            <div class="revenue-card">
+                                <div class="revenue-icon green">
+                                    <i class="fas fa-rupee-sign"></i>
+                                </div>
+                                <div class="revenue-info">
+                                    <label>Total Revenue</label>
+                                    <span id="detailTotalRevenue">₹0</span>
+                                </div>
+                            </div>
+                            <div class="revenue-card">
+                                <div class="revenue-icon purple">
+                                    <i class="fas fa-check-double"></i>
+                                </div>
+                                <div class="revenue-info">
+                                    <label>Delivered Revenue</label>
+                                    <span id="detailDeliveredRevenue">₹0</span>
+                                </div>
+                            </div>
+                            <div class="revenue-card">
+                                <div class="revenue-icon orange">
+                                    <i class="fas fa-calculator"></i>
+                                </div>
+                                <div class="revenue-info">
+                                    <label>Avg Order Value</label>
+                                    <span id="detailAvgOrderValue">₹0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="status-breakdown">
+                            <div class="status-item pending">
+                                <i class="fas fa-clock"></i>
+                                <span id="detailPendingOrders">0</span> Pending
+                            </div>
+                            <div class="status-item confirmed">
+                                <i class="fas fa-check"></i>
+                                <span id="detailConfirmedOrders">0</span> Confirmed
+                            </div>
+                            <div class="status-item delivered">
+                                <i class="fas fa-check-circle"></i>
+                                <span id="detailDeliveredOrders">0</span> Delivered
+                            </div>
+                            <div class="status-item cancelled">
+                                <i class="fas fa-times-circle"></i>
+                                <span id="detailCancelledOrders">0</span> Cancelled
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Orders Section -->
+                    <div class="detail-section">
+                        <h3><i class="fas fa-list-alt"></i> Order History</h3>
+                        <div id="storeOrders" class="store-orders">
+                            <!-- Order cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue Details Modal -->
+        <div id="revenueModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-chart-pie"></i> Revenue Breakdown</h2>
+                    <button class="modal-close" onclick="closeRevenueModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="revenue-breakdown">
+                        <div class="breakdown-item">
+                            <label>Total Orders</label>
+                            <span id="revenueTotalOrders">0</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <label>Total Revenue</label>
+                            <span id="revenueTotalAmount">₹0</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <label>Delivered Revenue</label>
+                            <span id="revenueDeliveredAmount">₹0</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <label>Active Stores</label>
+                            <span id="revenueActiveStores">0</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <label>Average per Store</label>
+                            <span id="revenueAvgPerStore">₹0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/admin/js/stores.js?v=1.6"></script>
+</body>
+</html>

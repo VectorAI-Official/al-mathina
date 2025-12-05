@@ -21,10 +21,32 @@
     --border-gray: #E0E0E0;
 }
 
-/* Prevent horizontal scrolling on mobile */
+/* Smooth scrolling for entire page */
 html {
     overflow-x: hidden;
     width: 100%;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-green-light) var(--bg-gray);
+}
+
+/* Custom scrollbar for webkit browsers */
+html::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html::-webkit-scrollbar-track {
+    background: var(--bg-gray);
+}
+
+html::-webkit-scrollbar-thumb {
+    background: var(--primary-green-light);
+    border-radius: 5px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-green);
 }
 
 body {

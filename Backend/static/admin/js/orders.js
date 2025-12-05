@@ -7,12 +7,22 @@
 let allOrders = [];
 let filteredOrders = []; // Currently filtered/displayed orders
 let currentOrder = null;
+let selectedOrderIds = new Set(); // Track selected order IDs for bulk actions
 let selectedDateFilter = {
     type: 'all', // 'all', 'single', 'range'
     singleDate: null,
     startDate: null,
     endDate: null
 };
+
+// Lazy loading state for orders
+let displayedOrdersCount = 0;
+const ORDERS_PER_PAGE = 100;
+const ORDERS_LOAD_THRESHOLD = 80; // Load more when scrolling to 80th item
+
+// Header scroll behavior state
+let lastScrollTop = 0;
+let scrollTimeout;
 
 // Initialize orders management
 document.addEventListener('DOMContentLoaded', function() {
@@ -22,8 +32,39 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('ordersContainer')) {
         loadOrders();
         setupEventListeners();
+        setupHeaderScrollBehavior();
     }
 });
+
+// Setup header hide/show on scroll
+function setupHeaderScrollBehavior() {
+    const header = document.querySelector('.orders-header');
+    if (!header) return;
+    
+    window.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+            
+            // Ignore if at top
+            if (currentScroll <= 0) {
+                header.classList.remove('header-hidden');
+                return;
+            }
+            
+            // Scrolling down - hide header
+            if (currentScroll > lastScrollTop && currentScroll > 100) {
+                header.classList.add('header-hidden');
+            } 
+            // Scrolling up - show header
+            else if (currentScroll < lastScrollTop) {
+                header.classList.remove('header-hidden');
+            }
+            
+            lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+        }, 50);
+    }, { passive: true });
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -92,8 +133,8 @@ async function loadOrders() {
     }
 }
 
-// Display orders in list
-function displayOrders(orders) {
+// Display orders in list with lazy loading
+function displayOrders(orders, append = false) {
     const container = document.getElementById('ordersContainer');
     
     if (!container) {
@@ -109,14 +150,36 @@ function displayOrders(orders) {
                 <p>Orders will appear here once customers place them.</p>
             </div>
         `;
+        displayedOrdersCount = 0;
         return;
     }
     
     try {
-        container.innerHTML = orders.map(order => `
-            <div class="order-card">
-                <div class="order-card-header" onclick="viewOrderDetails('${order.order_id}')">
-                    <div class="order-info">
+        // Reset count if not appending
+        if (!append) {
+            displayedOrdersCount = 0;
+        }
+        
+        // Calculate slice range
+        const start = displayedOrdersCount;
+        const end = Math.min(start + ORDERS_PER_PAGE, orders.length);
+        const ordersToShow = orders.slice(start, end);
+        
+        const newHTML = ordersToShow.map(order => `
+            <div class="order-card" data-order-id="${order.order_id}" data-order-index="${displayedOrdersCount + ordersToShow.indexOf(order)}">
+                <div class="order-card-header">
+                    ${order.status !== 'delivered' ? `
+                    <div class="order-checkbox-container">
+                        <input type="checkbox" 
+                               class="order-checkbox" 
+                               id="checkbox-${order.order_id}"
+                               data-order-id="${order.order_id}"
+                               onchange="toggleOrderSelection('${order.order_id}', this.checked)"
+                               onclick="event.stopPropagation()">
+                        <label for="checkbox-${order.order_id}" onclick="event.stopPropagation()"></label>
+                    </div>
+                    ` : ''}
+                    <div class="order-info" onclick="viewOrderDetails('${order.order_id}')">
                         <h3>Order #${order.order_id}</h3>
                         <p class="order-date">
                             <i class="fas fa-calendar"></i>
@@ -170,7 +233,29 @@ function displayOrders(orders) {
             </div>
         `).join('');
         
-        console.log(`✅ Displayed ${orders.length} orders`);
+        // Append or replace HTML
+        if (append) {
+            container.insertAdjacentHTML('beforeend', newHTML);
+        } else {
+            container.innerHTML = newHTML;
+        }
+        
+        // Update displayed count
+        displayedOrdersCount = end;
+        
+        // Restore checkbox states
+        selectedOrderIds.forEach(orderId => {
+            const checkbox = document.getElementById(`checkbox-${orderId}`);
+            if (checkbox) checkbox.checked = true;
+        });
+        
+        // Update bulk action button visibility
+        updateBulkActionButton();
+        
+        // Setup scroll listener
+        setupOrderScrollListener(orders);
+        
+        console.log(`✅ Displayed ${displayedOrdersCount}/${orders.length} orders`);
     } catch (displayError) {
         console.error('❌ Error generating order HTML:', displayError);
         container.innerHTML = `
@@ -181,6 +266,49 @@ function displayOrders(orders) {
             </div>
         `;
     }
+}
+
+// Setup scroll listener for lazy loading orders
+let orderLoadObserver = null;
+
+function setupOrderScrollListener(orders) {
+    const container = document.getElementById('ordersContainer');
+    
+    // Disconnect existing observer
+    if (orderLoadObserver) {
+        orderLoadObserver.disconnect();
+    }
+    
+    // Store current orders list
+    window.currentOrdersList = orders;
+    
+    // Check if we've loaded everything
+    if (displayedOrdersCount >= orders.length) return;
+    
+    // Create sentinel element at the end
+    let sentinel = document.getElementById('order-load-sentinel');
+    if (!sentinel) {
+        sentinel = document.createElement('div');
+        sentinel.id = 'order-load-sentinel';
+        sentinel.style.height = '1px';
+        sentinel.style.visibility = 'hidden';
+    }
+    container.appendChild(sentinel);
+    
+    // Create IntersectionObserver for smooth lazy loading
+    orderLoadObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && displayedOrdersCount < orders.length) {
+                displayOrders(orders, true); // Load next batch
+            }
+        });
+    }, {
+        root: null,
+        rootMargin: '300px', // Start loading 300px before reaching the end
+        threshold: 0.1
+    });
+    
+    orderLoadObserver.observe(sentinel);
 }
 
 // View order details
@@ -363,6 +491,7 @@ function showOrderDetailsModal(order) {
                                 <tr>
                                     <td colspan="4" style="text-align: right;"><strong>Grand Total:</strong></td>
                                     <td><strong class="total-amount">₹${parseFloat(order.total_amount).toFixed(2)}</strong></td>
+                                    <td style="display: none;" class="edit-only-column"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -508,7 +637,7 @@ function printInvoice(orderId) {
     }, 100);
 }
 
-// Share invoice on WhatsApp (generates PDF)
+// Share invoice on WhatsApp (generates PDF) - OPTIMIZED
 async function shareInvoiceWhatsApp(orderId) {
     const order = currentOrder;
     if (!order) return;
@@ -529,27 +658,22 @@ async function shareInvoiceWhatsApp(orderId) {
         container.style.width = '794px'; // A4 width at 96dpi
         container.style.background = '#ffffff';
         container.style.overflow = 'visible';
-        // Force proper scaling on mobile
-        if (isMobile) {
-            container.style.transform = 'scale(1)';
-            container.style.transformOrigin = 'top left';
-        }
         document.body.appendChild(container);
         
         container.innerHTML = invoiceHTML;
         
-        // Wait longer on mobile for proper rendering
-        await new Promise(r => setTimeout(r, isMobile ? 1500 : 1000));
+        // Reduced wait time for faster generation
+        await new Promise(r => setTimeout(r, isMobile ? 600 : 400));
         
         // Get actual rendered dimensions
         const invoiceElement = container.querySelector('.invoice-container');
         const actualWidth = invoiceElement.offsetWidth || 794;
         
-        console.log(`Rendering canvas at ${actualWidth}px width (mobile: ${isMobile})`);
+        console.log(`Rendering canvas at ${actualWidth}px width`);
         
-        // Capture invoice as canvas with high quality
+        // Capture invoice as canvas with optimized settings
         const canvas = await html2canvas(invoiceElement, {
-            scale: 2, // Always use 2x for quality
+            scale: 1.5, // Reduced from 2 for faster generation
             useCORS: true,
             allowTaint: false,
             backgroundColor: '#ffffff',
@@ -558,21 +682,22 @@ async function shareInvoiceWhatsApp(orderId) {
             windowWidth: actualWidth,
             scrollY: -window.scrollY,
             scrollX: -window.scrollX,
-            // Force proper rendering on mobile
             foreignObjectRendering: false,
-            imageTimeout: 0
+            imageTimeout: 0,
+            removeContainer: true // Clean up faster
         });
         
-        // Clean up container
+        // Clean up container immediately
         document.body.removeChild(container);
 
-        // Convert canvas to PDF using jsPDF with automatic pagination
+        // Convert canvas to PDF with optimized compression
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
             format: 'a4',
-            compress: true
+            compress: true,
+            precision: 2 // Reduce precision for smaller file size
         });
         
         // Get PDF dimensions (A4: 210mm x 297mm)
@@ -583,13 +708,13 @@ async function shareInvoiceWhatsApp(orderId) {
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
         
-        // Convert canvas to image data
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        // Convert canvas to image with optimized quality
+        const imgData = canvas.toDataURL('image/jpeg', 0.85); // Reduced from 0.95 for speed
         
         // Check if content fits on one page
         if (imgHeight <= pdfHeight) {
             // Single page - add directly
-            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
         } else {
             // Multi-page - split content across pages
             let heightLeft = imgHeight;
@@ -597,14 +722,14 @@ async function shareInvoiceWhatsApp(orderId) {
             let page = 0;
             
             // Add first page
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
             heightLeft -= pdfHeight;
             
             // Add subsequent pages
             while (heightLeft > 0) {
-                position = heightLeft - imgHeight; // Negative offset to show next portion
+                position = heightLeft - imgHeight;
                 pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
                 heightLeft -= pdfHeight;
                 page++;
             }
@@ -614,43 +739,39 @@ async function shareInvoiceWhatsApp(orderId) {
         
         // Generate PDF blob
         const pdfBlob = pdf.output('blob');
-        const pdfFile = new File([pdfBlob], `Al-Mathina_Invoice_${order.order_id}.pdf`, { type: 'application/pdf' });
+        const pdfFile = new File([pdfBlob], `Invoice_${order.order_id}.pdf`, { type: 'application/pdf' });
         
-        console.log('✅ PDF generated successfully:', pdfFile.size, 'bytes');
+        console.log('✅ PDF generated:', pdfFile.size, 'bytes');
 
         // Try to share PDF using Web Share API
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             try {
                 await navigator.share({
-                    title: `Al-Mathina Invoice - Order #${order.order_id}`,
-                    text: `Invoice for Order #${order.order_id}\nCustomer: ${order.user_name || 'Customer'}\nTotal: ₹${parseFloat(order.total_amount).toFixed(2)}\n- அல் மதீனா ஏஜென்சீஸ்`,
+                    title: `Invoice #${order.order_id}`,
+                    text: `Order #${order.order_id} - ${order.user_name || 'Customer'} - ₹${parseFloat(order.total_amount).toFixed(2)}`,
                     files: [pdfFile]
                 });
-                console.log('✅ PDF shared successfully via WhatsApp');
+                console.log('✅ Shared successfully');
                 return;
             } catch (err) {
-                if (err.name === 'AbortError') {
-                    console.log('Share cancelled by user');
-                    return;
-                }
-                console.warn('Web Share API failed:', err);
+                if (err.name === 'AbortError') return;
+                console.warn('Share failed:', err);
             }
         }
 
         // Fallback: Download the PDF file
-        console.log('Web Share API not available, downloading PDF...');
         const link = document.createElement('a');
         link.href = URL.createObjectURL(pdfBlob);
-        link.download = `Al-Mathina_Invoice_${order.order_id}.pdf`;
+        link.download = `Invoice_${order.order_id}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
         
-        alert('Invoice PDF downloaded! You can now share it via WhatsApp.');
+        showToast('Invoice downloaded! Share via WhatsApp', 'success');
     } catch (error) {
-        console.error('❌ Error generating PDF for WhatsApp:', error);
-        alert('Failed to generate PDF: ' + error.message);
+        console.error('❌ PDF generation error:', error);
+        showToast('Failed to generate PDF', 'error');
     }
 }
 
@@ -1902,16 +2023,14 @@ async function searchProducts(query) {
 function displaySearchResults(products) {
     const resultsContainer = document.getElementById('productSearchResults');
     
-    resultsContainer.innerHTML = products.map(product => {
+    resultsContainer.innerHTML = products.map((product, index) => {
         const tamilName = product.product_name_tamil || '';
         const displayName = tamilName ? `${product.product_name} / ${tamilName}` : product.product_name;
+        const uniqueId = `product-${product.item_id}-${index}`;
         
         return `
             <div class="product-search-item" 
-                onclick="addProductToOrder('${product.item_id}', '${product.product_name.replace(/'/g, "\\'")}', '${product.weight || ''}', ${product.price})" 
-                style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;" 
-                onmouseover="this.style.background='#f5f5f5'" 
-                onmouseout="this.style.background='white'">
+                style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; background: white;">
                 <div style="flex: 1;">
                     <div style="margin-bottom: 4px;">
                         <strong style="color: #1B5E20; font-size: 14px;">${product.product_name}</strong>
@@ -1923,7 +2042,26 @@ function displaySearchResults(products) {
                         ${product.section ? `<span style="background: #E8F5E9; padding: 2px 8px; border-radius: 12px; color: #2E7D32; font-size: 11px;">${product.section}</span>` : ''}
                     </div>
                 </div>
-                <i class="fas fa-plus-circle" style="color: #4CAF50; font-size: 20px;"></i>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="number" 
+                        id="qty-${uniqueId}" 
+                        class="product-qty-input" 
+                        placeholder="Qty" 
+                        min="1" 
+                        value=""
+                        style="width: 70px; padding: 6px 8px; text-align: center; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                        oninput="toggleAddButton('${uniqueId}', this.value)"
+                        onfocus="this.style.borderColor='#4CAF50'"
+                        onblur="this.style.borderColor='#e0e0e0'">
+                    <button 
+                        id="btn-${uniqueId}" 
+                        class="btn-add-product"
+                        disabled
+                        onclick="addProductToOrderWithQty('${product.item_id}', '${product.product_name.replace(/'/g, "\\'")}', '${product.weight || ''}', ${product.price}, '${uniqueId}')"
+                        style="background: #cccccc; color: white; border: none; padding: 8px 12px; border-radius: 50%; cursor: not-allowed; transition: all 0.2s; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-plus" style="font-size: 16px;"></i>
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
@@ -1931,8 +2069,34 @@ function displaySearchResults(products) {
     resultsContainer.style.display = 'block';
 }
 
-// Add product to order items table
-function addProductToOrder(itemId, productName, weight, price) {
+// Toggle add button based on quantity input
+function toggleAddButton(uniqueId, qtyValue) {
+    const button = document.getElementById(`btn-${uniqueId}`);
+    const qty = parseInt(qtyValue);
+    
+    if (qty && qty > 0) {
+        button.disabled = false;
+        button.style.background = '#4CAF50';
+        button.style.cursor = 'pointer';
+        button.style.boxShadow = '0 2px 4px rgba(76, 175, 80, 0.3)';
+    } else {
+        button.disabled = true;
+        button.style.background = '#cccccc';
+        button.style.cursor = 'not-allowed';
+        button.style.boxShadow = 'none';
+    }
+}
+
+// Add product to order with specified quantity
+function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) {
+    const qtyInput = document.getElementById(`qty-${uniqueId}`);
+    const quantity = parseInt(qtyInput.value) || 1;
+    
+    if (quantity <= 0) {
+        showToast('Please enter a valid quantity', 'error');
+        return;
+    }
+    
     const tbody = document.querySelector('#orderItemsTable tbody');
     
     // Check if product already exists
@@ -1944,21 +2108,21 @@ function addProductToOrder(itemId, productName, weight, price) {
     
     if (existingRow) {
         // Increment quantity if product already exists
-        const qtyInput = existingRow.querySelector('.qty-input');
-        if (qtyInput) {
-            const currentQty = parseInt(qtyInput.value) || 0;
-            qtyInput.value = currentQty + 1;
-            qtyInput.dataset.original = qtyInput.value;
+        const qtyInputExisting = existingRow.querySelector('.qty-input');
+        if (qtyInputExisting) {
+            const currentQty = parseInt(qtyInputExisting.value) || 0;
+            qtyInputExisting.value = currentQty + quantity;
+            qtyInputExisting.dataset.original = qtyInputExisting.value;
             
             // Update display
             const qtyDisplay = existingRow.querySelector('.qty-display');
-            if (qtyDisplay) qtyDisplay.textContent = `×${qtyInput.value}`;
+            if (qtyDisplay) qtyDisplay.textContent = `×${qtyInputExisting.value}`;
             
             // Recalculate totals
-            updateItemTotal({ target: qtyInput });
+            updateItemTotal({ target: qtyInputExisting });
         }
         
-        showToast(`Quantity increased for ${productName}`, 'success');
+        showToast(`Quantity increased for ${productName} (+${quantity})`, 'success');
     } else {
         // Add new row
         const newIndex = tbody.children.length;
@@ -1968,6 +2132,8 @@ function addProductToOrder(itemId, productName, weight, price) {
         newRow.dataset.price = price;
         newRow.dataset.weight = weight;
         
+        const totalAmount = (parseFloat(price) * quantity).toFixed(2);
+        
         newRow.innerHTML = `
             <td><strong>${productName}</strong></td>
             <td>${weight || '-'}</td>
@@ -1976,10 +2142,10 @@ function addProductToOrder(itemId, productName, weight, price) {
                 <input type="number" class="price-input" value="${price}" min="0" step="0.01" style="display: inline; width: 80px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="${price}">
             </td>
             <td class="qty-cell">
-                <span class="qty-display" style="display: none;">×1</span>
-                <input type="number" class="qty-input" value="1" min="1" style="display: inline; width: 60px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="1">
+                <span class="qty-display" style="display: none;">×${quantity}</span>
+                <input type="number" class="qty-input" value="${quantity}" min="1" style="display: inline; width: 60px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="${quantity}">
             </td>
-            <td class="item-total"><strong>₹${parseFloat(price).toFixed(2)}</strong></td>
+            <td class="item-total"><strong>₹${totalAmount}</strong></td>
             <td style="display: table-cell;" class="edit-only-column">
                 <button class="btn-delete-item" onclick="removeOrderItem(this)" style="display: inline-block; background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" title="Remove item">
                     <i class="fas fa-trash"></i>
@@ -1991,11 +2157,11 @@ function addProductToOrder(itemId, productName, weight, price) {
         
         // Add event listeners to new inputs
         const priceInput = newRow.querySelector('.price-input');
-        const qtyInput = newRow.querySelector('.qty-input');
+        const qtyInputNew = newRow.querySelector('.qty-input');
         if (priceInput) priceInput.addEventListener('input', updateItemTotal);
-        if (qtyInput) qtyInput.addEventListener('input', updateItemTotal);
+        if (qtyInputNew) qtyInputNew.addEventListener('input', updateItemTotal);
         
-        showToast(`${productName} added to order`, 'success');
+        showToast(`${productName} (×${quantity}) added to order`, 'success');
     }
     
     // Clear search
@@ -2018,6 +2184,116 @@ function removeOrderItem(button) {
     recalculateGrandTotal();
     
     showToast(`${productName} removed from order`, 'info');
+}
+
+// ============ BULK ORDER SELECTION FUNCTIONS ============
+
+// Toggle order selection
+function toggleOrderSelection(orderId, isChecked) {
+    if (isChecked) {
+        selectedOrderIds.add(orderId);
+    } else {
+        selectedOrderIds.delete(orderId);
+    }
+    updateBulkActionButton();
+}
+
+// Update bulk action button visibility and count
+function updateBulkActionButton() {
+    let bulkActionBtn = document.getElementById('bulkMarkDeliveredBtn');
+    
+    if (selectedOrderIds.size > 0) {
+        // Create button if it doesn't exist
+        if (!bulkActionBtn) {
+            bulkActionBtn = document.createElement('button');
+            bulkActionBtn.id = 'bulkMarkDeliveredBtn';
+            bulkActionBtn.className = 'bulk-action-btn';
+            bulkActionBtn.onclick = markSelectedAsDelivered;
+            
+            // Insert after orders header
+            const ordersHeader = document.querySelector('.orders-header');
+            if (ordersHeader) {
+                ordersHeader.after(bulkActionBtn);
+            }
+        }
+        
+        bulkActionBtn.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            Mark as Delivered (${selectedOrderIds.size})
+        `;
+        bulkActionBtn.style.display = 'flex';
+    } else {
+        // Hide button if no orders selected
+        if (bulkActionBtn) {
+            bulkActionBtn.style.display = 'none';
+        }
+    }
+}
+
+// Mark selected orders as delivered
+async function markSelectedAsDelivered() {
+    if (selectedOrderIds.size === 0) {
+        showToast('No orders selected', 'error');
+        return;
+    }
+    
+    const count = selectedOrderIds.size;
+    const confirmation = confirm(`Mark ${count} order${count > 1 ? 's' : ''} as delivered?`);
+    
+    if (!confirmation) return;
+    
+    try {
+        const orderIdsArray = Array.from(selectedOrderIds);
+        let successCount = 0;
+        let failCount = 0;
+        
+        // Show progress
+        showToast(`Processing ${count} orders...`, 'info');
+        
+        // Update each order
+        for (const orderId of orderIdsArray) {
+            try {
+                const response = await fetch(`/api/admin/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: 'delivered' })
+                });
+                
+                if (response.ok) {
+                    successCount++;
+                    // Update order in local array
+                    const order = allOrders.find(o => o.order_id === orderId);
+                    if (order) order.status = 'delivered';
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                console.error(`Failed to update order ${orderId}:`, error);
+                failCount++;
+            }
+        }
+        
+        // Clear selection
+        selectedOrderIds.clear();
+        
+        // Refresh display
+        displayOrders(filteredOrders);
+        updateOrderStats();
+        
+        // Show result
+        if (successCount > 0) {
+            showToast(`${successCount} order${successCount > 1 ? 's' : ''} marked as delivered!`, 'success');
+        }
+        if (failCount > 0) {
+            showToast(`${failCount} order${failCount > 1 ? 's' : ''} failed to update`, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Bulk update error:', error);
+        showToast('Failed to update orders', 'error');
+    }
 }
 
 // Clear product search

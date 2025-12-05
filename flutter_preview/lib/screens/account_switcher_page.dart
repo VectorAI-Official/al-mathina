@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/saved_account.dart';
 import '../services/shared_prefs_service.dart';
 import '../screens/phone_auth_screen.dart';
+import '../api_service.dart';
 
 class AccountSwitcherPage extends StatefulWidget {
   const AccountSwitcherPage({Key? key}) : super(key: key);
@@ -23,14 +24,168 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
   }
 
   Future<void> _loadAccounts() async {
+    print('');
+    print('███████████████████████████████████████████████████████████████');
+    print('🚀 ACCOUNT SWITCHER: _loadAccounts() STARTED');
+    print('███████████████████████████████████████████████████████████████');
+    
     setState(() => _isLoading = true);
     
     try {
-      final accounts = await SharedPrefsService.getSavedAccounts();
+      // Get preferences
+      print('');
+      print('📋 PHASE 1: Loading SharedPreferences...');
       final prefs = await SharedPreferences.getInstance();
       final currentPhone = prefs.getString('userPhone');
+      final currentStoreName = prefs.getString('userStoreName');
       
-      // Find current user UID from phone number
+      print('✅ SharedPreferences loaded:');
+      print('   📱 userPhone: $currentPhone');
+      print('   🏪 userStoreName: $currentStoreName');
+      
+      // Check raw JSON first to see if migration needed
+      print('');
+      print('📋 PHASE 2: Checking if migration needed...');
+      final rawJson = prefs.getString('saved_accounts');
+      print('📖 Raw saved_accounts: $rawJson');
+      
+      // Simple check: if JSON doesn't contain "storeName" string, we need to migrate
+      final needsMigration = rawJson != null && !rawJson.contains('storeName');
+      print('🔍 needsMigration = $needsMigration');
+      
+      List<SavedAccount> accounts;
+      
+      if (needsMigration) {
+        print('');
+        print('🔨🔨🔨 MIGRATION REQUIRED: Old format detected 🔨🔨🔨');
+        print('🔨 Old format does not have storeName field');
+        
+        // Load accounts to get phone numbers
+        print('');
+        print('📋 PHASE 3: Loading old accounts for phone numbers...');
+        final oldAccounts = await SharedPrefsService.getSavedAccounts();
+        print('✅ Loaded ${oldAccounts.length} old accounts');
+        
+        // Extract phone numbers
+        final phoneNumbers = oldAccounts.map((acc) => acc.phoneNumber).toList();
+        print('📞 Phone numbers to migrate: $phoneNumbers');
+        
+        // CRITICAL: Clear old data COMPLETELY before rebuilding
+        print('');
+        print('🗑️🗑️🗑️ CLEARING ALL OLD DATA 🗑️🗑️🗑️');
+        final removed = await prefs.remove('saved_accounts');
+        print('🗑️ remove() returned: $removed');
+        
+        // Force commit by getting instance again
+        await prefs.reload();
+        print('🔄 Called prefs.reload() to force refresh');
+        
+        final verifyCleared = prefs.getString('saved_accounts');
+        print('🗑️ Verify cleared - saved_accounts is now: $verifyCleared');
+        
+        // NOW rebuild from scratch with NEW storage
+        print('');
+        print('🔨 REBUILDING: Processing ${phoneNumbers.length} accounts with NEW format...');
+        accounts = [];
+        
+        for (int i = 0; i < phoneNumbers.length; i++) {
+          final phoneNumber = phoneNumbers[i];
+          final uid = 'user_${phoneNumber.replaceAll('+', '')}';
+          
+          print('');
+          print('──────────────────────────────────────────────────────────');
+          print('🔄 Processing account ${i + 1}/${phoneNumbers.length}');
+          print('   Phone: $phoneNumber');
+          print('   UID: $uid');
+          print('──────────────────────────────────────────────────────────');
+          
+          // If this is current user and we have store name cached, use it
+          if (phoneNumber == currentPhone && currentStoreName != null && currentStoreName.isNotEmpty) {
+            print('💾 This is CURRENT USER - using cached store name');
+            print('   Cached storeName: $currentStoreName');
+            
+            final account = SavedAccount(
+              uid: uid,
+              phoneNumber: phoneNumber,
+              storeName: currentStoreName,
+            );
+            print('✅ Created SavedAccount: ${account.toJson()}');
+            accounts.add(account);
+            
+            print('💾 Calling SharedPrefsService.saveAccount()...');
+            await SharedPrefsService.saveAccount(account);
+            print('✅ saveAccount() completed');
+            
+            // Verify it was saved with storeName
+            await prefs.reload();
+            final checkJson = prefs.getString('saved_accounts');
+            print('🔍 After save, saved_accounts contains: $checkJson');
+            continue;
+          }
+          
+          // Otherwise fetch from backend
+          print('🔍 NOT current user - fetching from backend...');
+          try {
+            print('📡 Calling ApiService.getStoreDetails($phoneNumber)...');
+            final storeDetails = await ApiService.getStoreDetails(phoneNumber);
+            print('📡 API Response: $storeDetails');
+            
+            final storeName = storeDetails['store_name']?.toString();
+            print('📦 Extracted store_name: $storeName');
+            
+            final account = SavedAccount(
+              uid: uid,
+              phoneNumber: phoneNumber,
+              storeName: storeName,
+            );
+            print('✅ Created SavedAccount: ${account.toJson()}');
+            accounts.add(account);
+            
+            print('💾 Calling SharedPrefsService.saveAccount()...');
+            await SharedPrefsService.saveAccount(account);
+            print('✅ saveAccount() completed');
+            
+            // Verify it was saved with storeName
+            await prefs.reload();
+            final checkJson = prefs.getString('saved_accounts');
+            print('🔍 After save, saved_accounts contains: $checkJson');
+          } catch (e) {
+            print('❌ API FAILED for $phoneNumber: $e');
+            // Keep account even if fetch fails
+            final account = SavedAccount(
+              uid: uid,
+              phoneNumber: phoneNumber,
+              storeName: null,
+            );
+            print('⚠️ Created SavedAccount without storeName: ${account.toJson()}');
+            accounts.add(account);
+            
+            print('💾 Calling SharedPrefsService.saveAccount()...');
+            await SharedPrefsService.saveAccount(account);
+            print('✅ saveAccount() completed');
+          }
+        }
+        
+        print('');
+        print('✅✅✅ MIGRATION COMPLETE ✅✅✅');
+        print('   Migrated ${accounts.length} accounts to new format');
+      } else {
+        print('');
+        print('📋 PHASE 3: Loading accounts (no migration needed)...');
+        accounts = await SharedPrefsService.getSavedAccounts();
+        print('✅ Loaded ${accounts.length} accounts with new format');
+      }
+      
+      // Verify what was saved
+      print('');
+      print('📋 PHASE 4: Final verification...');
+      final verifyJson = prefs.getString('saved_accounts');
+      print('🔍 Current saved_accounts in SharedPrefs:');
+      print('$verifyJson');
+      
+      // Find current user UID
+      print('');
+      print('📋 PHASE 5: Finding current user UID...');
       String? currentUid;
       if (currentPhone != null) {
         final currentAccount = accounts.firstWhere(
@@ -38,14 +193,39 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
           orElse: () => SavedAccount(uid: '', phoneNumber: ''),
         );
         currentUid = currentAccount.uid.isNotEmpty ? currentAccount.uid : null;
+        print('✅ Current user UID: $currentUid');
+      } else {
+        print('⚠️ No current phone - currentUid will be null');
       }
       
+      print('');
+      print('📋 PHASE 6: Preparing UI display...');
+      print('✨ Accounts to display:');
+      for (int i = 0; i < accounts.length; i++) {
+        print('   [$i] ${accounts[i].phoneNumber} -> storeName: ${accounts[i].storeName}');
+      }
+      
+      print('');
+      print('📋 PHASE 7: Calling setState()...');
       setState(() {
         _savedAccounts = accounts;
         _currentUserUid = currentUid;
         _isLoading = false;
       });
+      print('✅ setState() completed');
+      
+      print('');
+      print('███████████████████████████████████████████████████████████████');
+      print('🎉 ACCOUNT SWITCHER: _loadAccounts() FINISHED SUCCESSFULLY');
+      print('███████████████████████████████████████████████████████████████');
+      print('');
     } catch (e) {
+      print('');
+      print('❌❌❌ ERROR IN _loadAccounts() ❌❌❌');
+      print('💥 Exception: $e');
+      print('💥 Stack trace: ${StackTrace.current}');
+      print('███████████████████████████████████████████████████████████████');
+      
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +286,9 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Account'),
-        content: Text('Remove ${account.phoneNumber} from saved accounts?'),
+        content: Text(
+          'Remove ${account.storeName != null && account.storeName!.isNotEmpty ? account.storeName : account.phoneNumber} from saved accounts?'
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -154,6 +336,19 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
                   itemBuilder: (context, index) {
                     final account = _savedAccounts[index];
                     final isCurrentUser = account.uid == _currentUserUid;
+                    
+                    // Debug: Print account details when building UI
+                    print('');
+                    print('🎨🎨🎨 BUILDING UI FOR ACCOUNT $index 🎨🎨🎨');
+                    print('   uid: ${account.uid}');
+                    print('   phoneNumber: ${account.phoneNumber}');
+                    print('   storeName: ${account.storeName}');
+                    print('   storeName is null: ${account.storeName == null}');
+                    print('   storeName is empty: ${account.storeName?.isEmpty}');
+                    print('   hasStoreName: ${account.storeName != null && account.storeName!.isNotEmpty}');
+                    print('   Will display: ${account.storeName != null && account.storeName!.isNotEmpty ? account.storeName! : account.phoneNumber}');
+                    print('🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨');
+                    print('');
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -166,9 +361,11 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
                         leading: CircleAvatar(
                           backgroundColor: const Color(0xFF66BB6A),
                           child: Text(
-                            account.phoneNumber.substring(
-                              account.phoneNumber.length - 2,
-                            ),
+                            account.storeName != null && account.storeName!.isNotEmpty
+                                ? account.storeName!.substring(0, 1).toUpperCase()
+                                : account.phoneNumber.substring(
+                                    account.phoneNumber.length - 2,
+                                  ),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -176,21 +373,38 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
                           ),
                         ),
                         title: Text(
-                          account.phoneNumber,
+                          account.storeName != null && account.storeName!.isNotEmpty
+                              ? account.storeName!
+                              : account.phoneNumber,
                           style: const TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        subtitle: isCurrentUser
-                            ? const Text(
-                                'Current Account',
-                                style: TextStyle(
-                                  color: Color(0xFF66BB6A),
-                                  fontWeight: FontWeight.w500,
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              account.phoneNumber,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            if (isCurrentUser)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Current Account',
+                                  style: TextStyle(
+                                    color: Color(0xFF66BB6A),
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                              )
-                            : null,
+                              ),
+                          ],
+                        ),
                         trailing: isCurrentUser
                             ? const Icon(
                                 Icons.check_circle,

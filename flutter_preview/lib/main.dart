@@ -11,6 +11,8 @@ import 'api_service.dart';
 import 'screens/phone_auth_screen.dart';
 import 'screens/account_switcher_page.dart';
 import 'services/shared_prefs_service.dart';
+import 'models/saved_account.dart';
+import 'widgets/voice_search_dialog.dart';
 
 const Color kPrimaryColor = Color(0xFF66BB6A); // Colors.green[400]
 const String kAppName = 'AL-Madhina';
@@ -832,6 +834,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
         if (storeDetails.isEmpty) {
           storeIncomplete = true;
         } else {
+          // Save store name to SharedPreferences for account switcher
+          final storeName = storeDetails['store_name']?.toString();
+          if (storeName != null && storeName.trim().isNotEmpty) {
+            await prefs.setString('userStoreName', storeName);
+            print('💾 Saved store name to SharedPreferences: $storeName');
+            
+            // CRITICAL: Also update the saved_accounts array!
+            print('');
+            print('🔵🔵🔵 UPDATING saved_accounts WITH STORE NAME 🔵🔵🔵');
+            final uid = 'user_${phone.replaceAll('+', '')}';
+            final account = SavedAccount(
+              uid: uid,
+              phoneNumber: phone,
+              storeName: storeName,
+            );
+            print('🔵 Created SavedAccount: ${account.toJson()}');
+            print('🔵 Calling SharedPrefsService.saveAccount()...');
+            await SharedPrefsService.saveAccount(account);
+            print('🔵 SharedPrefsService.saveAccount() completed!');
+            print('🔵🔵🔵 UPDATE COMPLETE 🔵🔵🔵');
+            print('');
+          }
+          
           storeIncomplete = (
             storeDetails['store_name'] == null || storeDetails['store_name'].toString().trim().isEmpty ||
             storeDetails['street'] == null || storeDetails['street'].toString().trim().isEmpty ||
@@ -1237,6 +1262,37 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                     ),
                   ),
+                  // Voice Search Button
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF66BB6A).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.mic,
+                        color: Color(0xFF66BB6A),
+                        size: 20,
+                      ),
+                    ),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => VoiceSearchDialog(
+                          onSearchQuery: (query) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SearchResultsScreen(query: query),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
                 ],
               ),
             ),
@@ -1905,78 +1961,152 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   ? Center(child: Text('Error: $_error'))
                   : Row(
                       children: [
-                        // Left Sidebar - Subcategories (30%)
+                        // Left Sidebar - Subcategories (Modern Clean Design)
                         Container(
                       width: MediaQuery.of(context).size.width * 0.25,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border(right: BorderSide(color: Colors.grey[200]!, width: 1)),
+                        color: const Color(0xFFFAFAFA),
+                        border: Border(right: BorderSide(color: Colors.grey[300]!, width: 1)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 10,
+                            offset: const Offset(2, 0),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Filters header
+                          // Modern header with gradient
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                             decoration: BoxDecoration(
-                              color: Colors.grey[50],
-                              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                              gradient: LinearGradient(
+                                colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.85)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: kPrimaryColor.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.filter_list, size: 18, color: Colors.black87),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Filters',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.category, size: 20, color: Colors.white),
+                                ),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Text(
+                                    'Categories',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          // Subcategories list
+                          // Subcategories list with modern styling
                           Expanded(
                             child: ListView.builder(
-                              padding: EdgeInsets.zero,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
                               itemCount: _subcategories.length,
                               itemBuilder: (context, index) {
                                 final subcategory = _subcategories[index];
                                 final isSelected = subcategory.name == _selectedSubcategory;
 
                                 return Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: isSelected ? kPrimaryColor.withOpacity(0.05) : Colors.transparent,
-                                    border: Border(
-                                      left: BorderSide(
-                                        color: isSelected ? kPrimaryColor : Colors.transparent,
-                                        width: 3,
-                                      ),
+                                    color: isSelected ? Colors.white : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected ? kPrimaryColor.withOpacity(0.3) : Colors.transparent,
+                                      width: 1.5,
                                     ),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: kPrimaryColor.withOpacity(0.15),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ]
+                                        : [],
                                   ),
-                                  child: ListTile(
-                                    dense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    leading: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? kPrimaryColor.withOpacity(0.1) : Colors.grey[100],
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(
-                                        Icons.category_outlined,
-                                        size: 20,
-                                        color: isSelected ? kPrimaryColor : Colors.grey[600],
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () => _selectSubcategory(subcategory.name),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 40,
+                                              height: 40,
+                                              decoration: BoxDecoration(
+                                                gradient: isSelected
+                                                    ? LinearGradient(
+                                                        colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+                                                      )
+                                                    : LinearGradient(
+                                                        colors: [Colors.grey[200]!, Colors.grey[100]!],
+                                                      ),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Icon(
+                                                Icons.inventory_2_rounded,
+                                                size: 20,
+                                                color: isSelected ? Colors.white : Colors.grey[600],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                subcategory.nameDisplay,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                                  color: isSelected ? kPrimaryColor : Colors.black87,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (isSelected)
+                                              Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: kPrimaryColor.withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.check,
+                                                  size: 14,
+                                                  color: kPrimaryColor,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    title: Text(
-                                      subcategory.nameDisplay,  // Use localized name for display
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                        color: isSelected ? kPrimaryColor : Colors.black87,
-                                      ),
-                                    ),
-                                    onTap: () => _selectSubcategory(subcategory.name),  // Use English name for API
                                   ),
                                 );
                               },
@@ -6362,12 +6492,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               else
                 ...savedAccounts.map((account) {
                   final isCurrentAccount = account.phoneNumber == currentPhone;
+                  
+                  // Debug log
+                  print('🎨 Profile Switch Account Dialog - Building account:');
+                  print('   phoneNumber: ${account.phoneNumber}');
+                  print('   storeName: ${account.storeName}');
+                  
                   return ListTile(
-                    leading: Icon(
-                      Icons.phone_android,
-                      color: kPrimaryColor,
+                    leading: CircleAvatar(
+                      backgroundColor: kPrimaryColor,
+                      child: Text(
+                        account.storeName != null && account.storeName!.isNotEmpty
+                            ? account.storeName!.substring(0, 1).toUpperCase()
+                            : account.phoneNumber.substring(account.phoneNumber.length - 2),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    title: Text(account.phoneNumber),
+                    title: Text(
+                      account.storeName != null && account.storeName!.isNotEmpty
+                          ? account.storeName!
+                          : account.phoneNumber,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    subtitle: Text(
+                      account.phoneNumber,
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                      ),
+                    ),
                     trailing: isCurrentAccount
                         ? const Icon(Icons.check_circle, color: Colors.green)
                         : const Icon(Icons.chevron_right, color: Colors.grey),

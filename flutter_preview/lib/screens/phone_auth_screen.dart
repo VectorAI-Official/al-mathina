@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../services/shared_prefs_service.dart';
 import '../models/saved_account.dart';
+import '../api_service.dart';
 import '../main.dart' show MainScreen, mainScreenKey, AppProvider;
 
 const kPrimaryColor = Color(0xFF66BB6A);
@@ -107,13 +108,39 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     // Generate a simple UID from phone number (since Firebase is removed)
     final uid = 'user_${phoneNumber.replaceAll('+', '')}';
     
+    // Fetch store name from backend
+    String? storeName;
+    try {
+      final storeDetails = await ApiService.getStoreDetails(phoneNumber);
+      storeName = storeDetails['store_name']?.toString();
+      
+      // Save store name to SharedPreferences for current user
+      if (storeName != null && storeName.trim().isNotEmpty) {
+        await prefs.setString('userStoreName', storeName);
+        print('💾 Saved store name to SharedPreferences: $storeName');
+      }
+    } catch (e) {
+      print('Could not fetch store name: $e');
+    }
+    
     // Save account to saved accounts list
+    print('');
+    print('🔵🔵🔵 ABOUT TO SAVE ACCOUNT TO saved_accounts 🔵🔵🔵');
+    print('   uid: $uid');
+    print('   phoneNumber: $phoneNumber');
+    print('   storeName: $storeName');
     final account = SavedAccount(
       uid: uid,
       phoneNumber: phoneNumber,
+      storeName: storeName,
     );
+    print('🔵 Created SavedAccount object: ${account.toJson()}');
+    print('🔵 Calling SharedPrefsService.saveAccount()...');
     await SharedPrefsService.saveAccount(account);
-    print('Account saved: ${account.phoneNumber} (${account.uid})');
+    print('🔵 SharedPrefsService.saveAccount() completed!');
+    print('Account saved: ${account.phoneNumber} (${account.uid}) - ${account.storeName}');
+    print('🔵🔵🔵 SAVE ACCOUNT COMPLETE 🔵🔵🔵');
+    print('');
     
     widget.onAuthSuccess?.call();
     

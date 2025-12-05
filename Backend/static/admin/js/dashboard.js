@@ -7,6 +7,11 @@ let categoryMetadata = {}; // Stores category images and metadata
 let currentProductId = null;
 let deleteProductId = null;
 
+// Lazy loading state for products
+let displayedProductsCount = 0;
+const PRODUCTS_PER_PAGE = 50;
+const PRODUCTS_LOAD_THRESHOLD = 40; // Load more when scrolling to 40th item
+
 // Mobile view state tracking
 let mobileViewState = {
     currentView: 'sections', // 'sections', 'main-categories', 'subcategories'
@@ -395,8 +400,8 @@ async function loadProducts() {
     }
 }
 
-// Display products in table
-function displayProducts(products) {
+// Display products in table with lazy loading
+function displayProducts(products, append = false) {
     const tbody = document.getElementById('productsTableBody');
     
     if (products.length === 0) {
@@ -407,11 +412,24 @@ function displayProducts(products) {
                 </td>
             </tr>
         `;
+        displayedProductsCount = 0;
         return;
     }
     
-    tbody.innerHTML = products.map(product => `
-        <tr>
+    // Reset count if not appending
+    if (!append) {
+        displayedProductsCount = 0;
+        tbody.innerHTML = '';
+    }
+    
+    // Calculate slice range
+    const start = displayedProductsCount;
+    const end = Math.min(start + PRODUCTS_PER_PAGE, products.length);
+    const productsToShow = products.slice(start, end);
+    
+    // Generate HTML for new products
+    const newHTML = productsToShow.map(product => `
+        <tr data-product-index="${displayedProductsCount + productsToShow.indexOf(product)}">
             <td>
                 ${product.image_url || product.image ? 
                     `<img src="${product.image_url || product.image}" alt="${product.product_name || product.name}" class="product-image">` : 
@@ -440,6 +458,63 @@ function displayProducts(products) {
             </td>
         </tr>
     `).join('');
+    
+    // Append or replace HTML
+    if (append) {
+        tbody.insertAdjacentHTML('beforeend', newHTML);
+    } else {
+        tbody.innerHTML = newHTML;
+    }
+    
+    // Update displayed count
+    displayedProductsCount = end;
+    
+    // Setup scroll listener for lazy loading
+    setupProductScrollListener(products);
+    
+    console.log(`✅ Displayed ${displayedProductsCount}/${products.length} products`);
+}
+
+// Setup scroll listener for lazy loading products
+let productLoadObserver = null;
+
+function setupProductScrollListener(products) {
+    const tbody = document.getElementById('productsTableBody');
+    
+    // Disconnect existing observer
+    if (productLoadObserver) {
+        productLoadObserver.disconnect();
+    }
+    
+    // Store current products list
+    window.currentProductsList = products;
+    
+    // Check if we've loaded everything
+    if (displayedProductsCount >= products.length) return;
+    
+    // Create sentinel element at the end
+    let sentinel = document.getElementById('product-load-sentinel');
+    if (!sentinel) {
+        sentinel = document.createElement('tr');
+        sentinel.id = 'product-load-sentinel';
+        sentinel.innerHTML = '<td colspan="9" style="height: 1px;"></td>';
+    }
+    tbody.appendChild(sentinel);
+    
+    // Create IntersectionObserver for smooth lazy loading
+    productLoadObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && displayedProductsCount < products.length) {
+                displayProducts(products, true); // Load next batch
+            }
+        });
+    }, {
+        root: null,
+        rootMargin: '200px', // Start loading 200px before reaching the end
+        threshold: 0.1
+    });
+    
+    productLoadObserver.observe(sentinel);
 }
 
 // Filter products
@@ -4124,7 +4199,8 @@ async function handleSubCategoryEdit(event) {
             requestBody: requestBody
         });
         
-        const response = await fetch(`/admin/api/categories/sub/${encodeURIComponent(oldName)}`, {
+        // Use the correct endpoint with CASCADE product updates
+        const response = await fetch(`/admin/api/subcategory/${encodeURIComponent(section)}/${encodeURIComponent(mainCategory)}/${encodeURIComponent(oldName)}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'

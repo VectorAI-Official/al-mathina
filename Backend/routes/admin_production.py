@@ -713,29 +713,74 @@ async def update_subcategory(
         db = get_mongo_db()
         metadata_collection = db.category_metadata
         
+        logger.info(f"=" * 80)
+        logger.info(f"🔵 SUBCATEGORY UPDATE REQUEST RECEIVED")
+        logger.info(f"   Section: {section}")
+        logger.info(f"   Main Category: {main_category}")
+        logger.info(f"   Subcategory (OLD): {subcategory}")
+        logger.info(f"   Update Object: {update}")
+        logger.info(f"   Update.name: {update.name if hasattr(update, 'name') else 'NOT SET'}")
+        logger.info(f"   Update.name_ta: {update.name_ta if hasattr(update, 'name_ta') else 'NOT SET'}")
+        logger.info(f"   Update.image_url: {update.image_url if hasattr(update, 'image_url') else 'NOT SET'}")
+        logger.info(f"=" * 80)
+        
         # Get old IDs
         old_section_id = generate_category_id(section)
         old_main_cat_id = generate_category_id(section, main_category)
         old_subcat_id = generate_category_id(section, main_category, subcategory)
+        
+        logger.info(f"🔑 Generated OLD IDs:")
+        logger.info(f"   old_section_id: {old_section_id}")
+        logger.info(f"   old_main_cat_id: {old_main_cat_id}")
+        logger.info(f"   old_subcat_id: {old_subcat_id}")
         
         # Prepare update data
         update_data = {"updated_at": datetime.utcnow()}
         
         if update.name_ta:
             update_data["name_ta"] = update.name_ta
+            logger.info(f"✅ Adding name_ta to update_data: {update.name_ta}")
         
         if update.image_url:
             update_data["image_url"] = update.image_url
+            logger.info(f"✅ Adding image_url to update_data: {update.image_url}")
         
         # Check if name is being changed
         new_name = update.name if hasattr(update, 'name') and update.name else subcategory
+        logger.info(f"🔍 Name Check:")
+        logger.info(f"   hasattr(update, 'name'): {hasattr(update, 'name')}")
+        logger.info(f"   update.name value: {update.name if hasattr(update, 'name') else 'N/A'}")
+        logger.info(f"   new_name (computed): {new_name}")
+        logger.info(f"   subcategory (old): {subcategory}")
+        logger.info(f"   Names are different: {new_name != subcategory}")
+        
         if new_name != subcategory:
             update_data["name"] = new_name
             # Generate new subcategory ID
             new_subcat_id = generate_category_id(section, main_category, new_name)
             update_data["category_id"] = new_subcat_id
+            logger.info(f"✅ Name is changing! Adding to update_data:")
+            logger.info(f"   name: {new_name}")
+            logger.info(f"   category_id: {new_subcat_id}")
+        
+        logger.info(f"📋 Final update_data: {update_data}")
         
         # Update or create metadata
+        logger.info(f"🔍 Finding metadata document with:")
+        logger.info(f"   section: {section}")
+        logger.info(f"   main_category: {main_category}")
+        logger.info(f"   name: {subcategory}")
+        logger.info(f"   type: subcategory")
+        
+        # Check if document exists before update
+        existing_doc = metadata_collection.find_one({
+            "section": section,
+            "main_category": main_category,
+            "name": subcategory,
+            "type": "subcategory"
+        })
+        logger.info(f"📄 Existing metadata document: {existing_doc}")
+        
         result = metadata_collection.update_one(
             {
                 "section": section,
@@ -747,14 +792,88 @@ async def update_subcategory(
             upsert=True
         )
         
+        logger.info(f"✅ Metadata update result:")
+        logger.info(f"   matched_count: {result.matched_count}")
+        logger.info(f"   modified_count: {result.modified_count}")
+        logger.info(f"   upserted_id: {result.upserted_id}")
+        
+        # Verify the update
+        updated_doc = metadata_collection.find_one({
+            "section": section,
+            "main_category": main_category,
+            "name": new_name,
+            "type": "subcategory"
+        })
+        logger.info(f"🔍 Updated metadata document: {updated_doc}")
+        
         logger.info(f"✓ Subcategory updated: {section}/{main_category}/{subcategory}")
         
         # If name changed, CASCADE UPDATE using UUID references
         if new_name != subcategory:
             new_subcat_id = generate_category_id(section, main_category, new_name)
-            logger.info(f"🔄 CASCADE: Renaming subcategory '{subcategory}' → '{new_name}' (ID: {old_subcat_id} → {new_subcat_id})")
+            logger.info(f"=" * 80)
+            logger.info(f"🔄 CASCADE UPDATE STARTING")
+            logger.info(f"🔄 CASCADE: Renaming subcategory '{subcategory}' → '{new_name}'")
+            logger.info(f"   Old ID: {old_subcat_id}")
+            logger.info(f"   New ID: {new_subcat_id}")
+            logger.info(f"=" * 80)
             
-            # CASCADE UPDATE: Update all products by subcategory_id (using CORRECT field names)
+            # 1. Update category_hierarchy collection (CRITICAL for dashboard display)
+            logger.info(f"📊 Step 1: Updating category_hierarchy collection")
+            hierarchy_doc = db.category_hierarchy.find_one({"sections": section})
+            
+            if hierarchy_doc:
+                logger.info(f"✅ Found hierarchy document: {hierarchy_doc.get('_id')}")
+                subcats = hierarchy_doc.get("subcategories", {}).get(section, {}).get(main_category, [])
+                logger.info(f"   Current hierarchy subcategories for '{section}/{main_category}': {subcats}")
+                logger.info(f"   Type: {type(subcats)}, Length: {len(subcats)}")
+                
+                if subcategory in subcats:
+                    logger.info(f"✅ Found '{subcategory}' in hierarchy at index {subcats.index(subcategory)}")
+                    # Find index and replace in-place to preserve order
+                    idx = subcats.index(subcategory)
+                    subcats[idx] = new_name
+                    
+                    logger.info(f"📝 Updating hierarchy with new array: {subcats}")
+                    logger.info(f"   Update path: subcategories.{section}.{main_category}")
+                    
+                    hierarchy_update_result = db.category_hierarchy.update_one(
+                        {"_id": hierarchy_doc["_id"]},
+                        {"$set": {f"subcategories.{section}.{main_category}": subcats}}
+                    )
+                    
+                    logger.info(f"✅ Hierarchy update result:")
+                    logger.info(f"   matched_count: {hierarchy_update_result.matched_count}")
+                    logger.info(f"   modified_count: {hierarchy_update_result.modified_count}")
+                    
+                    # Verify the update
+                    verify_hierarchy = db.category_hierarchy.find_one({"_id": hierarchy_doc["_id"]})
+                    verify_subcats = verify_hierarchy.get("subcategories", {}).get(section, {}).get(main_category, [])
+                    logger.info(f"🔍 Verified hierarchy subcategories: {verify_subcats}")
+                    
+                    logger.info(f"✓ CASCADE: Hierarchy updated - '{subcategory}' → '{new_name}'")
+                    logger.info(f"   New hierarchy subcategories: {subcats}")
+                else:
+                    logger.warning(f"⚠️  Old name '{subcategory}' not found in hierarchy for '{section}/{main_category}'!")
+                    logger.warning(f"   Available subcategories: {subcats}")
+            else:
+                logger.warning(f"⚠️  Hierarchy document not found for section '{section}'")
+            
+            # 2. CASCADE UPDATE: Update all products by subcategory_id (using CORRECT field names)
+            logger.info(f"=" * 80)
+            logger.info(f"📦 Step 2: Updating products by category_sub_id")
+            logger.info(f"   Searching for products with category_sub_id: {old_subcat_id}")
+            
+            # Count products before update
+            product_count_before = db.products.count_documents({"category_sub_id": old_subcat_id})
+            logger.info(f"   Found {product_count_before} products with old subcategory ID")
+            
+            # Show sample products before update
+            sample_products_before = list(db.products.find({"category_sub_id": old_subcat_id}).limit(3))
+            logger.info(f"   Sample products BEFORE update:")
+            for p in sample_products_before:
+                logger.info(f"      - {p.get('product_name')}: category_sub='{p.get('category_sub')}', category_sub_id='{p.get('category_sub_id')}'")
+            
             products_result = db.products.update_many(
                 {"category_sub_id": old_subcat_id},
                 {
@@ -765,16 +884,45 @@ async def update_subcategory(
                     }
                 }
             )
+            
+            logger.info(f"✅ Products update result:")
+            logger.info(f"   matched_count: {products_result.matched_count}")
+            logger.info(f"   modified_count: {products_result.modified_count}")
+            
+            # Verify product updates
+            product_count_after_old = db.products.count_documents({"category_sub_id": old_subcat_id})
+            product_count_after_new = db.products.count_documents({"category_sub_id": new_subcat_id})
+            logger.info(f"   Products with OLD ID after update: {product_count_after_old}")
+            logger.info(f"   Products with NEW ID after update: {product_count_after_new}")
+            
+            # Show sample products after update
+            sample_products_after = list(db.products.find({"category_sub_id": new_subcat_id}).limit(3))
+            logger.info(f"   Sample products AFTER update:")
+            for p in sample_products_after:
+                logger.info(f"      - {p.get('product_name')}: category_sub='{p.get('category_sub')}', category_sub_id='{p.get('category_sub_id')}'")
+            
             logger.info(f"✓ CASCADE: Updated {products_result.modified_count} products (by UUID)")
+            logger.info(f"=" * 80)
+        
+        logger.info(f"🎉 SUBCATEGORY UPDATE COMPLETED SUCCESSFULLY")
+        logger.info(f"=" * 80)
         
         return {
             "success": True, 
             "message": "Subcategory updated successfully",
-            "reload_required": new_name != subcategory
+            "reload_required": new_name != subcategory,
+            "old_name": subcategory if new_name != subcategory else None,
+            "new_name": new_name if new_name != subcategory else None
         }
     
     except Exception as e:
+        logger.error(f"=" * 80)
+        logger.error(f"❌ SUBCATEGORY UPDATE FAILED")
         logger.error(f"✗ Failed to update subcategory: {e}")
+        logger.error(f"Exception type: {type(e)}")
+        import traceback
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        logger.error(f"=" * 80)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -787,19 +935,24 @@ async def get_products(
     subcategory: Optional[str] = None,
     limit: int = 100
 ):
-    """Get products with optional filtering"""
+    """Get products with optional filtering (ID-based)"""
     try:
         db = get_mongo_db()
         products_collection = db.products
         
-        # Build filter
+        # Build filter using CORRECT field names and ID-based lookup
         filter_dict = {}
         if section:
-            filter_dict["section"] = section
+            section_id = generate_category_id(section)
+            filter_dict["category_section_id"] = section_id
         if main_category:
-            filter_dict["main_category"] = main_category
+            main_cat_id = generate_category_id(section, main_category) if section else None
+            if main_cat_id:
+                filter_dict["category_main_id"] = main_cat_id
         if subcategory:
-            filter_dict["subcategory"] = subcategory
+            subcat_id = generate_category_id(section, main_category, subcategory) if (section and main_category) else None
+            if subcat_id:
+                filter_dict["category_sub_id"] = subcat_id
         
         # Fetch products
         products = list(products_collection.find(filter_dict).limit(limit))

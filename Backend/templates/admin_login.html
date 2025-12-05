@@ -125,6 +125,77 @@
             display: block;
             margin-bottom: 5px;
         }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+
+            .login-container {
+                padding: 30px 20px;
+                max-width: 100%;
+            }
+
+            .logo-section h1 {
+                font-size: 28px;
+            }
+
+            .logo-section p {
+                font-size: 13px;
+            }
+
+            .form-group input {
+                padding: 12px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            .login-button {
+                padding: 14px;
+                font-size: 16px;
+            }
+
+            .info-box {
+                font-size: 12px;
+                padding: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .login-container {
+                padding: 25px 15px;
+                border-radius: 12px;
+            }
+
+            .logo-section {
+                margin-bottom: 25px;
+            }
+
+            .logo-section h1 {
+                font-size: 24px;
+            }
+
+            .login-form {
+                gap: 15px;
+            }
+
+            .form-group {
+                gap: 6px;
+            }
+
+            .form-group label {
+                font-size: 13px;
+            }
+
+            .error-message {
+                padding: 10px;
+                font-size: 13px;
+            }
+        }
     </style>
 </head>
 <body>

@@ -389,7 +389,7 @@ async function loadProducts() {
         allProducts = [];
         document.getElementById('productsTableBody').innerHTML = `
             <tr>
-                <td colspan="9" style="text-align: center; padding: 40px;">
+                <td colspan="8" style="text-align: center; padding: 40px;">
                     <div style="color: #FF9800; font-size: 48px; margin-bottom: 16px;">📦</div>
                     <div style="color: #757575; font-size: 16px; margin-bottom: 8px;">No products in database</div>
                     <div style="color: #9E9E9E; font-size: 14px;">Add your first product using the "Add Product" button</div>
@@ -407,7 +407,7 @@ function displayProducts(products, append = false) {
     if (products.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" style="text-align: center; padding: 40px; color: #757575;">
+                <td colspan="8" style="text-align: center; padding: 40px; color: #757575;">
                     📦 No products found
                 </td>
             </tr>
@@ -497,7 +497,7 @@ function setupProductScrollListener(products) {
     if (!sentinel) {
         sentinel = document.createElement('tr');
         sentinel.id = 'product-load-sentinel';
-        sentinel.innerHTML = '<td colspan="9" style="height: 1px;"></td>';
+        sentinel.innerHTML = '<td colspan="8" style="height: 1px;"></td>';
     }
     tbody.appendChild(sentinel);
     

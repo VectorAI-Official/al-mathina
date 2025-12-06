@@ -18,6 +18,14 @@ let currentFilters = {
     end_date: ''
 };
 
+// Date filter state
+let selectedDateFilter = {
+    type: 'all', // 'all', 'single', 'range'
+    singleDate: null,
+    startDate: null,
+    endDate: null
+};
+
 // Header scroll behavior state
 let lastScrollTop = 0;
 let scrollTimeout;
@@ -75,10 +83,9 @@ async function loadStores(reset = false) {
             document.getElementById('storesGrid').innerHTML = '';
             hasMoreStores = true;
             
-            // Update current filters
+            // Update current filters (search filter only, dates are managed by date filter functions)
             currentFilters.search = document.getElementById('searchInput').value;
-            currentFilters.start_date = document.getElementById('startDateFilter').value;
-            currentFilters.end_date = document.getElementById('endDateFilter').value;
+            // Note: currentFilters.start_date and end_date are already set by date filter functions
         }
         
         // Build URL with filters and pagination
@@ -222,12 +229,12 @@ function displayStores(stores) {
 function updateStatisticsDisplay(statistics) {
     document.getElementById('totalStores').textContent = statistics.total_stores;
     document.getElementById('totalOrders').textContent = statistics.total_orders;
-    // Display delivered_revenue as "Total Revenue"
-    document.getElementById('totalRevenue').textContent = `₹${formatCurrency(statistics.delivered_revenue)}`;
+    // Display total_revenue (not just delivered)
+    document.getElementById('totalRevenue').textContent = `₹${formatCurrency(statistics.total_revenue)}`;
     
-    // Calculate and display average per store
+    // Calculate and display average per store based on total revenue
     const avgPerStore = statistics.total_stores > 0 
-        ? statistics.delivered_revenue / statistics.total_stores 
+        ? statistics.total_revenue / statistics.total_stores 
         : 0;
     document.getElementById('avgPerStore').textContent = `₹${formatCurrency(avgPerStore)}`;
 }
@@ -279,9 +286,21 @@ function clearSearch() {
 // Clear all filters
 function clearFilters() {
     document.getElementById('searchInput').value = '';
-    document.getElementById('startDateFilter').value = '';
-    document.getElementById('endDateFilter').value = '';
     document.getElementById('clearSearchBtn').style.display = 'none';
+    
+    // Clear date filter state
+    selectedDateFilter.type = 'all';
+    selectedDateFilter.singleDate = null;
+    selectedDateFilter.startDate = null;
+    selectedDateFilter.endDate = null;
+    
+    document.getElementById('dateFilter').value = 'all';
+    document.getElementById('dateDisplayGroup').style.display = 'none';
+    
+    // Clear filters for API call
+    currentFilters.start_date = '';
+    currentFilters.end_date = '';
+    
     loadStores(true);
 }
 
@@ -290,9 +309,9 @@ async function viewStoreDetail(phone) {
     try {
         showLoading();
         
-        // Get date filters for revenue calculation
-        const startDate = document.getElementById('startDateFilter').value;
-        const endDate = document.getElementById('endDateFilter').value;
+        // Get date filters for revenue calculation from currentFilters
+        const startDate = currentFilters.start_date;
+        const endDate = currentFilters.end_date;
         
         let url = `/admin/api/stores/detail/${phone}`;
         const params = new URLSearchParams();
@@ -415,8 +434,8 @@ function displayStoreOrders(orders) {
 // Show revenue details modal
 async function showRevenueDetails() {
     try {
-        const startDate = document.getElementById('startDateFilter').value;
-        const endDate = document.getElementById('endDateFilter').value;
+        const startDate = currentFilters.start_date;
+        const endDate = currentFilters.end_date;
         
         let url = '/admin/api/stores/revenue-summary';
         const params = new URLSearchParams();
@@ -578,6 +597,171 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
+
+// ============ DATE FILTER FUNCTIONS ============
+
+// Handle date filter dropdown change
+function handleDateFilterChange() {
+    const dateFilter = document.getElementById('dateFilter').value;
+    
+    if (dateFilter === 'all') {
+        selectedDateFilter.type = 'all';
+        selectedDateFilter.singleDate = null;
+        selectedDateFilter.startDate = null;
+        selectedDateFilter.endDate = null;
+        document.getElementById('dateDisplayGroup').style.display = 'none';
+        filterStores();
+    } else if (dateFilter === 'single') {
+        openSingleDateModal();
+    } else if (dateFilter === 'range') {
+        openRangeDateModal();
+    }
+}
+
+// Open single date picker modal
+function openSingleDateModal() {
+    const modal = document.getElementById('singleDateModal');
+    const datePicker = document.getElementById('singleDatePicker');
+    
+    // Set max date to today
+    const today = new Date().toISOString().split('T')[0];
+    datePicker.max = today;
+    
+    // Set current value if exists
+    if (selectedDateFilter.singleDate) {
+        datePicker.value = selectedDateFilter.singleDate;
+    } else {
+        datePicker.value = today;
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Open date range picker modal
+function openRangeDateModal() {
+    const modal = document.getElementById('rangeDateModal');
+    const startPicker = document.getElementById('startDatePicker');
+    const endPicker = document.getElementById('endDatePicker');
+    
+    // Set max date to today
+    const today = new Date().toISOString().split('T')[0];
+    startPicker.max = today;
+    endPicker.max = today;
+    
+    // Set current values if exist
+    if (selectedDateFilter.startDate && selectedDateFilter.endDate) {
+        startPicker.value = selectedDateFilter.startDate;
+        endPicker.value = selectedDateFilter.endDate;
+    } else {
+        // Default to last 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        startPicker.value = sevenDaysAgo.toISOString().split('T')[0];
+        endPicker.value = today;
+    }
+    
+    modal.style.display = 'block';
+}
+
+// Close date modals
+function closeDateModal() {
+    document.getElementById('singleDateModal').style.display = 'none';
+    document.getElementById('rangeDateModal').style.display = 'none';
+    
+    // Reset dropdown if user cancels
+    if (selectedDateFilter.type === 'all') {
+        document.getElementById('dateFilter').value = 'all';
+    }
+}
+
+// Apply single date filter
+function applySingleDate() {
+    const datePicker = document.getElementById('singleDatePicker');
+    const selectedDate = datePicker.value;
+    
+    if (!selectedDate) {
+        alert('Please select a date');
+        return;
+    }
+    
+    selectedDateFilter.type = 'single';
+    selectedDateFilter.singleDate = selectedDate;
+    selectedDateFilter.startDate = null;
+    selectedDateFilter.endDate = null;
+    
+    // Update display
+    const dateObj = new Date(selectedDate);
+    const dateDisplay = dateObj.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    // Update filters for API call
+    currentFilters.start_date = selectedDate;
+    currentFilters.end_date = selectedDate;
+    
+    closeDateModal();
+    filterStores();
+}
+
+// Apply date range filter
+function applyDateRange() {
+    const startPicker = document.getElementById('startDatePicker');
+    const endPicker = document.getElementById('endDatePicker');
+    const startDate = startPicker.value;
+    const endDate = endPicker.value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select both start and end dates');
+        return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+        alert('Start date must be before or equal to end date');
+        return;
+    }
+    
+    selectedDateFilter.type = 'range';
+    selectedDateFilter.singleDate = null;
+    selectedDateFilter.startDate = startDate;
+    selectedDateFilter.endDate = endDate;
+    
+    // Update display
+    const startObj = new Date(startDate);
+    const endObj = new Date(endDate);
+    const dateDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    // Update filters for API call
+    currentFilters.start_date = startDate;
+    currentFilters.end_date = endDate;
+    
+    closeDateModal();
+    filterStores();
+}
+
+// Clear date filter
+function clearDateFilter() {
+    selectedDateFilter.type = 'all';
+    selectedDateFilter.singleDate = null;
+    selectedDateFilter.startDate = null;
+    selectedDateFilter.endDate = null;
+    
+    document.getElementById('dateFilter').value = 'all';
+    document.getElementById('dateDisplayGroup').style.display = 'none';
+    
+    // Clear filters for API call
+    currentFilters.start_date = '';
+    currentFilters.end_date = '';
+    
+    filterStores();
+}
+
+// ============ END DATE FILTER FUNCTIONS ============
 
 // Add animation styles
 const style = document.createElement('style');

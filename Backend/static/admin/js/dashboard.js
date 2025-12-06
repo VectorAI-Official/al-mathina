@@ -1503,11 +1503,8 @@ function loadMobileCategorySections() {
             console.log(`   📌 Section ${idx + 1}/${sections.length}: "${section}"`);
             html += `
                 <div class="mobile-category-card" data-category-name="${section.toLowerCase()}" onclick="showMobileCategoryProducts('${section.replace(/'/g, "\\'")}')">
-                    <button class="edit-category-btn" onclick="openEditSectionModal('${section.replace(/'/g, "\\'")}', event)" title="Edit Section">
-                        ✏️
-                    </button>
-                    <button class="delete-category-btn" onclick="confirmDeleteSection('${section.replace(/'/g, "\\'")}', event)" title="Delete Section">
-                        🗑️
+                    <button class="menu-btn" onclick="toggleCategoryMenu(event, 'section', '${section.replace(/'/g, "\\'")}', null, null)" title="Options">
+                        ⋮
                     </button>
                     <div class="name">${section}</div>
                 </div>
@@ -1911,11 +1908,8 @@ async function showMainCategoryCards(section) {
                 <button class="star-category-btn ${isStarred ? 'starred' : ''}" onclick="toggleStarMainCategory('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', ${isStarred}, event)" title="${isStarred ? 'Unstar' : 'Star'} Main Category">
                     ${isStarred ? '★' : '⭐'}
                 </button>
-                <button class="edit-category-btn" onclick="openEditMainCategoryModal('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', event)" title="Edit Main Category">
-                    ✏️
-                </button>
-                <button class="delete-category-btn" onclick="confirmDeleteMainCategory('${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', event)" title="Delete Main Category">
-                    🗑️
+                <button class="menu-btn" onclick="toggleCategoryMenu(event, 'mainCategory', '${section.replace(/'/g, "\\'")}', '${mainCat.replace(/'/g, "\\'")}', null)" title="Options">
+                    ⋮
                 </button>
                 ${imageUrl ? 
                     `<img src="${imageUrl}" alt="${mainCat}" class="card-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -2074,11 +2068,8 @@ function showSubCategoryProducts(section, mainCategory) {
         
         html += `
             <div class="mobile-sidebar-item ${isActive}" onclick="selectSubCategory('${section.replace(/'/g, "\\'")}', '${mainCategory.replace(/'/g, "\\'")}', '${subCat.replace(/'/g, "\\'")}', this)">
-                <button class="edit-btn" onclick="openEditSubCategoryModal('${section.replace(/'/g, "\\'")}', '${mainCategory.replace(/'/g, "\\'")}', '${subCat.replace(/'/g, "\\'")}', event)" title="Edit Subcategory">
-                    ✏️
-                </button>
-                <button class="delete-btn" onclick="confirmDeleteSubCategory('${section.replace(/'/g, "\\'")}', '${mainCategory.replace(/'/g, "\\'")}', '${subCat.replace(/'/g, "\\'")}', event)" title="Delete Subcategory">
-                    🗑️
+                <button class="menu-btn" onclick="toggleCategoryMenu(event, 'subcategory', '${section.replace(/'/g, "\\'")}', '${mainCategory.replace(/'/g, "\\'")}', '${subCat.replace(/'/g, "\\'")}')">
+                    ⋮
                 </button>
                 ${imageUrl ? 
                     `<img src="${imageUrl}" alt="${subCat}" class="category-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
@@ -3068,6 +3059,102 @@ function openEditMobileProduct(productId, event) {
     
     // Use the existing editProduct function
     editProduct(productId);
+}
+
+// ============================================
+// Three-Dot Menu Functions
+// ============================================
+
+// Toggle category menu popup
+function toggleCategoryMenu(event, type, section, mainCategory, subcategory) {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    // Close any existing menus first
+    closeAllMenus();
+    
+    // Get category name for header
+    let categoryName = '';
+    if (type === 'section') {
+        categoryName = section;
+    } else if (type === 'mainCategory') {
+        categoryName = mainCategory;
+    } else if (type === 'subcategory') {
+        categoryName = subcategory;
+    }
+    
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'menu-popup-overlay';
+    overlay.id = 'activeMenuPopup';
+    
+    // Create popup menu
+    const popup = document.createElement('div');
+    popup.className = type === 'subcategory' ? 'sidebar-menu-popup' : 'category-menu-popup';
+    
+    // Add menu content
+    popup.innerHTML = `
+        <div class="menu-header">${categoryName}</div>
+        <div class="menu-item edit" onclick="handleMenuEdit(event, '${type}', '${section.replace(/'/g, "\\'")}', '${mainCategory ? mainCategory.replace(/'/g, "\\'") : ''}', '${subcategory ? subcategory.replace(/'/g, "\\'") : ''}')">
+            <span>✏️</span>
+            <span>Edit</span>
+        </div>
+        <div class="menu-item delete" onclick="handleMenuDelete(event, '${type}', '${section.replace(/'/g, "\\'")}', '${mainCategory ? mainCategory.replace(/'/g, "\\'") : ''}', '${subcategory ? subcategory.replace(/'/g, "\\'") : ''}')">
+            <span>🗑️</span>
+            <span>Delete</span>
+        </div>
+    `;
+    
+    // Append popup to overlay
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    
+    // Show overlay with animation
+    setTimeout(() => overlay.classList.add('show'), 10);
+    
+    // Close menu when clicking overlay
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeAllMenus();
+        }
+    });
+}
+
+// Handle edit action from menu
+function handleMenuEdit(event, type, section, mainCategory, subcategory) {
+    event.stopPropagation();
+    closeAllMenus();
+    
+    if (type === 'section') {
+        openEditSectionModal(section, event);
+    } else if (type === 'mainCategory') {
+        openEditMainCategoryModal(section, mainCategory, event);
+    } else if (type === 'subcategory') {
+        openEditSubCategoryModal(section, mainCategory, subcategory, event);
+    }
+}
+
+// Handle delete action from menu
+function handleMenuDelete(event, type, section, mainCategory, subcategory) {
+    event.stopPropagation();
+    closeAllMenus();
+    
+    if (type === 'section') {
+        confirmDeleteSection(section, event);
+    } else if (type === 'mainCategory') {
+        confirmDeleteMainCategory(section, mainCategory, event);
+    } else if (type === 'subcategory') {
+        confirmDeleteSubCategory(section, mainCategory, subcategory, event);
+    }
+}
+
+// Close all menu popups
+function closeAllMenus() {
+    const activeMenu = document.getElementById('activeMenuPopup');
+    if (activeMenu) {
+        activeMenu.classList.remove('show');
+        setTimeout(() => activeMenu.remove(), 200);
+    }
 }
 
 // ============================================

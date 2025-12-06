@@ -919,6 +919,17 @@ body {
     box-shadow: 0 4px 12px rgba(211, 47, 47, 0.2);
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, #f57c00 0%, #ef6c00 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(245, 124, 0, 0.2);
+}
+
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(245, 124, 0, 0.3);
+}
+
 .btn-danger:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(211, 47, 47, 0.3);

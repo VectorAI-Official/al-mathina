@@ -56,8 +56,8 @@ def serialize_doc(doc):
 async def get_stores_list(
     request: Request,
     search: Optional[str] = Query(None, description="Search by store name or phone"),
-    start_date: Optional[str] = Query(None, description="Filter by creation date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="Filter by creation date (YYYY-MM-DD)"),
+    start_date: Optional[str] = Query(None, description="Filter by order date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Filter by order date (YYYY-MM-DD)"),
     limit: Optional[int] = Query(50, description="Number of stores per page"),
     skip: Optional[int] = Query(0, description="Number of stores to skip")
 ):
@@ -70,18 +70,19 @@ async def get_stores_list(
         users_collection = db['users']
         orders_collection = db['orders']
         
-        # Build query filter
-        query = {}
+        # Build query filter for users
+        user_query = {}
         
         # Search filter
         if search:
-            query["$or"] = [
+            user_query["$or"] = [
                 {"store_details.store_name": {"$regex": search, "$options": "i"}},
                 {"phone": {"$regex": search, "$options": "i"}},
                 {"name": {"$regex": search, "$options": "i"}}
             ]
         
-        # Date filter
+        # Date filter - filter by order date, not user registration date
+        user_phones_with_orders = None
         if start_date or end_date:
             date_query = {}
             if start_date:
@@ -90,18 +91,49 @@ async def get_stores_list(
                 from datetime import timedelta
                 end_dt = datetime.fromisoformat(end_date)
                 date_query["$lte"] = end_dt + timedelta(days=1)
-            query["created_at"] = date_query
+            
+            # Find all users who placed orders in the date range
+            orders_in_range = orders_collection.find(
+                {"created_at": date_query},
+                {"user_phone": 1}
+            ).distinct("user_phone")
+            
+            user_phones_with_orders = set(orders_in_range)
+            
+            # Add to user query to filter only users with orders in date range
+            if user_phones_with_orders:
+                user_query["phone"] = {"$in": list(user_phones_with_orders)}
+            else:
+                # No orders in date range, return empty
+                return {
+                    "success": True,
+                    "stores": [],
+                    "total": 0,
+                    "has_more": False
+                }
         
         # Fetch all matching users
-        total_count = users_collection.count_documents(query)
-        users = list(users_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
+        total_count = users_collection.count_documents(user_query)
+        users = list(users_collection.find(user_query).sort("created_at", -1).skip(skip).limit(limit))
         
         # Use aggregation pipeline for efficient order stats
         user_phones = [user['phone'] for user in users]
         
+        # Build order stats pipeline with date filter if applicable
+        order_match = {"user_phone": {"$in": user_phones}}
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                date_query["$gte"] = datetime.fromisoformat(start_date)
+            if end_date:
+                from datetime import timedelta
+                end_dt = datetime.fromisoformat(end_date)
+                date_query["$lte"] = end_dt + timedelta(days=1)
+            order_match["created_at"] = date_query
+        
         # Batch fetch order stats for all users at once
         pipeline = [
-            {"$match": {"user_phone": {"$in": user_phones}}},
+            {"$match": order_match},
             {"$group": {
                 "_id": "$user_phone",
                 "order_count": {"$sum": 1},
@@ -147,8 +179,8 @@ async def get_stores_list(
 async def get_stores_statistics(
     request: Request,
     search: Optional[str] = Query(None, description="Search by store name or phone"),
-    start_date: Optional[str] = Query(None, description="Filter by creation date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="Filter by creation date (YYYY-MM-DD)")
+    start_date: Optional[str] = Query(None, description="Filter by order date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Filter by order date (YYYY-MM-DD)")
 ):
     """
     Get statistics for ALL stores matching the filters
@@ -160,17 +192,17 @@ async def get_stores_statistics(
         orders_collection = db['orders']
         
         # Build same query filter as /list endpoint
-        query = {}
+        user_query = {}
         
         # Search filter
         if search:
-            query["$or"] = [
+            user_query["$or"] = [
                 {"store_details.store_name": {"$regex": search, "$options": "i"}},
                 {"phone": {"$regex": search, "$options": "i"}},
                 {"name": {"$regex": search, "$options": "i"}}
             ]
         
-        # Date filter
+        # Date filter - filter by order date, not user registration date
         if start_date or end_date:
             date_query = {}
             if start_date:
@@ -179,15 +211,47 @@ async def get_stores_statistics(
                 from datetime import timedelta
                 end_dt = datetime.fromisoformat(end_date)
                 date_query["$lte"] = end_dt + timedelta(days=1)
-            query["created_at"] = date_query
+            
+            # Find all users who placed orders in the date range
+            orders_in_range = orders_collection.find(
+                {"created_at": date_query},
+                {"user_phone": 1}
+            ).distinct("user_phone")
+            
+            user_phones_with_orders = set(orders_in_range)
+            
+            # Add to user query to filter only users with orders in date range
+            if user_phones_with_orders:
+                user_query["phone"] = {"$in": list(user_phones_with_orders)}
+            else:
+                # No orders in date range, return zero stats
+                return {
+                    "success": True,
+                    "total_stores": 0,
+                    "total_orders": 0,
+                    "total_revenue": 0.0,
+                    "avg_per_store": 0.0
+                }
         
         # Get total count and all matching phone numbers
-        total_stores = users_collection.count_documents(query)
-        user_phones = [user['phone'] for user in users_collection.find(query, {"phone": 1})]
+        total_stores = users_collection.count_documents(user_query)
+        user_phones = [user['phone'] for user in users_collection.find(user_query, {"phone": 1})]
         
-        # Calculate aggregated statistics across all orders for these stores
+        # Build order match query with date filter if applicable
+        order_match = {"user_phone": {"$in": user_phones}} if user_phones else {}
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                date_query["$gte"] = datetime.fromisoformat(start_date)
+            if end_date:
+                from datetime import timedelta
+                end_dt = datetime.fromisoformat(end_date)
+                date_query["$lte"] = end_dt + timedelta(days=1)
+            order_match["created_at"] = date_query
+        
+        # Calculate aggregated statistics across all orders for these stores with date filter
         pipeline = [
-            {"$match": {"user_phone": {"$in": user_phones}}},
+            {"$match": order_match},
             {"$group": {
                 "_id": None,
                 "total_orders": {"$sum": 1},

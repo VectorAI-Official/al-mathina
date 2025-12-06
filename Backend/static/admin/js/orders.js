@@ -2206,6 +2206,39 @@ function toggleOrderSelection(orderId, isChecked) {
     updateBulkActionButton();
 }
 
+// Select all pending orders that are currently displayed
+function selectAllPendings() {
+    // Get all currently displayed order cards
+    const orderCards = document.querySelectorAll('.order-card');
+    
+    let selectedCount = 0;
+    orderCards.forEach(card => {
+        const orderId = card.getAttribute('data-order-id');
+        const checkbox = document.getElementById(`checkbox-${orderId}`);
+        
+        // Only select if checkbox exists (not delivered) and is pending status
+        if (checkbox) {
+            const statusBadge = card.querySelector('.status-badge');
+            const status = statusBadge ? statusBadge.textContent.trim().toLowerCase() : '';
+            
+            if (status === 'pending') {
+                checkbox.checked = true;
+                selectedOrderIds.add(orderId);
+                selectedCount++;
+            }
+        }
+    });
+    
+    updateBulkActionButton();
+    
+    // Show feedback
+    if (selectedCount > 0) {
+        showToast(`Selected ${selectedCount} pending order${selectedCount > 1 ? 's' : ''}`, 'success');
+    } else {
+        showToast('No pending orders found in currently loaded orders', 'info');
+    }
+}
+
 // Update bulk action button visibility and count
 function updateBulkActionButton() {
     let bulkActionBtn = document.getElementById('bulkMarkDeliveredBtn');

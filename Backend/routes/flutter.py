@@ -362,9 +362,9 @@ async def get_products(
             raw_image = prod.get("image_url", prod.get("image", ""))
             products.append({
                 "item_id": prod.get("item_id"),
-                "section": prod.get("section"),
-                "main_category": prod.get("main_category"),
-                "subcategory": prod.get("subcategory"),
+                "section": prod.get("category_section"),  # Fix: use category_section from DB
+                "main_category": prod.get("category_main"),  # Fix: use category_main from DB
+                "subcategory": prod.get("category_sub"),  # Fix: use category_sub from DB
                 "product_name": prod.get("product_name"),
                 "product_name_ta": prod.get("product_name_ta", ""),
                 "weight": prod.get("weight", ""),
@@ -429,6 +429,9 @@ async def get_product_details(request: Request, item_id: str):
             "item_id": product.get("item_id"),
             "product_name": product.get("product_name"),
             "product_name_ta": product.get("product_name_ta", ""),
+            "section": product.get("category_section"),  # Add flat section field
+            "main_category": product.get("category_main"),  # Add flat main_category field
+            "subcategory": product.get("category_sub"),  # Add flat subcategory field
             "category": {
                 "section": product.get("category_section"),
                 "main_category": product.get("category_main"),

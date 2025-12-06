@@ -285,9 +285,10 @@ async def get_user_orders(phone: str, request: Request):
 # Create order
 @router.post("/orders")
 async def create_order(request: Request):
-    """Create a new order"""
+    """Create a new order - automatically splits by section"""
     try:
         from datetime import datetime, timedelta, timezone
+        from collections import defaultdict
         import uuid
         
         # Get request body
@@ -305,37 +306,59 @@ async def create_order(request: Request):
         if not user_phone or not items or not delivery_address:
             raise HTTPException(status_code=400, detail="Missing required fields: user_phone, items, delivery_address")
         
-        # Generate a human-readable order ID
-        order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+        # Group items by section
+        items_by_section = defaultdict(list)
+        for item in items:
+            section = item.get('section', 'Unknown')
+            items_by_section[section].append(item)
         
         # Use local timezone (India Standard Time - UTC+5:30)
         ist_offset = timezone(timedelta(hours=5, minutes=30))
         current_time = datetime.now(ist_offset)
         
-        # Prepare order document
-        order_doc = {
-            'order_id': order_id,  # ✅ Store the generated order_id
-            'user_phone': user_phone,
-            'items': items,
-            'total_amount': float(total_amount),
-            'status': 'pending',
-            'payment_method': payment_method,
-            'delivery_address': delivery_address,
-            'created_at': current_time,
-            'updated_at': current_time,
-            'estimated_delivery': (current_time + timedelta(days=3)).isoformat()
-        }
+        created_orders = []
         
-        result = orders_collection.insert_one(order_doc)
-        
-        logger.info(f"Created order {order_id} (MongoDB ID: {result.inserted_id}) for user {user_phone} at {current_time.isoformat()}")
+        # Create separate order for each section
+        for section, section_items in items_by_section.items():
+            # Calculate section total
+            section_total = sum(item.get('price', 0) * item.get('quantity', 1) for item in section_items)
+            
+            # Generate a human-readable order ID
+            order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+            
+            # Prepare order document
+            order_doc = {
+                'order_id': order_id,
+                'user_phone': user_phone,
+                'section': section,  # Store which section this order belongs to
+                'items': section_items,
+                'total_amount': float(section_total),
+                'status': 'pending',
+                'payment_method': payment_method,
+                'delivery_address': delivery_address,
+                'created_at': current_time,
+                'updated_at': current_time,
+                'estimated_delivery': (current_time + timedelta(days=3)).isoformat()
+            }
+            
+            result = orders_collection.insert_one(order_doc)
+            
+            created_orders.append({
+                'order_id': order_id,
+                'section': section,
+                'items_count': len(section_items),
+                'total_amount': section_total,
+                'status': 'pending'
+            })
+            
+            logger.info(f"Created order {order_id} for section '{section}' (MongoDB ID: {result.inserted_id}) for user {user_phone}")
         
         return {
             "success": True,
-            "message": "Order created successfully",
-            "order_id": order_id,  # ✅ Return the generated order_id
-            "status": "pending",
-            "created_at": order_doc["created_at"].isoformat()
+            "message": f"Created {len(created_orders)} order(s) - split by section",
+            "orders": created_orders,
+            "created_at": current_time.isoformat(),
+            "total_orders": len(created_orders)
         }
     except HTTPException:
         raise

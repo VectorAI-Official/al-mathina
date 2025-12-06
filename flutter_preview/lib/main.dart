@@ -3857,7 +3857,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       // Create order with real store address
       final paymentMethod = _selectedPayment == 'upi' ? 'UPI' : 'Cash on Delivery';
       
-      await ApiService.createOrder(
+      final orderResponse = await ApiService.createOrder(
         userPhone: userPhone,
         items: items,
         totalAmount: provider.cartTotal,
@@ -3876,13 +3876,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         Navigator.pop(context);
       }
 
-      // Navigate to success screen
+      // Extract order information from response
+      final ordersCreated = orderResponse['orders'] as List? ?? [];
+      final totalOrders = orderResponse['total_orders'] ?? ordersCreated.length;
+
+      // Navigate to success screen with order info
       if (context.mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => OrderSuccessScreen(
               totalAmount: provider.cartTotal,
+              ordersCount: totalOrders,
+              orders: ordersCreated,
             ),
           ),
         );
@@ -3906,8 +3912,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 // ORDER SUCCESS SCREEN
 class OrderSuccessScreen extends StatelessWidget {
   final double totalAmount;
+  final int ordersCount;
+  final List orders;
   
-  const OrderSuccessScreen({super.key, required this.totalAmount});
+  const OrderSuccessScreen({
+    super.key, 
+    required this.totalAmount,
+    this.ordersCount = 1,
+    this.orders = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3960,6 +3973,32 @@ class OrderSuccessScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              // Orders info
+              if (ordersCount > 1)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue[200]!, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Split into $ordersCount orders by section',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 16),
               // Subtitle
               Text(
                 provider.text('order_success_subtitle'),
@@ -3970,6 +4009,62 @@ class OrderSuccessScreen extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
+              // Show order details if available
+              if (orders.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: orders.length,
+                    itemBuilder: (context, index) {
+                      final order = orders[index];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.receipt_long, color: Colors.green[600], size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    order['order_id'] ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${order['section']} - ${order['items_count']} items',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '₹${order['total_amount'].toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
               const Spacer(),
               const Spacer(),
               // Track Order button

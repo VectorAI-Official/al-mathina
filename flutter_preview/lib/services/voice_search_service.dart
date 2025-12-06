@@ -130,8 +130,8 @@ class VoiceSearchService {
       return;
     }
 
-    // PRIORITY: Tamil (ta-IN) first, then English fallback
-    String localeToUse = 'ta-IN'; // Tamil (India) - HIGHEST PRIORITY
+    // TAMIL-ONLY: Force Tamil locale
+    const String localeToUse = 'ta-IN'; // Tamil (India) - FORCED
     
     final locales = await _speech.locales();
     debugPrint('🌍 Available locales:');
@@ -139,30 +139,9 @@ class VoiceSearchService {
       debugPrint('   - ${locale.localeId}: ${locale.name}');
     }
     
-    // Try Tamil first (PRIORITY)
-    final tamilLocale = locales.firstWhere(
-      (locale) => locale.localeId == 'ta_IN' || locale.localeId == 'ta-IN',
-      orElse: () => locales.firstWhere(
-        (locale) => locale.localeId.toLowerCase().startsWith('ta'),
-        orElse: () {
-          // If Tamil not found, fallback to English
-          debugPrint('⚠️ Tamil not available, falling back to English');
-          return locales.firstWhere(
-            (locale) => locale.localeId == 'en_IN' || locale.localeId == 'en-IN',
-            orElse: () => locales.firstWhere(
-              (locale) => locale.localeId.toLowerCase().startsWith('en'),
-              orElse: () => locales.first,
-            ),
-          );
-        },
-      ),
-    );
-    
-    localeToUse = tamilLocale.localeId;
-    
     debugPrint('🎤 Using locale: $localeToUse');
-    debugPrint('🎤 PRIORITY: Tamil recognition enabled');
-    debugPrint('🎤 Will also recognize English words in Tamil context');
+    debugPrint('🎤 TAMIL-ONLY: Tamil recognition forced');
+    debugPrint('🎤 English STT is disabled');
 
     try {
       await _speech.listen(
@@ -178,7 +157,7 @@ class VoiceSearchService {
             onComplete();
           }
         },
-        localeId: localeToUse, // Tamil PRIORITY
+        localeId: localeToUse, // Tamil-ONLY (forced to ta-IN)
         listenMode: stt.ListenMode.confirmation,
         cancelOnError: false,
         partialResults: true,

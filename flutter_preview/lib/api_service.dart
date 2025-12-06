@@ -435,12 +435,14 @@ class ApiService {
     required String query,
     int page = 1,
     int limit = 50,
+    bool useRegex = false,
   }) async {
     try {
       final queryParams = {
         'q': query,
         'page': page.toString(),
         'limit': limit.toString(),
+        'regex': useRegex.toString(),
         't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
       final uri = Uri.parse('$API_BASE/search').replace(queryParameters: queryParams);

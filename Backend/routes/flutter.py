@@ -462,7 +462,8 @@ async def search_products(
     request: Request,
     q: str = Query(..., min_length=1, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=100, description="Results per page")
+    limit: int = Query(20, ge=1, le=100, description="Results per page"),
+    regex: bool = Query(False, description="Enable regex search mode")
 ):
     """
     Search products globally across all categories.
@@ -471,6 +472,7 @@ async def search_products(
     - q: Search query
     - page: Page number (default: 1)
     - limit: Results per page (default: 20, max: 100)
+    - regex: Enable regex pattern matching (default: False)
     
     Returns:
     - Paginated search results
@@ -479,17 +481,34 @@ async def search_products(
         db = get_mongo_db()
         products_collection = db["products"]
         
-        # Build search query
+        # Build search query with optional regex mode
+        # If regex=true, use the query as a regex pattern directly
+        # If regex=false, escape special chars and do case-insensitive substring match
+        if regex:
+            # Use query as regex pattern (be careful with user input!)
+            import re
+            try:
+                # Validate regex pattern
+                re.compile(q)
+                search_pattern = q
+            except re.error:
+                # If invalid regex, fall back to escaped literal search
+                search_pattern = re.escape(q)
+        else:
+            # Escape special regex characters for literal search
+            import re
+            search_pattern = re.escape(q)
+        
         query = {
             "$and": [
                 {"active": True},
                 {
                     "$or": [
-                        {"product_name": {"$regex": q, "$options": "i"}},
-                        {"product_name_ta": {"$regex": q, "$options": "i"}},
-                        {"category_main": {"$regex": q, "$options": "i"}},
-                        {"category_sub": {"$regex": q, "$options": "i"}},
-                        {"description": {"$regex": q, "$options": "i"}}
+                        {"product_name": {"$regex": search_pattern, "$options": "i"}},
+                        {"product_name_ta": {"$regex": search_pattern, "$options": "i"}},
+                        {"category_main": {"$regex": search_pattern, "$options": "i"}},
+                        {"category_sub": {"$regex": search_pattern, "$options": "i"}},
+                        {"description": {"$regex": search_pattern, "$options": "i"}}
                     ]
                 }
             ]

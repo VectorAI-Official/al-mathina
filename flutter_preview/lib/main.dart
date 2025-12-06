@@ -63,7 +63,7 @@ const Map<String, Map<String, String>> translations = {
     
     // Phone Authentication
     'al_mathina': 'Al-Mathina',
-    'traders': 'Traders',
+    'traders': 'Agencies',
     'welcome_back': 'Welcome Back',
     'phone_number': 'Phone Number',
     'enter_the_number': 'Enter the Number',
@@ -218,7 +218,7 @@ const Map<String, Map<String, String>> translations = {
     
     // Phone Authentication
     'al_mathina': 'அல்-மதீனா',
-    'traders': 'வணிகர்கள்',
+    'traders': 'ஏஜென்சிகள்',
     'welcome_back': 'மீண்டும் வருக',
     'phone_number': 'தொலைபேசி எண்',
     'enter_the_number': 'எண்ணை உள்ளிடவும்',
@@ -1060,8 +1060,16 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   String? _lastLanguage; // Track language changes
   
+  // Lazy loading state
+  bool _bannerLoaded = false;
+  int _displayedCategoriesCount = 0;
+  final int _categoriesPerBatch = 20;
+  
   ScrollController? _scrollController;
   double _lastScrollPosition = 0;
+  
+  // Search controller for voice search integration
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -1116,16 +1124,27 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _scrollController?.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadHomeData() async {
     try {
       final provider = Provider.of<AppProvider>(context, listen: false);
+      
+      // Step 1: Show banner immediately (it's a local asset, no need to wait)
+      setState(() {
+        _bannerLoaded = true;
+      });
+      
+      // Step 2: Load data from API
       final data = await ApiService.getHomeData(lang: provider.currentLanguage);
+      
       setState(() {
         _homeData = data;
         _isLoading = false;
+        // Initialize display count for first section
+        _displayedCategoriesCount = _categoriesPerBatch;
       });
     } catch (e) {
       setState(() {
@@ -1134,6 +1153,8 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
+  
+
 
   @override
   Widget build(BuildContext context) {
@@ -1240,6 +1261,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
+                      controller: _searchController,
                       decoration: InputDecoration(
                         hintText: provider.text('search'),
                         hintStyle: const TextStyle(
@@ -1280,13 +1302,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       showDialog(
                         context: context,
                         builder: (context) => VoiceSearchDialog(
+                          currentLanguage: provider.currentLanguage,
                           onSearchQuery: (query) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SearchResultsScreen(query: query),
-                              ),
-                            );
+                            // Use post frame callback to ensure dialog is closed first
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              // Fill the search text box
+                              _searchController.text = query;
+                              // Navigate to search results
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => SearchResultsScreen(query: query),
+                                ),
+                              );
+                            });
                           },
                         ),
                       );
@@ -1424,50 +1453,52 @@ class _HomeScreenState extends State<HomeScreen> {
                         controller: _scrollController,
                         child: Column(
                           children: [
-                            // White container with banner
-                            Container(
-                              color: Colors.white,
-                              padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 12.0),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.asset(
-                                  'assets/images/banner.png',
-                                  width: double.infinity,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (context, error, stackTrace) => Container(
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.image, size: 48, color: Colors.grey[400]),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            'Banner Image',
-                                            style: TextStyle(
-                                              color: Colors.grey[600],
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
+                            // White container with banner - loads immediately
+                            if (_bannerLoaded)
+                              Container(
+                                color: Colors.white,
+                                padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 12.0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.asset(
+                                    'assets/images/banner.png',
+                                    width: double.infinity,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      height: 150,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.image, size: 48, color: Colors.grey[400]),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Banner Image',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            // Content section
+                            
+                            // Content section with sections hierarchy
                             Padding(
                               padding: const EdgeInsets.fromLTRB(18.0, 18.0, 18.0, 90.0),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Most Bought Section - Display Main Categories First
+                                  // Most Bought Section
                                   if (_homeData!.bestSellers.mainCategories.isNotEmpty) ...[
                                     const SizedBox(height: 12),
                                     _buildSectionHeader(
@@ -1475,16 +1506,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                       _homeData!.bestSellers.icon,
                                     ),
                                     const SizedBox(height: 12),
-                                    _buildMainCategoryGrid(_homeData!.bestSellers.mainCategories, isBestSeller: true),
+                                    _buildMainCategoryGrid(
+                                      _homeData!.bestSellers.mainCategories.take(_displayedCategoriesCount).toList(),
+                                      isBestSeller: true,
+                                    ),
                                     const SizedBox(height: 12),
                                   ],
 
-                                  // Regular Sections - Flatten structure to remove implicit spacing
+                                  // Regular Sections
                                   for (var section in _homeData!.sections) ...[
                                     const SizedBox(height: 12),
                                     _buildSectionHeader(section.title, section.icon),
                                     const SizedBox(height: 12),
-                                    _buildMainCategoryGrid(section.mainCategories, isBestSeller: false),
+                                    _buildMainCategoryGrid(
+                                      section.mainCategories.take(_displayedCategoriesCount).toList(),
+                                      isBestSeller: false,
+                                    ),
                                     const SizedBox(height: 12),
                                   ],
                                 ],
@@ -2711,16 +2748,27 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   List<Product> _results = [];
   bool _isLoading = true;
   String? _error;
+  bool _isRegexSearch = false;
 
   @override
   void initState() {
     super.initState();
+    _detectRegexPattern();
     _search();
+  }
+  
+  // Detect if the query contains regex special characters
+  void _detectRegexPattern() {
+    final regexChars = RegExp(r'[\.\*\+\?\^\$\[\]\{\}\(\)\|\\]');
+    _isRegexSearch = regexChars.hasMatch(widget.query);
   }
 
   Future<void> _search() async {
     try {
-      final result = await ApiService.searchProducts(query: widget.query);
+      final result = await ApiService.searchProducts(
+        query: widget.query,
+        useRegex: _isRegexSearch,
+      );
       setState(() {
         _results = result['results'] as List<Product>;
         _isLoading = false;
@@ -2762,6 +2810,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), // Added bottom padding for floating button
+                          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                           itemCount: _results.length,
                           itemBuilder: (context, index) {
                             final product = _results[index];
@@ -4207,11 +4256,49 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   bool _isLoadingProducts = false;
   String? _error;
   String? _lastLanguage;
+  
+  // Lazy loading for products
+  int _displayedProductsCount = 0;
+  final int _productsPerBatch = 20;
+  bool _isLoadingMoreProducts = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadSubcategories();
+    _scrollController.addListener(_onScroll);
+  }
+  
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+  
+  void _onScroll() {
+    final scrollPercentage = _scrollController.position.pixels / _scrollController.position.maxScrollExtent;
+    if (scrollPercentage > 0.7 && !_isLoadingMoreProducts && _displayedProductsCount < _products.length) {
+      _loadMoreProducts();
+    }
+  }
+  
+  void _loadMoreProducts() {
+    if (_isLoadingMoreProducts || _displayedProductsCount >= _products.length) return;
+    
+    setState(() {
+      _isLoadingMoreProducts = true;
+    });
+    
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _displayedProductsCount = 
+              (_displayedProductsCount + _productsPerBatch).clamp(0, _products.length);
+          _isLoadingMoreProducts = false;
+        });
+      }
+    });
   }
 
   @override
@@ -4287,6 +4374,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
       
       setState(() {
         _products = result['products'] as List<Product>;
+        _displayedProductsCount = _productsPerBatch.clamp(0, (result['products'] as List<Product>).length);
         _isLoadingProducts = false;
       });
     } catch (e) {
@@ -4350,6 +4438,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                             ),
                           ),
                           child: ListView.builder(
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                             itemCount: _subcategories.length,
                             itemBuilder: (context, index) {
                               final subcategory = _subcategories[index];
@@ -4433,12 +4522,13 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                         Expanded(
                           child: _isLoadingProducts
                               ? GridView.builder(
-                                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 140), // Added extra bottom padding for floating cart
+                                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
+                                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 2,
                                     crossAxisSpacing: 10,
                                     mainAxisSpacing: 10,
-                                    childAspectRatio: 0.45, // Optimized for 2-line product names
+                                    childAspectRatio: 0.45,
                                   ),
                                   itemCount: 6,
                                   itemBuilder: (context, index) => _buildSkeletonCard(),
@@ -4455,15 +4545,21 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                       ),
                                     )
                                   : GridView.builder(
-                                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 140), // Added extra bottom padding for floating cart
+                                      controller: _scrollController,
+                                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
+                                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 2,
                                         crossAxisSpacing: 10,
                                         mainAxisSpacing: 10,
-                                        childAspectRatio: 0.45, // Optimized for 2-line product names
+                                        childAspectRatio: 0.45,
                                       ),
-                                      itemCount: _products.length,
+                                      itemCount: _displayedProductsCount + (_isLoadingMoreProducts ? 2 : 0),
                                       itemBuilder: (context, index) {
+                                        // Show skeleton for loading more
+                                        if (index >= _displayedProductsCount) {
+                                          return _buildSkeletonCard();
+                                        }
                                         final product = _products[index];
                                         return _buildProductCard(product, provider);
                                       },
@@ -5551,6 +5647,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               ? ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, kBottomNavigationBarHeight + 20),
+                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                   itemCount: 5, // Show 5 skeleton cards while loading
                   itemBuilder: (context, index) => _buildSkeletonCard(),
                 )
@@ -5642,6 +5739,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       : ListView.builder(
                           controller: _scrollController,
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, kBottomNavigationBarHeight + 20),
+                          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                           itemCount: _favoriteProducts.length,
                           itemBuilder: (context, index) {
                             final product = _favoriteProducts[index];
@@ -6057,6 +6155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         color: kPrimaryColor,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Added bottom padding for navbar
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           children: [
             // Profile Header
             Center(

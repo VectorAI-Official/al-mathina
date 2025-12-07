@@ -26,9 +26,10 @@ class Settings(BaseSettings):
     cloudinary_api_key: str = Field(..., alias="CLOUDINARY_API_KEY")
     cloudinary_api_secret: str = Field(..., alias="CLOUDINARY_API_SECRET")
     
-    # Supabase Configuration (Optional - for compatibility, but not used in production)
+    # Supabase Configuration (for FCM token storage and user management)
     supabase_url: str = Field(default="https://supabase-placeholder.com", alias="SUPABASE_URL")
     supabase_anon_key: str = Field(default="placeholder-key", alias="SUPABASE_ANON_KEY")
+    supabase_service_key: Optional[str] = Field(default=None, alias="SUPABASE_SERVICE_KEY")
     
     # Application Settings
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

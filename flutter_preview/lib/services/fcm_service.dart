@@ -25,11 +25,14 @@ class FCMService {
   /// Initialize Firebase and FCM
   Future<void> initialize() async {
     try {
+      print('🚀 FCM: Starting initialization...');
       // Initialize Firebase
       await Firebase.initializeApp();
+      print('✅ FCM: Firebase initialized');
       
       // Initialize messaging after Firebase is ready
       _messaging = FirebaseMessaging.instance;
+      print('✅ FCM: Messaging instance created');
       
       // Request notification permission
       NotificationSettings settings = await messaging.requestPermission(
@@ -43,10 +46,12 @@ class FCMService {
         print('✅ FCM: User granted notification permission');
         
         // Get FCM token
+        print('🔑 FCM: Requesting token...');
         _fcmToken = await messaging.getToken();
-        print('✅ FCM Token: $_fcmToken');
+        print('✅ FCM Token generated: $_fcmToken');
         
         // Save token to backend
+        print('💾 FCM: Saving token to backend...');
         await _saveFCMTokenToBackend(_fcmToken!);
         
         // Listen for token refresh
@@ -57,19 +62,26 @@ class FCMService {
         });
         
         // Initialize local notifications for foreground messages
+        print('🔔 FCM: Initializing local notifications...');
         await _initializeLocalNotifications();
+        print('✅ FCM: Local notifications ready');
         
         // Handle foreground messages
+        print('👂 FCM: Setting up message listeners...');
         FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
         
         // Handle background/terminated messages
         FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
+        print('✅ FCM: All listeners registered');
+        print('🎉 FCM: Initialization complete!');
         
       } else {
         print('❌ FCM: User declined notification permission');
+        print('⚠️ FCM: Authorization status: ${settings.authorizationStatus}');
       }
     } catch (e) {
       print('❌ FCM initialization error: $e');
+      print('❌ FCM error stack trace: ${StackTrace.current}');
     }
   }
 
@@ -93,13 +105,20 @@ class FCMService {
 
   /// Handle foreground messages (app is open)
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    print('📩 Foreground message: ${message.notification?.title}');
-    print('📩 Message body: ${message.notification?.body}');
-    print('📩 Message data: ${message.data}');
+    print('\n🎯 ============ FOREGROUND MESSAGE RECEIVED ============');
+    print('📩 Title: ${message.notification?.title}');
+    print('📩 Body: ${message.notification?.body}');
+    print('📩 Data: ${message.data}');
+    print('📩 Message ID: ${message.messageId}');
+    print('📩 Sent time: ${message.sentTime}');
+    print('======================================================\n');
     
     // Trigger in-app notification callback
     if (onMessageReceived != null) {
+      print('📲 FCM: Triggering in-app callback...');
       onMessageReceived!(message);
+    } else {
+      print('⚠️ FCM: No in-app callback registered');
     }
     
     // Show local notification with Al-Mathina branding
@@ -119,29 +138,41 @@ class FCMService {
       android: androidDetails,
     );
 
-    await _localNotifications.show(
-      message.hashCode,
-      message.notification?.title ?? 'Al-Mathina',
-      message.notification?.body ?? '',
-      notificationDetails,
-      payload: message.data.toString(),
-    );
+    try {
+      print('🔔 FCM: Showing local notification...');
+      await _localNotifications.show(
+        message.hashCode,
+        message.notification?.title ?? 'Al-Mathina',
+        message.notification?.body ?? '',
+        notificationDetails,
+        payload: message.data.toString(),
+      );
+      print('✅ FCM: Local notification displayed');
+    } catch (e) {
+      print('❌ FCM: Error showing notification: $e');
+    }
   }
 
   /// Handle background/terminated messages (app is closed)
   Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-    print('📩 Background message opened: ${message.notification?.title}');
+    print('\n🎯 ============ BACKGROUND MESSAGE OPENED ============');
+    print('📩 Title: ${message.notification?.title}');
+    print('📩 Body: ${message.notification?.body}');
+    print('📩 Data: ${message.data}');
+    print('======================================================\n');
     // Navigate to orders screen or specific order
   }
 
   /// Save FCM token to backend
   Future<void> _saveFCMTokenToBackend(String token) async {
     try {
+      print('💾 FCM: Preparing to save token...');
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('userPhone');
+      print('📱 FCM: User phone: ${phone ?? "NOT FOUND"}');
       
       if (phone == null || phone.isEmpty) {
-        print('⚠️ FCM: No user phone found, cannot save token');
+        print('❌ FCM: Cannot save token - no user phone in SharedPreferences');
         return;
       }
 
@@ -149,36 +180,48 @@ class FCMService {
       const String baseUrl = 'https://al-mathina.onrender.com'; // Production
       // For local testing: 'http://127.0.0.1:8000' or 'http://10.0.2.2:8000' (Android emulator)
       
+      final url = '$baseUrl/api/user/fcm-token';
+      print('🌐 FCM: Sending to: $url');
+      print('📦 FCM: Payload: {phone: $phone, fcm_token: ${token.substring(0, 20)}...}');
+      
       final response = await http.post(
-        Uri.parse('$baseUrl/api/user/fcm-token'),
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'phone': phone,
           'fcm_token': token,
         }),
-      );
+      ).timeout(Duration(seconds: 10));
 
+      print('📡 FCM: Response status: ${response.statusCode}');
       if (response.statusCode == 200) {
-        print('✅ FCM token saved to backend');
+        print('✅ FCM: Token saved successfully to backend!');
+        print('✅ FCM: Response: ${response.body}');
       } else {
-        print('❌ Failed to save FCM token: ${response.statusCode}');
-        print('❌ Response body: ${response.body}');
+        print('❌ FCM: Failed to save token - Status ${response.statusCode}');
+        print('❌ FCM: Response body: ${response.body}');
       }
     } catch (e) {
-      print('❌ Error saving FCM token: $e');
+      print('❌ FCM: Error saving token: $e');
+      print('❌ FCM: Error type: ${e.runtimeType}');
     }
   }
 
   /// Manually refresh FCM token (call after login)
   Future<void> refreshToken() async {
     try {
+      print('🔄 FCM: Refreshing token manually...');
       final token = await messaging.getToken();
       if (token != null) {
+        print('✅ FCM: Token retrieved: ${token.substring(0, 20)}...');
         _fcmToken = token;
         await _saveFCMTokenToBackend(token);
+      } else {
+        print('⚠️ FCM: Token is null after refresh');
       }
     } catch (e) {
-      print('❌ Error refreshing FCM token: $e');
+      print('❌ FCM: Error refreshing token: $e');
+      print('❌ FCM: Error type: ${e.runtimeType}');
     }
   }
 }

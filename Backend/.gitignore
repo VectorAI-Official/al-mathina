@@ -14,6 +14,9 @@ ENV/
 .env.production
 .env.production.local
 
+# Firebase credentials
+firebase-service-account.json
+
 # IDEs
 .vscode/
 .idea/

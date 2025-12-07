@@ -294,15 +294,59 @@ body {
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
     position: relative;
     border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.store-card-content {
+    cursor: pointer;
 }
 
 .store-card:hover {
     transform: translateY(-12px);
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.12);
     border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Delete button */
+.delete-store-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+}
+
+.store-card:hover .delete-store-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.delete-store-btn:hover {
+    background: #d32f2f;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.5);
+}
+
+.delete-store-btn:active {
+    transform: scale(0.95);
+}
+
+.delete-store-btn i {
+    font-size: 14px;
 }
 
 .store-card-header {

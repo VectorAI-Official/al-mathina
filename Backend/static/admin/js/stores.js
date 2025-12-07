@@ -177,33 +177,38 @@ function displayStores(stores) {
     hideEmptyState();
     
     const storesHTML = stores.map(store => `
-        <div class="store-card" onclick="viewStoreDetail('${store.phone}')">
-            <div class="store-card-header">
-                <div class="store-icon">
-                    <i class="fas fa-store"></i>
+        <div class="store-card">
+            <div class="store-card-content" onclick="viewStoreDetail('${store.phone}')">
+                <div class="store-card-header">
+                    <div class="store-icon">
+                        <i class="fas fa-store"></i>
+                    </div>
+                    <div class="store-title">
+                        <h3>${escapeHtml(store.store_name || 'Unnamed Store')}</h3>
+                        <p class="store-phone">
+                            <i class="fas fa-phone"></i> ${store.phone}
+                        </p>
+                    </div>
                 </div>
-                <div class="store-title">
-                    <h3>${escapeHtml(store.store_name || 'Unnamed Store')}</h3>
-                    <p class="store-phone">
-                        <i class="fas fa-phone"></i> ${store.phone}
-                    </p>
+                <div class="store-card-footer">
+                    <div class="store-stat">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span>${store.order_count} orders</span>
+                    </div>
+                    <div class="store-stat revenue">
+                        <i class="fas fa-rupee-sign"></i>
+                        <span>₹${formatCurrency(store.total_revenue)}</span>
+                    </div>
                 </div>
+                ${store.latest_order ? `
+                    <div class="store-badge">
+                        <i class="fas fa-clock"></i> Last order: ${formatDateRelative(store.latest_order)}
+                    </div>
+                ` : ''}
             </div>
-            <div class="store-card-footer">
-                <div class="store-stat">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>${store.order_count} orders</span>
-                </div>
-                <div class="store-stat revenue">
-                    <i class="fas fa-rupee-sign"></i>
-                    <span>₹${formatCurrency(store.total_revenue)}</span>
-                </div>
-            </div>
-            ${store.latest_order ? `
-                <div class="store-badge">
-                    <i class="fas fa-clock"></i> Last order: ${formatDateRelative(store.latest_order)}
-                </div>
-            ` : ''}
+            <button class="delete-store-btn" onclick="event.stopPropagation(); deleteUserProfile('${store.phone}', '${escapeHtml(store.store_name || 'Unnamed Store')}')" title="Delete user profile">
+                <i class="fas fa-trash-alt"></i>
+            </button>
         </div>
     `).join('');
     
@@ -1093,6 +1098,58 @@ async function viewOrderDetails(orderId) {
 
 // Show order details content
 function showOrderDetailsContent(order) {
+
+// Delete user profile with confirmation
+async function deleteUserProfile(phone, storeName) {
+    // Show confirmation dialog
+    const confirmed = confirm(
+        `⚠️ DELETE USER PROFILE\n\n` +
+        `Store: ${storeName}\n` +
+        `Phone: ${phone}\n\n` +
+        `This will permanently delete:\n` +
+        `• User profile\n` +
+        `• All orders\n` +
+        `• Store details\n` +
+        `• FCM tokens\n\n` +
+        `This action CANNOT be undone!\n\n` +
+        `Are you sure you want to delete this user?`
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        const response = await fetch(`/api/flutter/user/profile/${phone}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            // Show success message
+            alert(
+                `✅ User Deleted Successfully\n\n` +
+                `Phone: ${phone}\n` +
+                `Store: ${data.deleted.store_name}\n` +
+                `Orders Deleted: ${data.deleted.orders_deleted}\n\n` +
+                `The user profile has been permanently removed.`
+            );
+            
+            // Reload stores list
+            loadStores(true);
+        } else {
+            alert(`❌ Error: ${data.detail || 'Failed to delete user profile'}`);
+        }
+    } catch (error) {
+        console.error('Error deleting user profile:', error);
+        alert(`❌ Error deleting user profile: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
     const content = document.getElementById('orderDetailsContent');
     
     content.innerHTML = `

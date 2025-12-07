@@ -843,3 +843,80 @@ async def remove_favorite(phone: str, item_id: str):
     except Exception as e:
         print(f"Error removing favorite: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Delete user profile (Admin only)
+@router.delete("/profile/{phone}")
+async def delete_user_profile(phone: str, request: Request):
+    """
+    Delete user profile and all associated data
+    WARNING: This permanently deletes user data from MongoDB and Supabase
+    """
+    try:
+        db = get_mongo_db()
+        users_collection = db['users']
+        orders_collection = db['orders']
+        
+        logger.info(f"🗑️ ADMIN: Attempting to delete user profile: {phone}")
+        
+        # Check if user exists
+        user = users_collection.find_one({"phone": phone})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_name = user.get('name', 'Unknown')
+        store_name = user.get('store_details', {}).get('store_name', 'Unknown')
+        
+        # Count orders to be deleted
+        order_count = orders_collection.count_documents({"phone": phone})
+        
+        logger.info(f"📊 ADMIN: User {phone} has {order_count} orders")
+        
+        # Delete from MongoDB
+        # 1. Delete all user's orders
+        if order_count > 0:
+            delete_orders_result = orders_collection.delete_many({"phone": phone})
+            logger.info(f"✅ ADMIN: Deleted {delete_orders_result.deleted_count} orders")
+        
+        # 2. Delete user profile
+        delete_user_result = users_collection.delete_one({"phone": phone})
+        if delete_user_result.deleted_count > 0:
+            logger.info(f"✅ ADMIN: Deleted user from MongoDB")
+        
+        # Delete from Supabase
+        try:
+            supabase = get_supabase_client()
+            
+            # Delete FCM tokens from user_devices
+            try:
+                devices_result = supabase.table("user_devices").delete().eq("user_phone", phone).execute()
+                logger.info(f"✅ ADMIN: Deleted FCM tokens from Supabase")
+            except Exception as e:
+                logger.warning(f"⚠️ ADMIN: Failed to delete FCM tokens: {e}")
+            
+            # Delete from users table
+            try:
+                users_result = supabase.table("users").delete().eq("phone", phone).execute()
+                logger.info(f"✅ ADMIN: Deleted user from Supabase")
+            except Exception as e:
+                logger.warning(f"⚠️ ADMIN: Failed to delete from Supabase users: {e}")
+        except Exception as supabase_error:
+            logger.warning(f"⚠️ ADMIN: Supabase deletion failed (non-critical): {supabase_error}")
+        
+        logger.info(f"🎉 ADMIN: Successfully deleted user {phone}")
+        
+        return {
+            "success": True,
+            "message": "User profile deleted successfully",
+            "deleted": {
+                "phone": phone,
+                "name": user_name,
+                "store_name": store_name,
+                "orders_deleted": order_count
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ ADMIN: Error deleting user profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

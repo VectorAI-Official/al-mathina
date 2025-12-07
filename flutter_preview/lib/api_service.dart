@@ -356,6 +356,37 @@ class ApiService {
     print('🗑️ Expired cache entries cleared');
   }
   
+  // Preload critical data at app startup
+  static Future<void> preloadAppData({String? userPhone, String lang = 'en'}) async {
+    print('🚀 Preloading app data at startup...');
+    
+    try {
+      // Preload home data (runs in background)
+      getHomeData(lang: lang).then((_) {
+        print('✅ Home data preloaded successfully');
+      }).catchError((e) {
+        print('⚠️ Home data preload failed (non-critical): $e');
+      });
+      
+      // If user is logged in, preload their profile data
+      if (userPhone != null && userPhone.isNotEmpty) {
+        print('👤 Preloading user data for: $userPhone');
+        
+        // Run profile and store details in parallel
+        Future.wait([
+          getUserProfile(userPhone),
+          getStoreDetails(userPhone).catchError((_) => <String, dynamic>{}),
+        ]).then((_) {
+          print('✅ User data preloaded successfully');
+        }).catchError((e) {
+          print('⚠️ User data preload failed (non-critical): $e');
+        });
+      }
+    } catch (e) {
+      print('⚠️ Preload error (non-critical): $e');
+    }
+  }
+  
   static Future<HomeData> getHomeData({String lang = 'en'}) async {
     try {
       // Check cache first (30 seconds TTL)

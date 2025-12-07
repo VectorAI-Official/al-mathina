@@ -685,9 +685,25 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    // Start the 2-second splash timer
+    final splashTimer = Future.delayed(const Duration(seconds: 2));
+    
+    // Get user info and preload data in parallel with splash display
     final prefs = await SharedPreferences.getInstance();
     final isOldUser = prefs.getBool('isOldUser') ?? false;
+    final userPhone = prefs.getString('userPhone');
+    
+    // Get current language for preloading
+    final provider = Provider.of<AppProvider>(context, listen: false);
+    final lang = provider.currentLanguage;
+    
+    // Start preloading data (non-blocking - runs in background)
+    print('🚀 Starting data preload during splash screen...');
+    ApiService.preloadAppData(userPhone: userPhone, lang: lang);
+    
+    // Wait for splash timer to finish
+    await splashTimer;
+    
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(

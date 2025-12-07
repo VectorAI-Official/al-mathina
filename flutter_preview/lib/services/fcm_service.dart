@@ -21,6 +21,9 @@ class FCMService {
   
   // Callback for showing in-app notifications
   Function(RemoteMessage)? onMessageReceived;
+  
+  // Callback for handling notification taps
+  Function(String orderId, String userPhone)? onNotificationTap;
 
   /// Initialize Firebase and FCM
   Future<void> initialize() async {
@@ -72,6 +75,17 @@ class FCMService {
         
         // Handle background/terminated messages
         FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
+        
+        // Check if app was opened from a notification (terminated state)
+        print('🔍 FCM: Checking for initial message...');
+        RemoteMessage? initialMessage = await messaging.getInitialMessage();
+        if (initialMessage != null) {
+          print('📬 FCM: App opened from notification in terminated state');
+          await _handleBackgroundMessage(initialMessage);
+        } else {
+          print('ℹ️ FCM: No initial message (normal app launch)');
+        }
+        
         print('✅ FCM: All listeners registered');
         print('🎉 FCM: Initialization complete!');
         
@@ -96,9 +110,9 @@ class FCMService {
 
     await _localNotifications.initialize(
       initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
         print('📱 Notification tapped: ${response.payload}');
-        // Handle notification tap
+        await _handleNotificationTap(response.payload);
       },
     );
   }
@@ -138,29 +152,81 @@ class FCMService {
       android: androidDetails,
     );
 
-    try {
+      try {
       print('🔔 FCM: Showing local notification...');
+      // Encode order_id in payload
+      final payload = jsonEncode(message.data);
+      print('📦 FCM: Notification payload: $payload');
+      
       await _localNotifications.show(
         message.hashCode,
         message.notification?.title ?? 'Al-Mathina',
         message.notification?.body ?? '',
         notificationDetails,
-        payload: message.data.toString(),
+        payload: payload,
       );
       print('✅ FCM: Local notification displayed');
     } catch (e) {
       print('❌ FCM: Error showing notification: $e');
     }
   }
-
-  /// Handle background/terminated messages (app is closed)
+  
+  /// Handle notification tap (both foreground local notification and background)
+  Future<void> _handleNotificationTap(String? payload) async {
+    if (payload == null || payload.isEmpty) {
+      print('⚠️ FCM: No payload in notification tap');
+      return;
+    }
+    
+    try {
+      print('🔔 FCM: Processing notification tap payload...');
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      print('📦 FCM: Decoded data: $data');
+      
+      if (data.containsKey('order_id')) {
+        final orderId = data['order_id'];
+        print('🎯 FCM: Order ID from tap: $orderId');
+        
+        // Get user phone from SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        final userPhone = prefs.getString('userPhone');
+        print('📱 FCM: User phone: $userPhone');
+        
+        if (userPhone != null && onNotificationTap != null) {
+          print('✅ FCM: Triggering navigation to OrderDetailsScreen');
+          onNotificationTap!(orderId, userPhone);
+        } else {
+          print('⚠️ FCM: Cannot navigate - userPhone: $userPhone, callback: ${onNotificationTap != null}');
+        }
+      } else {
+        print('⚠️ FCM: No order_id in notification data');
+      }
+    } catch (e) {
+      print('❌ FCM: Error parsing notification payload: $e');
+    }
+  }  /// Handle background/terminated messages (app is closed)
   Future<void> _handleBackgroundMessage(RemoteMessage message) async {
     print('\n🎯 ============ BACKGROUND MESSAGE OPENED ============');
     print('📩 Title: ${message.notification?.title}');
     print('📩 Body: ${message.notification?.body}');
     print('📩 Data: ${message.data}');
     print('======================================================\n');
-    // Navigate to orders screen or specific order
+    
+    // Navigate to order details
+    if (message.data.containsKey('order_id')) {
+      final orderId = message.data['order_id'];
+      print('🔔 FCM: Navigating to order: $orderId');
+      
+      // Get user phone from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userPhone = prefs.getString('userPhone');
+      
+      if (userPhone != null && onNotificationTap != null) {
+        onNotificationTap!(orderId, userPhone);
+      } else {
+        print('⚠️ FCM: Cannot navigate - userPhone or callback missing');
+      }
+    }
   }
 
   /// Save FCM token to backend

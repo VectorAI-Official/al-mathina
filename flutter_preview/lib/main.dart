@@ -631,6 +631,24 @@ class MyApp extends StatelessWidget {
       }
     };
     
+    // Set up notification tap handler
+    FCMService().onNotificationTap = (String orderId, String userPhone) {
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        print('🎯 FCM: Navigating to OrderDetailsScreen with orderId: $orderId');
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OrderDetailsScreen(
+              userPhone: userPhone,
+              orderId: orderId,
+            ),
+          ),
+        );
+      } else {
+        print('❌ FCM: No navigator context available');
+      }
+    };
+    
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: '$kAppName Wholesale',

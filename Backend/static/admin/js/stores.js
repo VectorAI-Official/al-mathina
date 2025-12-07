@@ -1096,9 +1096,6 @@ async function viewOrderDetails(orderId) {
     }
 }
 
-// Show order details content
-function showOrderDetailsContent(order) {
-
 // Delete user profile with confirmation
 async function deleteUserProfile(phone, storeName) {
     // Show confirmation dialog
@@ -1150,6 +1147,9 @@ async function deleteUserProfile(phone, storeName) {
         hideLoading();
     }
 }
+
+// Show order details content
+function showOrderDetailsContent(order) {
     const content = document.getElementById('orderDetailsContent');
     
     content.innerHTML = `

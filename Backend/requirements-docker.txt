@@ -8,6 +8,8 @@ pydantic-settings==2.2.1
 # Database
 pymongo==4.8.0
 motor==3.4.0
+supabase==2.11.2
+firebase-admin==6.5.0
 
 # Image Storage and Processing
 Cloudinary==1.36.0

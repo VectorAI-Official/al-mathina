@@ -7101,7 +7101,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                     ),
                   ),
-                ),\n              const Divider(),
+                ),
+              const Divider(),
               // Add Account button
               ListTile(
                 leading: const Icon(Icons.add_circle, color: kPrimaryColor),
@@ -7130,7 +7131,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Close'),
           ),
-        ],\n          );\n        },
+        ],
+          );
+        },
       ),
     );
   }

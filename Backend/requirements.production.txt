@@ -9,7 +9,7 @@ python-dotenv==1.0.1
 # Database
 pymongo==4.10.1
 dnspython==2.7.0
-supabase==2.11.2
+supabase==2.25.0
 firebase-admin==6.5.0
 
 # Image Storage

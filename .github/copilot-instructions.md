@@ -60,7 +60,7 @@ Deployment & Requirements (CRITICAL)
 - ❌ NEVER assume one requirements file will work for all environments
 
 **Recent Example (Dec 2025)**: Added FCM push notifications:
-- Added `supabase==2.11.2` and `firebase-admin==6.5.0`
+- Added `supabase==2.25.0` and `firebase-admin==6.5.0`
 - Updated requirements.txt ✅
 - Updated requirements.production.txt ✅
 - Updated requirements-docker.txt ✅

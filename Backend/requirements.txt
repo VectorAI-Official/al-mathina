@@ -73,6 +73,7 @@ flake8==7.3.0
 fonttools==4.59.0
 fqdn==1.5.1
 frozendict==2.4.6
+supabase==2.25.0
 frozenlist==1.7.0
 fsspec==2025.7.0
 funcsigs==1.0.2

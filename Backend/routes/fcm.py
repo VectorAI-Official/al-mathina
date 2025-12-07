@@ -24,10 +24,13 @@ async def save_fcm_token(request: FCMTokenRequest):
     Save or update user's FCM token for push notifications
     """
     try:
+        logger.info(f"📱 Attempting to save FCM token for phone: {request.phone}")
         supabase = get_supabase_client()
+        logger.info(f"✅ Supabase client obtained successfully")
         
         # Check if user exists
         user_check = supabase.table("users").select("*").eq("phone", request.phone).execute()
+        logger.info(f"📋 User check result: found={len(user_check.data) if user_check.data else 0} users")
         
         if not user_check.data:
             # Create new user with FCM token
@@ -58,7 +61,7 @@ async def save_fcm_token(request: FCMTokenRequest):
             }
             
     except Exception as e:
-        logger.error(f"❌ Error saving FCM token: {str(e)}")
+        logger.error(f"❌ Error saving FCM token: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to save FCM token: {str(e)}")
 
 @router.get("/fcm-token/{phone}")

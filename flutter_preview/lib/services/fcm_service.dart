@@ -152,6 +152,7 @@ class FCMService {
         print('✅ FCM token saved to backend');
       } else {
         print('❌ Failed to save FCM token: ${response.statusCode}');
+        print('❌ Response body: ${response.body}');
       }
     } catch (e) {
       print('❌ Error saving FCM token: $e');

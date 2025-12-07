@@ -6888,6 +6888,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   print('🔄 [DIALOG SWITCH] Switching to: ${account.phoneNumber}');
                                   print('🔄 [DIALOG SWITCH] Store: ${account.storeName ?? "N/A"}');
                                   
+                                  // Save the context before closing dialog
+                                  final navigatorContext = context;
+                                  print('💾 [DIALOG SWITCH] Saved navigator context: ${navigatorContext.mounted}');
+                                  
                                   Navigator.pop(dialogContext);
                                   print('✅ [DIALOG SWITCH] Dialog closed');
                                   
@@ -6900,24 +6904,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ApiService.clearCache();
                                   print('✅ [DIALOG SWITCH] Cache cleared');
                                   
-                                  if (context.mounted) {
-                                    print('🔄 [DIALOG SWITCH] Showing loading dialog...');
+                                  print('🔄 [DIALOG SWITCH] Showing loading dialog...');
+                                  print('   Context mounted: ${navigatorContext.mounted}');
+                                  if (navigatorContext.mounted) {
                                     showDialog(
-                                      context: context,
+                                      context: navigatorContext,
                                       barrierDismissible: false,
                                       builder: (_) => const Center(
                                         child: CircularProgressIndicator(color: kPrimaryColor),
                                       ),
                                     );
+                                    print('✅ [DIALOG SWITCH] Loading dialog shown');
+                                  } else {
+                                    print('⚠️ [DIALOG SWITCH] Context unmounted - cannot show loading dialog');
                                   }
                                   
                                   print('⏳ [DIALOG SWITCH] Waiting 300ms...');
                                   await Future.delayed(const Duration(milliseconds: 300));
                                   print('✅ [DIALOG SWITCH] Wait complete');
                                   
-                                  if (context.mounted) {
-                                    print('🚀 [DIALOG SWITCH] Navigating to MainScreen...');
-                                    Navigator.of(context).pushAndRemoveUntil(
+                                  print('🚀 [DIALOG SWITCH] Navigating to MainScreen...');
+                                  print('   Context mounted: ${navigatorContext.mounted}');
+                                  if (navigatorContext.mounted) {
+                                    Navigator.of(navigatorContext).pushAndRemoveUntil(
                                       MaterialPageRoute(
                                         builder: (_) {
                                           print('🏗️  [DIALOG SWITCH] Building MainScreen...');

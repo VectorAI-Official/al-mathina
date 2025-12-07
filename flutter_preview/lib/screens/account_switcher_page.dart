@@ -284,22 +284,29 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
       print('\n🚀 [SWITCH] Step 4/4: Navigating to login screen...');
       print('   From: ${oldPhone ?? "none"}');
       print('   To: ${account.phoneNumber}');
+      print('   Closing loading dialog...');
       
       // Close loading dialog
       if (mounted) {
         Navigator.of(context).pop();
+        print('   ✅ Loading dialog closed');
       }
+      
+      print('   Initiating navigation with prefilledPhone: ${account.phoneNumber}');
       
       // Navigate to PhoneAuthScreen with pre-filled phone number
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: (context) => PhoneAuthScreenWithPrefilledPhone(
-              phoneNumber: account.phoneNumber,
+            builder: (context) => PhoneAuthScreen(
+              prefilledPhone: account.phoneNumber,
             ),
           ),
           (route) => false,
         );
+        print('   ✅ Navigation route pushed');
+      } else {
+        print('   ⚠️ Widget not mounted - skipping navigation');
       }
       
       final step4Duration = DateTime.now().difference(step4Start);
@@ -316,12 +323,30 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
       print('   Step 4 (Navigate):     ${step4Duration.inMilliseconds}ms');
       print('   TOTAL:                 ${totalDuration.inMilliseconds}ms');
       print('═══════════════════════════════════════════════════════════\n');
-    } catch (e) {
+    } catch (e, stackTrace) {
+      final duration = DateTime.now().difference(switchStartTime);
+      print('\n❌❌❌ ACCOUNT SWITCH FAILED AFTER ${duration.inMilliseconds}ms ❌❌❌');
+      print('💥 Exception type: ${e.runtimeType}');
+      print('💥 Exception message: $e');
+      print('💥 Stack trace:');
+      print(stackTrace);
+      print('═══════════════════════════════════════════════════════════\n');
+      
       // Close loading dialog
       if (mounted) {
-        Navigator.of(context).pop();
+        try {
+          Navigator.of(context).pop();
+          print('✅ Loading dialog closed after error');
+        } catch (popError) {
+          print('⚠️ Failed to close loading dialog: $popError');
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error switching account: $e')),
+          SnackBar(
+            content: Text('Error switching account: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }

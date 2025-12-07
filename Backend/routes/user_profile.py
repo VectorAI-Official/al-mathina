@@ -549,7 +549,8 @@ async def create_order(request: Request):
                         order_id=created_orders[0]['order_id'],  # Use first order ID
                         total_amount=float(total_amount),  # Total across all orders
                         items_count=total_items,
-                        store_name=store_name
+                        store_name=store_name,
+                        user_phone=user_phone
                     )
                     
                     if notification_sent:

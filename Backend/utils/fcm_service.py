@@ -74,7 +74,8 @@ class FCMService:
         order_id: str,
         total_amount: float,
         items_count: int,
-        store_name: Optional[str] = None
+        store_name: Optional[str] = None,
+        user_phone: Optional[str] = None
     ) -> bool:
         """
         Send order confirmation notification to user
@@ -127,9 +128,11 @@ class FCMService:
                 data={
                     'type': 'order_confirmation',
                     'order_id': order_id,
+                    'user_phone': user_phone or '',
                     'total_amount': str(total_amount),
                     'items_count': str(items_count),
-                    'timestamp': str(int(os.times().elapsed * 1000))
+                    'timestamp': str(int(os.times().elapsed * 1000)),
+                    'click_action': 'FLUTTER_NOTIFICATION_CLICK'
                 },
                 android=messaging.AndroidConfig(
                     priority='high',

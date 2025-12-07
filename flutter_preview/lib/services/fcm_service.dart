@@ -187,12 +187,18 @@ class FCMService {
         final orderId = data['order_id'];
         print('🎯 FCM: Order ID from tap: $orderId');
         
-        // Get user phone from SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        final userPhone = prefs.getString('userPhone');
-        print('📱 FCM: User phone: $userPhone');
+        // Try to get user phone from notification data first, then from SharedPreferences
+        String? userPhone = data['user_phone'];
         
-        if (userPhone != null && onNotificationTap != null) {
+        if (userPhone == null || userPhone.isEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          userPhone = prefs.getString('userPhone');
+          print('📱 FCM: User phone from SharedPreferences: $userPhone');
+        } else {
+          print('📱 FCM: User phone from notification data: $userPhone');
+        }
+        
+        if (userPhone != null && userPhone.isNotEmpty && onNotificationTap != null) {
           print('✅ FCM: Triggering navigation to OrderDetailsScreen');
           onNotificationTap!(orderId, userPhone);
         } else {
@@ -217,15 +223,25 @@ class FCMService {
       final orderId = message.data['order_id'];
       print('🔔 FCM: Navigating to order: $orderId');
       
-      // Get user phone from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final userPhone = prefs.getString('userPhone');
+      // Try to get user phone from notification data first, then from SharedPreferences
+      String? userPhone = message.data['user_phone'];
       
-      if (userPhone != null && onNotificationTap != null) {
+      if (userPhone == null || userPhone.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        userPhone = prefs.getString('userPhone');
+        print('📱 FCM: User phone from SharedPreferences: $userPhone');
+      } else {
+        print('📱 FCM: User phone from notification data: $userPhone');
+      }
+      
+      if (userPhone != null && userPhone.isNotEmpty && onNotificationTap != null) {
+        print('✅ FCM: Triggering navigation callback...');
         onNotificationTap!(orderId, userPhone);
       } else {
-        print('⚠️ FCM: Cannot navigate - userPhone or callback missing');
+        print('⚠️ FCM: Cannot navigate - userPhone: $userPhone, callback: ${onNotificationTap != null}');
       }
+    } else {
+      print('⚠️ FCM: No order_id in notification data');
     }
   }
 

@@ -415,6 +415,48 @@ class ApiService {
       print('═══════════════════════════════════════════════════════════\n');
     }
   }
+
+  // Update phone number
+  static Future<Map<String, dynamic>> updatePhoneNumber(
+      String oldPhone, String newPhone) async {
+    try {
+      print('📱 [API] Updating phone number: $oldPhone → $newPhone');
+      final startTime = DateTime.now();
+
+      final response = await http.put(
+        Uri.parse('$API_BASE/user/phone/$oldPhone'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({'new_phone': newPhone}),
+      );
+
+      final duration = DateTime.now().difference(startTime);
+      print('📡 [API] Phone update response: ${response.statusCode} in ${duration.inMilliseconds}ms');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ [API] Phone updated successfully: ${data['message']}');
+        return data;
+      } else if (response.statusCode == 409) {
+        print('⚠️ [API] Phone number already exists');
+        throw Exception('Phone number already registered to another user');
+      } else if (response.statusCode == 404) {
+        print('❌ [API] User not found');
+        throw Exception('User not found');
+      } else if (response.statusCode == 400) {
+        final error = json.decode(response.body);
+        print('⚠️ [API] Invalid phone format: ${error['detail']}');
+        throw Exception(error['detail'] ?? 'Invalid phone number format');
+      } else {
+        print('❌ [API] Unexpected status: ${response.statusCode}');
+        throw Exception('Failed to update phone: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ [API] Phone update error: $e');
+      rethrow;
+    }
+  }
   
   static Future<HomeData> getHomeData({String lang = 'en'}) async {
     final startTime = DateTime.now();

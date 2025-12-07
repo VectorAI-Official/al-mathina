@@ -6688,23 +6688,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   builder: (_) => const Center(child: CircularProgressIndicator()),
                 );
 
-                // Update profile via API
+                // If phone number changed, update via backend API first
+                if (newPhone != phone) {
+                  print('📱 [PROFILE] Phone changed: $phone → $newPhone, calling API...');
+                  try {
+                    await ApiService.updatePhoneNumber(phone, newPhone);
+                    print('✅ [PROFILE] Phone updated in database');
+                    
+                    // Update SharedPreferences only if API succeeds
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('userPhone', newPhone);
+                    
+                    // Clear cache so new data is fetched
+                    ApiService.clearCache();
+                    
+                    print('✅ [PROFILE] SharedPreferences updated with new phone');
+                  } catch (phoneError) {
+                    // Phone update failed - close loading and show specific error
+                    if (context.mounted) {
+                      Navigator.pop(context); // Close loading dialog
+                      
+                      String errorMessage;
+                      if (phoneError.toString().contains('already registered')) {
+                        errorMessage = provider.currentLanguage == 'ta' 
+                            ? 'இந்த தொலைபேசி எண் ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது'
+                            : 'This phone number is already registered to another user';
+                      } else if (phoneError.toString().contains('Invalid phone format')) {
+                        errorMessage = provider.currentLanguage == 'ta'
+                            ? 'தவறான தொலைபேசி எண் வடிவம்'
+                            : 'Invalid phone number format';
+                      } else {
+                        errorMessage = provider.currentLanguage == 'ta'
+                            ? 'தொலைபேசி எண்ணைப் புதுப்பிக்க முடியவில்லை: $phoneError'
+                            : 'Failed to update phone number: $phoneError';
+                      }
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(errorMessage),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 5),
+                        ),
+                      );
+                      return; // Don't proceed with profile update
+                    }
+                  }
+                }
+
+                // Update profile via API (name and email)
                 await ApiService.updateUserProfile(
-                  phone,
+                  newPhone, // Use newPhone in case it changed
                   name,
                   null,
                 );
-
-                // If phone number changed, update SharedPreferences
-                if (newPhone != phone) {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('userPhone', newPhone);
-                  
-                  // Clear cache so new data is fetched
-                  ApiService.clearCache();
-                  
-                  print('📱 Phone number updated from $phone to $newPhone');
-                }
 
                 if (context.mounted) {
                   Navigator.pop(context); // Close loading dialog

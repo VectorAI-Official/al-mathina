@@ -394,7 +394,8 @@ async def create_order(request: Request):
                 logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
                 
                 # Send single notification for all orders
-                total_items = sum(len(order['items']) for order in created_orders)
+                # created_orders only has items_count, not the full items array
+                total_items = sum(order['items_count'] for order in created_orders)
                 logger.info(f"📊 ORDER: Total items across all orders: {total_items}")
                 logger.info(f"📦 ORDER: First order ID: {created_orders[0]['order_id']}")
                 

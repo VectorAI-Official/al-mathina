@@ -6615,7 +6615,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final nameController = TextEditingController(text: currentName);
-    final phoneController = TextEditingController(text: phone);
+    
+    // Extract only the digits after +91 for editing
+    final phoneDigits = phone.startsWith('+91') ? phone.substring(3) : phone;
+    final phoneController = TextEditingController(text: phoneDigits);
 
     return showDialog(
       context: context,
@@ -6640,11 +6643,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: InputDecoration(
                   labelText: provider.currentLanguage == 'ta' ? 'தொலைபேசி எண்' : 'Phone Number',
                   border: const OutlineInputBorder(),
-                  hintText: '+91XXXXXXXXXX',
+                  hintText: 'XXXXXXXXXX',
                   prefixIcon: const Icon(Icons.phone, color: kPrimaryColor),
+                  prefixText: '+91 ',
+                  prefixStyle: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 keyboardType: TextInputType.phone,
-                maxLength: 13,
+                maxLength: 10,
               ),
             ],
           ),
@@ -6657,7 +6666,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
-              final newPhone = phoneController.text.trim();
+              final phoneDigits = phoneController.text.trim();
               
               if (name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -6669,7 +6678,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 return;
               }
 
-              if (newPhone.isEmpty) {
+              if (phoneDigits.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(provider.currentLanguage == 'ta' ? 'தொலைபேசி எண் தேவை' : 'Phone number is required'),
@@ -6679,18 +6688,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 return;
               }
 
-              // Validate phone number format (must start with +91 and have 10 digits)
-              if (!newPhone.startsWith('+91') || newPhone.length != 13) {
+              // Validate phone number format (must have exactly 10 digits)
+              if (phoneDigits.length != 10 || !RegExp(r'^[0-9]{10}$').hasMatch(phoneDigits)) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(provider.currentLanguage == 'ta' 
-                        ? 'சரியான இந்திய தொலைபேசி எண்ணை உள்ளிடவும் (+91XXXXXXXXXX)'
-                        : 'Please enter a valid Indian phone number (+91XXXXXXXXXX)'),
+                        ? 'சரியான 10 இலக்க தொலைபேசி எண்ணை உள்ளிடவும்'
+                        : 'Please enter a valid 10-digit phone number'),
                     backgroundColor: Colors.red,
                   ),
                 );
                 return;
               }
+              
+              // Prepend +91 to create full phone number
+              final newPhone = '+91$phoneDigits';
 
               try {
                 // Show loading
@@ -6875,37 +6887,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (!context.mounted) return;
 
+    // Search controller
+    final searchController = TextEditingController();
+    
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Switch Account', style: TextStyle(fontWeight: FontWeight.bold)),
-        contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Scrollable list of saved accounts
-              if (savedAccounts.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('No saved accounts', style: TextStyle(color: Colors.grey)),
-                )
-              else
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(dialogContext).size.height * 0.5,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          // Filter accounts based on search query
+          final searchQuery = searchController.text.toLowerCase();
+          final filteredAccounts = savedAccounts.where((account) {
+            final phone = account.phoneNumber.toLowerCase();
+            final name = (account.storeName ?? '').toLowerCase();
+            return phone.contains(searchQuery) || name.contains(searchQuery);
+          }).toList();
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            title: const Text('Switch Account', style: TextStyle(fontWeight: FontWeight.bold)),
+            contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Search bar
+                  if (savedAccounts.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: TextField(
+                        controller: searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search by phone or name...',
+                          hintStyle: const TextStyle(fontSize: 14),
+                          prefixIcon: const Icon(Icons.search, color: kPrimaryColor, size: 20),
+                          suffixIcon: searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  onPressed: () {
+                                    searchController.clear();
+                                    setState(() {});
+                                  },
+                                )
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.grey),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: kPrimaryColor, width: 2),
+                          ),
+                        ),
+                        onChanged: (value) => setState(() {}),
+                      ),
                     ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: savedAccounts.length,
-                      itemBuilder: (context, index) {
-                        final account = savedAccounts[index];
-                        final isCurrentAccount = account.phoneNumber == currentPhone;
-                        
-                        return ListTile(
+                  const SizedBox(height: 8),
+                  // Scrollable list of saved accounts
+                  if (savedAccounts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text('No saved accounts', style: TextStyle(color: Colors.grey)),
+                    )
+                  else if (filteredAccounts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          Icon(Icons.search_off, size: 48, color: Colors.grey),
+                          SizedBox(height: 8),
+                          Text('No matching accounts', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(dialogContext).size.height * 0.8,
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filteredAccounts.length,
+                          itemBuilder: (context, index) {
+                            final account = filteredAccounts[index];
+                            final isCurrentAccount = account.phoneNumber == currentPhone;
+                            
+                            return ListTile(
                           leading: IconButton(
                             icon: const Icon(Icons.delete_outline, color: Colors.red),
                             onPressed: () async {
@@ -7032,8 +7101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                     ),
                   ),
-                ),
-              const Divider(),
+                ),\n              const Divider(),
               // Add Account button
               ListTile(
                 leading: const Icon(Icons.add_circle, color: kPrimaryColor),
@@ -7062,7 +7130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Close'),
           ),
-        ],
+        ],\n          );\n        },
       ),
     );
   }

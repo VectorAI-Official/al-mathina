@@ -594,12 +594,52 @@ void main() async {
   );
 }
 
+// Global navigator key for showing snackbars from anywhere
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Set up FCM foreground message handler
+    FCMService().onMessageReceived = (RemoteMessage message) {
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.notification?.title ?? 'Al-Mathina',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(message.notification?.body ?? ''),
+              ],
+            ),
+            backgroundColor: const Color.fromARGB(255, 40, 167, 69),
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'VIEW',
+              textColor: Colors.white,
+              onPressed: () {
+                // Navigate to orders screen or relevant page
+              },
+            ),
+          ),
+        );
+      }
+    };
+    
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: '$kAppName Wholesale',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

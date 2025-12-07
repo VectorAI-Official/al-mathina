@@ -18,6 +18,9 @@ class FCMService {
   
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
+  
+  // Callback for showing in-app notifications
+  Function(RemoteMessage)? onMessageReceived;
 
   /// Initialize Firebase and FCM
   Future<void> initialize() async {
@@ -91,6 +94,13 @@ class FCMService {
   /// Handle foreground messages (app is open)
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     print('📩 Foreground message: ${message.notification?.title}');
+    print('📩 Message body: ${message.notification?.body}');
+    print('📩 Message data: ${message.data}');
+    
+    // Trigger in-app notification callback
+    if (onMessageReceived != null) {
+      onMessageReceived!(message);
+    }
     
     // Show local notification with Al-Mathina branding
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(

@@ -383,41 +383,54 @@ async def create_order(request: Request):
             supabase = get_supabase_client()
             logger.info("✅ ORDER: Supabase client obtained")
             
-            logger.info(f"🔍 ORDER: Querying FCM token for phone: {user_phone}")
-            fcm_result = supabase.table("users").select("fcm_token, store_name").eq("phone", user_phone).execute()
-            logger.info(f"✅ ORDER: Query completed, data: {fcm_result.data}")
+            logger.info(f"🔍 ORDER: Querying ALL FCM tokens for phone: {user_phone}")
+            # Query user_devices table for multi-device support
+            devices_result = supabase.table("user_devices").select("fcm_token").eq("phone", user_phone).execute()
+            logger.info(f"✅ ORDER: Query completed, found {len(devices_result.data) if devices_result.data else 0} device(s)")
             
-            if fcm_result.data and fcm_result.data[0].get("fcm_token"):
-                fcm_token = fcm_result.data[0]["fcm_token"]
-                store_name = fcm_result.data[0].get("store_name")
-                logger.info(f"✅ ORDER: Found FCM token: {fcm_token[:30]}...")
-                logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
+            # Also get store_name from users table
+            user_result = supabase.table("users").select("store_name").eq("phone", user_phone).execute()
+            store_name = user_result.data[0].get("store_name") if user_result.data else None
+            logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
+            
+            if devices_result.data:
+                device_count = len(devices_result.data)
+                logger.info(f"📱 ORDER: Found {device_count} device(s) for user {user_phone}")
                 
-                # Send single notification for all orders
+                # Send notification to ALL devices
                 # created_orders only has items_count, not the full items array
                 total_items = sum(order['items_count'] for order in created_orders)
                 logger.info(f"📊 ORDER: Total items across all orders: {total_items}")
                 logger.info(f"📦 ORDER: First order ID: {created_orders[0]['order_id']}")
                 
-                logger.info("📤 ORDER: Calling FCM service to send notification...")
-                notification_sent = await fcm_service.send_order_notification(
-                    fcm_token=fcm_token,
-                    order_id=created_orders[0]['order_id'],  # Use first order ID
-                    total_amount=float(total_amount),  # Total across all orders
-                    items_count=total_items,
-                    store_name=store_name
-                )
+                successful_sends = 0
+                failed_sends = 0
                 
-                if notification_sent:
-                    logger.info(f"✅ ORDER: Push notification sent successfully for {len(created_orders)} split order(s)!")
-                    logger.info("🎉 ORDER: User should receive notification now")
-                else:
-                    logger.error(f"❌ ORDER: Failed to send push notification")
-                    logger.error("❌ ORDER: Check FCM service logs above for details")
+                for idx, device in enumerate(devices_result.data, 1):
+                    fcm_token = device["fcm_token"]
+                    logger.info(f"📤 ORDER: [{idx}/{device_count}] Sending to device: {fcm_token[:30]}...")
+                    
+                    notification_sent = await fcm_service.send_order_notification(
+                        fcm_token=fcm_token,
+                        order_id=created_orders[0]['order_id'],  # Use first order ID
+                        total_amount=float(total_amount),  # Total across all orders
+                        items_count=total_items,
+                        store_name=store_name
+                    )
+                    
+                    if notification_sent:
+                        successful_sends += 1
+                        logger.info(f"✅ ORDER: [{idx}/{device_count}] Notification sent successfully!")
+                    else:
+                        failed_sends += 1
+                        logger.error(f"❌ ORDER: [{idx}/{device_count}] Failed to send notification")
+                
+                logger.info(f"🎉 ORDER: Notification summary: {successful_sends} sent, {failed_sends} failed out of {device_count} device(s)")
+                if successful_sends > 0:
+                    logger.info(f"🎉 ORDER: At least one device received notification!")
             else:
-                logger.warning(f"⚠️ ORDER: No FCM token found for user {user_phone}")
+                logger.warning(f"⚠️ ORDER: No devices found for user {user_phone}")
                 logger.warning(f"⚠️ ORDER: User needs to login again to save FCM token")
-                logger.warning(f"⚠️ ORDER: Query result: {fcm_result.data}")
             
             logger.info("*"*60 + "\n")
                 

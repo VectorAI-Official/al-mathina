@@ -22,13 +22,23 @@ class FCMTokenRequest(BaseModel):
 async def save_fcm_token(request: FCMTokenRequest):
     """
     Save or update user's FCM token for push notifications
+    Supports multiple devices per phone number
     """
     try:
         logger.info(f"📱 Attempting to save FCM token for phone: {request.phone}")
         supabase = get_supabase_client()
         logger.info(f"✅ Supabase client obtained successfully")
         
-        # Check if user exists
+        # Save to user_devices table (multi-device support)
+        device_result = supabase.table("user_devices").upsert({
+            "phone": request.phone,
+            "fcm_token": request.fcm_token,
+            "last_active": datetime.utcnow().isoformat()
+        }, on_conflict="phone,fcm_token").execute()
+        
+        logger.info(f"✅ Saved to user_devices table for phone: {request.phone}")
+        
+        # Also update users table for backward compatibility
         user_check = supabase.table("users").select("*").eq("phone", request.phone).execute()
         logger.info(f"📋 User check result: found={len(user_check.data) if user_check.data else 0} users")
         
@@ -43,7 +53,7 @@ async def save_fcm_token(request: FCMTokenRequest):
             logger.info(f"✅ Created new user with FCM token: {request.phone}")
             return {
                 "success": True,
-                "message": "User created and FCM token saved",
+                "message": "User created and FCM token saved to both tables",
                 "data": result.data[0] if result.data else None
             }
         else:
@@ -56,7 +66,7 @@ async def save_fcm_token(request: FCMTokenRequest):
             logger.info(f"✅ Updated FCM token for user: {request.phone}")
             return {
                 "success": True,
-                "message": "FCM token updated",
+                "message": "FCM token updated in both tables",
                 "data": result.data[0] if result.data else None
             }
             
@@ -67,28 +77,25 @@ async def save_fcm_token(request: FCMTokenRequest):
 @router.get("/fcm-token/{phone}")
 async def get_fcm_token(phone: str):
     """
-    Retrieve user's FCM token (used internally by backend)
+    Retrieve all FCM tokens for a phone number (supports multiple devices)
     """
     try:
         supabase = get_supabase_client()
         
-        result = supabase.table("users").select("fcm_token").eq("phone", phone).execute()
+        # Get all device tokens for this phone
+        result = supabase.table("user_devices").select("fcm_token, device_id, device_name, last_active").eq("phone", phone).execute()
         
         if not result.data:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        fcm_token = result.data[0].get("fcm_token")
-        
-        if not fcm_token:
-            raise HTTPException(status_code=404, detail="FCM token not found for user")
+            raise HTTPException(status_code=404, detail="No devices found for user")
         
         return {
             "success": True,
-            "fcm_token": fcm_token
+            "device_count": len(result.data),
+            "devices": result.data
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error retrieving FCM token: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve FCM token: {str(e)}")
+        logger.error(f"❌ Error retrieving FCM tokens: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve FCM tokens: {str(e)}")

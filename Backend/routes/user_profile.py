@@ -518,8 +518,8 @@ async def create_order(request: Request):
             logger.info("✅ ORDER: Supabase client obtained")
             
             logger.info(f"🔍 ORDER: Querying ALL FCM tokens for phone: {user_phone}")
-            # Query user_devices table for multi-device support (column is 'user_phone', not 'phone')
-            devices_result = supabase.table("user_devices").select("fcm_token").eq("user_phone", user_phone).execute()
+            # Query user_devices table for multi-device support (column is 'phone', not 'user_phone')
+            devices_result = supabase.table("user_devices").select("fcm_token").eq("phone", user_phone).execute()
             logger.info(f"✅ ORDER: Query completed, found {len(devices_result.data) if devices_result.data else 0} device(s)")
             
             # Also get store_name from users table

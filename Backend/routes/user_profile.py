@@ -403,7 +403,12 @@ async def get_user_orders(phone: str, request: Request):
 @router.post("/orders")
 async def create_order(request: Request):
     """Create a new order - automatically splits by section"""
+    from datetime import datetime, timedelta, timezone
+    from collections import defaultdict
+    import uuid
     import sys
+    import traceback
+    
     sys.stdout.flush()
     sys.stderr.flush()
     
@@ -418,9 +423,6 @@ async def create_order(request: Request):
     logger.warning("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER WARNING")
     logger.info("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER INFO")
     try:
-        from datetime import datetime, timedelta, timezone
-        from collections import defaultdict
-        import uuid
         
         print("📥 Step 1: Reading request body...", flush=True)
         # Get request body
@@ -593,7 +595,6 @@ async def create_order(request: Request):
         print(f"❌ Error type: {type(e).__name__}", flush=True)
         print(f"❌ Error message: {str(e)}", flush=True)
         print("❌ Full traceback:", flush=True)
-        import traceback
         print(traceback.format_exc(), flush=True)
         print("❌"*40 + "\n", flush=True)
         

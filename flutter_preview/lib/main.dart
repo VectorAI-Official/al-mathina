@@ -6732,9 +6732,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final oldAccount = savedAccounts[oldAccountIndex];
                       await SharedPrefsService.removeAccount(phone);
                       await SharedPrefsService.saveAccount(SavedAccount(
+                        uid: oldAccount.uid,
                         phoneNumber: newPhone,
                         storeName: oldAccount.storeName,
-                        lastLogin: DateTime.now(),
                       ));
                       print('✅ [PROFILE] Saved accounts updated: $phone → $newPhone');
                     }

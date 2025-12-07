@@ -6603,24 +6603,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showEditProfileDialog(BuildContext context, String currentName, String currentEmail, String phone) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final nameController = TextEditingController(text: currentName);
+    final phoneController = TextEditingController(text: phone);
 
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         title: Text(provider.text('edit_profile')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: provider.text('name'),
-                border: const OutlineInputBorder(),
-                hintText: 'Enter your name',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: provider.text('name'),
+                  border: const OutlineInputBorder(),
+                  hintText: 'Enter your name',
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: phoneController,
+                decoration: InputDecoration(
+                  labelText: provider.currentLanguage == 'ta' ? 'தொலைபேசி எண்' : 'Phone Number',
+                  border: const OutlineInputBorder(),
+                  hintText: '+91XXXXXXXXXX',
+                  prefixIcon: const Icon(Icons.phone, color: kPrimaryColor),
+                ),
+                keyboardType: TextInputType.phone,
+                maxLength: 13,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -6630,11 +6645,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
+              final newPhone = phoneController.text.trim();
               
               if (name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(provider.text('name_required')),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              if (newPhone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(provider.currentLanguage == 'ta' ? 'தொலைபேசி எண் தேவை' : 'Phone number is required'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              // Validate phone number format (must start with +91 and have 10 digits)
+              if (!newPhone.startsWith('+91') || newPhone.length != 13) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(provider.currentLanguage == 'ta' 
+                        ? 'சரியான இந்திய தொலைபேசி எண்ணை உள்ளிடவும் (+91XXXXXXXXXX)'
+                        : 'Please enter a valid Indian phone number (+91XXXXXXXXXX)'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -6649,12 +6688,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   builder: (_) => const Center(child: CircularProgressIndicator()),
                 );
 
-                // Update profile via API (email set to null since we removed it)
+                // Update profile via API
                 await ApiService.updateUserProfile(
                   phone,
                   name,
                   null,
                 );
+
+                // If phone number changed, update SharedPreferences
+                if (newPhone != phone) {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('userPhone', newPhone);
+                  
+                  // Clear cache so new data is fetched
+                  ApiService.clearCache();
+                  
+                  print('📱 Phone number updated from $phone to $newPhone');
+                }
 
                 if (context.mounted) {
                   Navigator.pop(context); // Close loading dialog

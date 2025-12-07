@@ -6882,12 +6882,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onTap: isCurrentAccount
                               ? null
                               : () async {
-                                  Navigator.pop(dialogContext);
+                                  print('\n╔═══════════════════════════════════════════════════════════╗');
+                                  print('║         ACCOUNT SWITCH FROM DIALOG STARTED                ║');
+                                  print('╚═══════════════════════════════════════════════════════════╝');
+                                  print('🔄 [DIALOG SWITCH] Switching to: ${account.phoneNumber}');
+                                  print('🔄 [DIALOG SWITCH] Store: ${account.storeName ?? "N/A"}');
                                   
+                                  Navigator.pop(dialogContext);
+                                  print('✅ [DIALOG SWITCH] Dialog closed');
+                                  
+                                  print('📋 [DIALOG SWITCH] Updating userPhone in SharedPreferences...');
                                   final prefs = await SharedPreferences.getInstance();
                                   await prefs.setString('userPhone', account.phoneNumber);
+                                  print('✅ [DIALOG SWITCH] userPhone set to: ${account.phoneNumber}');
+                                  
+                                  print('🗑️  [DIALOG SWITCH] Clearing API cache...');
+                                  ApiService.clearCache();
+                                  print('✅ [DIALOG SWITCH] Cache cleared');
                                   
                                   if (context.mounted) {
+                                    print('🔄 [DIALOG SWITCH] Showing loading dialog...');
                                     showDialog(
                                       context: context,
                                       barrierDismissible: false,
@@ -6897,16 +6911,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     );
                                   }
                                   
+                                  print('⏳ [DIALOG SWITCH] Waiting 300ms...');
                                   await Future.delayed(const Duration(milliseconds: 300));
+                                  print('✅ [DIALOG SWITCH] Wait complete');
                                   
                                   if (context.mounted) {
+                                    print('🚀 [DIALOG SWITCH] Navigating to MainScreen...');
                                     Navigator.of(context).pushAndRemoveUntil(
                                       MaterialPageRoute(
-                                        builder: (_) => const MainScreen(),
+                                        builder: (_) {
+                                          print('🏗️  [DIALOG SWITCH] Building MainScreen...');
+                                          return const MainScreen();
+                                        },
                                       ),
                                       (route) => false,
                                     );
+                                    print('✅ [DIALOG SWITCH] Navigation pushed');
+                                  } else {
+                                    print('⚠️ [DIALOG SWITCH] Context not mounted - skipping navigation');
                                   }
+                                  
+                                  print('╔═══════════════════════════════════════════════════════════╗');
+                                  print('║  ACCOUNT SWITCH FROM DIALOG COMPLETED                     ║');
+                                  print('╚═══════════════════════════════════════════════════════════╝\n');
                                 },
                         );
                       },

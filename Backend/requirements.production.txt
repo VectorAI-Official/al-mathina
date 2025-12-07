@@ -1,16 +1,16 @@
 # Core FastAPI and Server
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
+fastapi==0.110.1
+uvicorn==0.25.0
 python-multipart==0.0.20
-pydantic==2.10.6
-pydantic-settings==2.7.1
+pydantic==2.11.9
+pydantic-settings==2.10.1
 python-dotenv==1.0.1
 
 # Database
 pymongo==4.10.1
 dnspython==2.7.0
 supabase==2.25.0
-firebase-admin==6.5.0
+firebase-admin==7.1.0
 
 # Image Storage
 cloudinary==1.45.0

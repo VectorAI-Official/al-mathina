@@ -626,13 +626,6 @@ class MyApp extends StatelessWidget {
             backgroundColor: const Color.fromARGB(255, 40, 167, 69),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'VIEW',
-              textColor: Colors.white,
-              onPressed: () {
-                // Navigate to orders screen or relevant page
-              },
-            ),
           ),
         );
       }

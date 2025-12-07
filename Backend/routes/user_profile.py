@@ -38,6 +38,9 @@ class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
 
+class UpdatePhoneRequest(BaseModel):
+    new_phone: str
+
 class AddAddressRequest(BaseModel):
     street: str
     city: str
@@ -143,6 +146,105 @@ async def update_user_profile(phone: str, profile: UpdateProfileRequest, request
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Update phone number
+@router.put("/phone/{old_phone}")
+async def update_phone_number(old_phone: str, update_request: UpdatePhoneRequest, request: Request):
+    """
+    Update user's phone number
+    First checks if new phone already exists, then updates across all collections
+    """
+    try:
+        new_phone = update_request.new_phone
+        
+        # Validate phone format
+        if not new_phone.startswith('+91') or len(new_phone) != 13:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid phone format. Must be +91XXXXXXXXXX"
+            )
+        
+        # Check if it's the same number
+        if old_phone == new_phone:
+            raise HTTPException(
+                status_code=400,
+                detail="New phone number is the same as current"
+            )
+        
+        db = get_mongo_db()
+        users_collection = db['users']
+        orders_collection = db['orders']
+        
+        # Check if new phone already exists
+        existing_user = users_collection.find_one({"phone": new_phone})
+        if existing_user:
+            raise HTTPException(
+                status_code=409,
+                detail="Phone number already registered to another user"
+            )
+        
+        # Get old user data
+        old_user = users_collection.find_one({"phone": old_phone})
+        if not old_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        logger.info(f"📱 Updating phone number: {old_phone} -> {new_phone}")
+        
+        # Update phone in users collection
+        result = users_collection.update_one(
+            {"phone": old_phone},
+            {
+                "$set": {
+                    "phone": new_phone,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        if result.modified_count > 0:
+            logger.info(f"✅ Updated phone in users collection")
+        
+        # Update phone in all orders
+        orders_result = orders_collection.update_many(
+            {"phone": old_phone},
+            {"$set": {"phone": new_phone}}
+        )
+        
+        if orders_result.modified_count > 0:
+            logger.info(f"✅ Updated {orders_result.modified_count} orders")
+        
+        # Update in Supabase users table
+        try:
+            supabase = get_supabase_client()
+            supabase_result = supabase.table('users').update({
+                'phone': new_phone,
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('phone', old_phone).execute()
+            
+            if supabase_result.data:
+                logger.info(f"✅ Updated phone in Supabase")
+        except Exception as supabase_error:
+            logger.warning(f"⚠️ Supabase update failed (non-critical): {supabase_error}")
+        
+        # Get updated user
+        updated_user = users_collection.find_one({"phone": new_phone})
+        updated_user['_id'] = str(updated_user['_id'])
+        
+        logger.info(f"🎉 Phone number update completed successfully")
+        
+        return {
+            "success": True,
+            "message": "Phone number updated successfully",
+            "old_phone": old_phone,
+            "new_phone": new_phone,
+            "user": updated_user
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error updating phone number: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Add address

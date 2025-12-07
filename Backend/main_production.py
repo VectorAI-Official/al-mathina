@@ -43,12 +43,27 @@ def delete_session(session_id: str) -> None:
 # Set environment variable to ensure production config is used
 os.environ['ENVIRONMENT'] = 'production'
 
-# Configure logging
+# Force unbuffered output for Docker/Render
+import sys
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
+# Configure logging with forced flushing
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ],
+    force=True
 )
 logger = logging.getLogger(__name__)
+
+# Print startup banner to verify logs are working
+print("=" * 60, flush=True)
+print("🚀 AL-MATHINA BACKEND - PRODUCTION MODE", flush=True)
+print(f"📅 Starting at: {datetime.now().isoformat()}", flush=True)
+print("=" * 60, flush=True)
 
 
 @asynccontextmanager

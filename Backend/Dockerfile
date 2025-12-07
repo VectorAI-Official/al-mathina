@@ -1,6 +1,9 @@
 # Use Python 3.11 (avoids Python 3.13 SSL bug with MongoDB Atlas)
 FROM python:3.11-slim
 
+# Force unbuffered output for real-time logs
+ENV PYTHONUNBUFFERED=1
+
 # Set working directory
 WORKDIR /app
 

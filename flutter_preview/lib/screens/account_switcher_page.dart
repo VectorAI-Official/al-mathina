@@ -20,6 +20,9 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
   @override
   void initState() {
     super.initState();
+    print('\n🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷');
+    print('🔷 ACCOUNT SWITCHER PAGE: initState() CALLED');
+    print('🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷🔷\n');
     _loadAccounts();
   }
 
@@ -388,6 +391,8 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
 
   @override
   Widget build(BuildContext context) {
+    print('🎨 [ACCOUNT SWITCHER] build() called - _isLoading: $_isLoading, _savedAccounts: ${_savedAccounts.length}');
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Switch Account'),

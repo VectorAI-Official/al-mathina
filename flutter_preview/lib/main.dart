@@ -685,24 +685,47 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
+    final splashStartTime = DateTime.now();
+    print('\n╔═══════════════════════════════════════════════════════════╗');
+    print('║              SPLASH SCREEN STARTED                        ║');
+    print('╚═══════════════════════════════════════════════════════════╝');
+    
     // Start the 2-second splash timer
     final splashTimer = Future.delayed(const Duration(seconds: 2));
     
     // Get user info and preload data in parallel with splash display
+    final prefsStartTime = DateTime.now();
+    print('\n📋 [SPLASH] Loading preferences...');
     final prefs = await SharedPreferences.getInstance();
     final isOldUser = prefs.getBool('isOldUser') ?? false;
     final userPhone = prefs.getString('userPhone');
+    final prefsDuration = DateTime.now().difference(prefsStartTime);
+    
+    print('   ✅ Preferences loaded in ${prefsDuration.inMilliseconds}ms');
+    print('   isOldUser: $isOldUser');
+    print('   userPhone: ${userPhone ?? "NOT SET"}');
     
     // Get current language for preloading
     final provider = Provider.of<AppProvider>(context, listen: false);
     final lang = provider.currentLanguage;
+    print('   Language: $lang');
     
     // Start preloading data (non-blocking - runs in background)
-    print('🚀 Starting data preload during splash screen...');
+    final preloadStartTime = DateTime.now();
+    print('\n🎯 [SPLASH] Initiating background preload...');
     ApiService.preloadAppData(userPhone: userPhone, lang: lang);
+    final preloadInitDuration = DateTime.now().difference(preloadStartTime);
+    print('   ✅ Preload initiated in ${preloadInitDuration.inMilliseconds}ms (continues in background)');
     
     // Wait for splash timer to finish
+    print('\n⏱️  [SPLASH] Waiting for 2-second timer...');
     await splashTimer;
+    final splashDuration = DateTime.now().difference(splashStartTime);
+    
+    print('\n🚀 [SPLASH] Timer complete - navigating to ${isOldUser ? "Main Screen" : "Login Screen"}');
+    print('╔═══════════════════════════════════════════════════════════╗');
+    print('║  SPLASH SCREEN COMPLETED IN ${splashDuration.inMilliseconds}ms');
+    print('╚═══════════════════════════════════════════════════════════╝\n');
     
     if (!mounted) return;
     Navigator.of(context).pushReplacement(

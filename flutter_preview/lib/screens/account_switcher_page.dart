@@ -236,6 +236,14 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
   }
 
   Future<void> _switchAccount(SavedAccount account) async {
+    final switchStartTime = DateTime.now();
+    print('\n╔═══════════════════════════════════════════════════════════╗');
+    print('║         ACCOUNT SWITCH STARTED                            ║');
+    print('╚═══════════════════════════════════════════════════════════╝');
+    print('🔄 [SWITCH] Target: ${account.phoneNumber}');
+    print('🔄 [SWITCH] Store: ${account.storeName ?? "N/A"}');
+    print('');
+    
     // Show loading dialog
     if (mounted) {
       showDialog(
@@ -248,16 +256,34 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
     }
 
     try {
-      // Clear API cache before switching
-      ApiService.clearCache();
-      
-      // Clear current user session
+      // Step 1: Get current user info
+      final step1Start = DateTime.now();
+      print('📋 [SWITCH] Step 1/4: Getting current user info...');
       final prefs = await SharedPreferences.getInstance();
       final oldPhone = prefs.getString('userPhone');
+      final step1Duration = DateTime.now().difference(step1Start);
+      print('   ✅ Current user: ${oldPhone ?? "none"} (${step1Duration.inMilliseconds}ms)');
+      
+      // Step 2: Clear API cache
+      final step2Start = DateTime.now();
+      print('\n🗑️  [SWITCH] Step 2/4: Clearing API cache...');
+      ApiService.clearCache();
+      final step2Duration = DateTime.now().difference(step2Start);
+      print('   ✅ Cache cleared (${step2Duration.inMilliseconds}ms)');
+      
+      // Step 3: Clear user session
+      final step3Start = DateTime.now();
+      print('\n🧹 [SWITCH] Step 3/4: Clearing user session...');
       await prefs.remove('userPhone');
       await prefs.remove('isOldUser');
+      final step3Duration = DateTime.now().difference(step3Start);
+      print('   ✅ Session cleared (${step3Duration.inMilliseconds}ms)');
       
-      print('🔄 Switching from ${oldPhone ?? "none"} to ${account.phoneNumber}');
+      // Step 4: Navigate to login
+      final step4Start = DateTime.now();
+      print('\n🚀 [SWITCH] Step 4/4: Navigating to login screen...');
+      print('   From: ${oldPhone ?? "none"}');
+      print('   To: ${account.phoneNumber}');
       
       // Close loading dialog
       if (mounted) {
@@ -275,6 +301,21 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
           (route) => false,
         );
       }
+      
+      final step4Duration = DateTime.now().difference(step4Start);
+      final totalDuration = DateTime.now().difference(switchStartTime);
+      
+      print('   ✅ Navigation initiated (${step4Duration.inMilliseconds}ms)');
+      print('');
+      print('╔═══════════════════════════════════════════════════════════╗');
+      print('║  ACCOUNT SWITCH COMPLETED IN ${totalDuration.inMilliseconds}ms');
+      print('╚═══════════════════════════════════════════════════════════╝');
+      print('   Step 1 (Get Info):     ${step1Duration.inMilliseconds}ms');
+      print('   Step 2 (Clear Cache):  ${step2Duration.inMilliseconds}ms');
+      print('   Step 3 (Clear Session): ${step3Duration.inMilliseconds}ms');
+      print('   Step 4 (Navigate):     ${step4Duration.inMilliseconds}ms');
+      print('   TOTAL:                 ${totalDuration.inMilliseconds}ms');
+      print('═══════════════════════════════════════════════════════════\n');
     } catch (e) {
       // Close loading dialog
       if (mounted) {

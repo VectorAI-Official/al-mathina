@@ -358,46 +358,86 @@ class ApiService {
   
   // Preload critical data at app startup
   static Future<void> preloadAppData({String? userPhone, String lang = 'en'}) async {
-    print('🚀 Preloading app data at startup...');
+    final startTime = DateTime.now();
+    print('\n═══════════════════════════════════════════════════════════');
+    print('🚀 PRELOAD START at ${startTime.toIso8601String()}');
+    print('   User Phone: ${userPhone ?? "NOT LOGGED IN"}');
+    print('   Language: $lang');
+    print('═══════════════════════════════════════════════════════════');
     
     try {
       // Preload home data (runs in background)
-      getHomeData(lang: lang).then((_) {
-        print('✅ Home data preloaded successfully');
+      final homeStartTime = DateTime.now();
+      print('\n📡 [PRELOAD] Starting home data fetch...');
+      
+      getHomeData(lang: lang).then((data) {
+        final duration = DateTime.now().difference(homeStartTime);
+        print('✅ [PRELOAD] Home data preloaded successfully in ${duration.inMilliseconds}ms');
+        print('   Sections: ${data.sections?.length ?? 0}');
+        print('   Best Sellers: ${data.bestSellers?.mainCategories?.length ?? 0}');
       }).catchError((e) {
-        print('⚠️ Home data preload failed (non-critical): $e');
+        final duration = DateTime.now().difference(homeStartTime);
+        print('❌ [PRELOAD] Home data preload FAILED after ${duration.inMilliseconds}ms');
+        print('   Error: $e');
       });
       
       // If user is logged in, preload their profile data
       if (userPhone != null && userPhone.isNotEmpty) {
-        print('👤 Preloading user data for: $userPhone');
+        final userStartTime = DateTime.now();
+        print('\n👤 [PRELOAD] Starting user data fetch for: $userPhone');
         
         // Run profile and store details in parallel
         Future.wait([
           getUserProfile(userPhone),
           getStoreDetails(userPhone).catchError((_) => <String, dynamic>{}),
-        ]).then((_) {
-          print('✅ User data preloaded successfully');
+        ]).then((results) {
+          final duration = DateTime.now().difference(userStartTime);
+          print('✅ [PRELOAD] User data preloaded successfully in ${duration.inMilliseconds}ms');
+          print('   Profile: ${results[0] != null ? "Loaded" : "Failed"}');
+          print('   Store: ${results[1].isNotEmpty ? "Loaded" : "Not found"}');
         }).catchError((e) {
-          print('⚠️ User data preload failed (non-critical): $e');
+          final duration = DateTime.now().difference(userStartTime);
+          print('❌ [PRELOAD] User data preload FAILED after ${duration.inMilliseconds}ms');
+          print('   Error: $e');
         });
+      } else {
+        print('\n⏭️  [PRELOAD] Skipping user data - not logged in');
       }
+      
+      final totalDuration = DateTime.now().difference(startTime);
+      print('\n═══════════════════════════════════════════════════════════');
+      print('✅ [PRELOAD] Preload initiated in ${totalDuration.inMilliseconds}ms');
+      print('   (Background loading continues...)');
+      print('═══════════════════════════════════════════════════════════\n');
     } catch (e) {
-      print('⚠️ Preload error (non-critical): $e');
+      final duration = DateTime.now().difference(startTime);
+      print('\n❌ [PRELOAD] CRITICAL ERROR after ${duration.inMilliseconds}ms: $e');
+      print('═══════════════════════════════════════════════════════════\n');
     }
   }
   
   static Future<HomeData> getHomeData({String lang = 'en'}) async {
+    final startTime = DateTime.now();
+    final cacheKey = 'home_data_$lang';
+    
     try {
       // Check cache first (30 seconds TTL)
-      final cacheKey = 'home_data_$lang';
+      print('\n🔍 [HOME] Checking cache for key: $cacheKey');
       final cached = _ApiCache.get<HomeData>(cacheKey);
+      
       if (cached != null) {
-        print('✅ Returning cached home data for lang: $lang');
+        final duration = DateTime.now().difference(startTime);
+        print('⚡ [HOME] CACHE HIT! Returned in ${duration.inMilliseconds}ms');
+        print('   Sections: ${cached.sections?.length ?? 0}');
+        print('   Lang: $lang');
         return cached;
       }
       
-      print('📡 Fetching fresh home data for lang: $lang');
+      print('💾 [HOME] Cache miss - fetching from server...');
+      print('   Language: $lang');
+      print('   URL: \$API_BASE/home');
+      
+      final fetchStartTime = DateTime.now();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final random = DateTime.now().microsecond;
       final response = await _makeRequest(
@@ -409,19 +449,36 @@ class ApiService {
           'If-Modified-Since': 'Thu, 1 Jan 1970 00:00:00 GMT',
         },
       );
+      
+      final fetchDuration = DateTime.now().difference(fetchStartTime);
+      print('🌐 [HOME] Network request completed in ${fetchDuration.inMilliseconds}ms');
+      print('   Status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
+        final parseStartTime = DateTime.now();
         final data = json.decode(response.body);
         final homeData = HomeData.fromJson(data);
+        final parseDuration = DateTime.now().difference(parseStartTime);
+        
+        print('📦 [HOME] Data parsed in ${parseDuration.inMilliseconds}ms');
+        print('   Sections: ${homeData.sections?.length ?? 0}');
+        print('   Best Sellers: ${homeData.bestSellers?.mainCategories?.length ?? 0}');
         
         // Cache for 30 seconds
         _ApiCache.set(cacheKey, homeData, const Duration(seconds: 30));
-        print('✅ Cached home data for lang: $lang');
+        
+        final totalDuration = DateTime.now().difference(startTime);
+        print('✅ [HOME] Complete in ${totalDuration.inMilliseconds}ms (fetch: ${fetchDuration.inMilliseconds}ms, parse: ${parseDuration.inMilliseconds}ms)');
+        print('   Cached with 30s TTL');
         
         return homeData;
       } else {
+        print('❌ [HOME] Server error: ${response.statusCode}');
         throw Exception('Failed to load home data: ${response.statusCode}');
       }
     } catch (e) {
+      final duration = DateTime.now().difference(startTime);
+      print('❌ [HOME] ERROR after ${duration.inMilliseconds}ms: $e');
       throw Exception('Error loading home data: $e');
     }
   }
@@ -586,29 +643,47 @@ class ApiService {
 
   // User Profile APIs
   static Future<Map<String, dynamic>> getUserProfile(String phone) async {
+    final startTime = DateTime.now();
+    final cacheKey = 'user_profile_$phone';
+    
     try {
-      // Check cache first (60 seconds TTL for profile)
-      final cacheKey = 'user_profile_$phone';
+      print('\n🔍 [PROFILE] Checking cache for: $phone');
       final cached = _ApiCache.get<Map<String, dynamic>>(cacheKey);
+      
       if (cached != null) {
-        print('✅ Returning cached user profile for: $phone');
+        final duration = DateTime.now().difference(startTime);
+        print('⚡ [PROFILE] CACHE HIT! Returned in ${duration.inMilliseconds}ms');
         return cached;
       }
       
-      print('📡 Fetching fresh user profile for: $phone');
+      print('💾 [PROFILE] Cache miss - fetching from server...');
+      final fetchStartTime = DateTime.now();
       final response = await http.get(Uri.parse('$API_BASE/user/profile/$phone'));
+      final fetchDuration = DateTime.now().difference(fetchStartTime);
+      
+      print('🌐 [PROFILE] Network request completed in ${fetchDuration.inMilliseconds}ms');
+      print('   Status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         
         // Cache for 60 seconds
         _ApiCache.set(cacheKey, data, const Duration(seconds: 60));
-        print('✅ Cached user profile for: $phone');
+        
+        final totalDuration = DateTime.now().difference(startTime);
+        print('✅ [PROFILE] Complete in ${totalDuration.inMilliseconds}ms - Cached with 60s TTL');
         
         return data;
       } else {
+        print('❌ [PROFILE] Server error: ${response.statusCode}');
         throw Exception('Failed to load user profile: ${response.statusCode}');
       }
     } catch (e) {
+      final duration = DateTime.now().difference(startTime);
+      print('❌ [PROFILE] ERROR after ${duration.inMilliseconds}ms: $e');
+      throw Exception('Error loading user profile: $e');
+    }
+  }
       throw Exception('Error loading user profile: $e');
     }
   }

@@ -248,10 +248,16 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
     }
 
     try {
+      // Clear API cache before switching
+      ApiService.clearCache();
+      
       // Clear current user session
       final prefs = await SharedPreferences.getInstance();
+      final oldPhone = prefs.getString('userPhone');
       await prefs.remove('userPhone');
       await prefs.remove('isOldUser');
+      
+      print('🔄 Switching from ${oldPhone ?? "none"} to ${account.phoneNumber}');
       
       // Close loading dialog
       if (mounted) {

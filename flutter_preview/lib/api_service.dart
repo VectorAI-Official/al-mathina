@@ -12,6 +12,46 @@ const String API_BASE = "$BASE_URL/api/flutter";
 const String FALLBACK_URL = "https://gcp-us-west1-1.origin.onrender.com";
 const String FALLBACK_API_BASE = "$FALLBACK_URL/api/flutter";
 
+// Simple in-memory cache with TTL
+class _CacheEntry<T> {
+  final T data;
+  final DateTime timestamp;
+  final Duration ttl;
+  
+  _CacheEntry(this.data, this.ttl) : timestamp = DateTime.now();
+  
+  bool get isExpired => DateTime.now().difference(timestamp) > ttl;
+}
+
+class _ApiCache {
+  static final Map<String, _CacheEntry> _cache = {};
+  
+  static T? get<T>(String key) {
+    final entry = _cache[key];
+    if (entry == null || entry.isExpired) {
+      _cache.remove(key);
+      return null;
+    }
+    return entry.data as T;
+  }
+  
+  static void set<T>(String key, T data, Duration ttl) {
+    _cache[key] = _CacheEntry(data, ttl);
+  }
+  
+  static void clear([String? key]) {
+    if (key != null) {
+      _cache.remove(key);
+    } else {
+      _cache.clear();
+    }
+  }
+  
+  static void clearExpired() {
+    _cache.removeWhere((key, value) => value.isExpired);
+  }
+}
+
 // Helper function to make HTTP requests with retry and fallback
 Future<http.Response> _makeRequest(Uri uri, {Map<String, String>? headers, int retries = 2}) async {
   Exception? lastError;
@@ -299,8 +339,34 @@ class PaginationInfo {
 }
 
 class ApiService {
+  // Cache management methods
+  static void clearCache() {
+    _ApiCache.clear();
+    print('🗑️ All API cache cleared');
+  }
+  
+  static void clearUserCache(String phone) {
+    _ApiCache.clear('user_profile_$phone');
+    _ApiCache.clear('store_details_$phone');
+    print('🗑️ Cache cleared for user: $phone');
+  }
+  
+  static void clearExpiredCache() {
+    _ApiCache.clearExpired();
+    print('🗑️ Expired cache entries cleared');
+  }
+  
   static Future<HomeData> getHomeData({String lang = 'en'}) async {
     try {
+      // Check cache first (30 seconds TTL)
+      final cacheKey = 'home_data_$lang';
+      final cached = _ApiCache.get<HomeData>(cacheKey);
+      if (cached != null) {
+        print('✅ Returning cached home data for lang: $lang');
+        return cached;
+      }
+      
+      print('📡 Fetching fresh home data for lang: $lang');
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final random = DateTime.now().microsecond;
       final response = await _makeRequest(
@@ -314,7 +380,13 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return HomeData.fromJson(data);
+        final homeData = HomeData.fromJson(data);
+        
+        // Cache for 30 seconds
+        _ApiCache.set(cacheKey, homeData, const Duration(seconds: 30));
+        print('✅ Cached home data for lang: $lang');
+        
+        return homeData;
       } else {
         throw Exception('Failed to load home data: ${response.statusCode}');
       }
@@ -484,9 +556,24 @@ class ApiService {
   // User Profile APIs
   static Future<Map<String, dynamic>> getUserProfile(String phone) async {
     try {
+      // Check cache first (60 seconds TTL for profile)
+      final cacheKey = 'user_profile_$phone';
+      final cached = _ApiCache.get<Map<String, dynamic>>(cacheKey);
+      if (cached != null) {
+        print('✅ Returning cached user profile for: $phone');
+        return cached;
+      }
+      
+      print('📡 Fetching fresh user profile for: $phone');
       final response = await http.get(Uri.parse('$API_BASE/user/profile/$phone'));
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final data = json.decode(response.body);
+        
+        // Cache for 60 seconds
+        _ApiCache.set(cacheKey, data, const Duration(seconds: 60));
+        print('✅ Cached user profile for: $phone');
+        
+        return data;
       } else {
         throw Exception('Failed to load user profile: ${response.statusCode}');
       }
@@ -506,6 +593,9 @@ class ApiService {
         }),
       );
       if (response.statusCode == 200) {
+        // Clear cache after update
+        _ApiCache.clear('user_profile_$phone');
+        _ApiCache.clear('store_details_$phone');
         return json.decode(response.body);
       } else {
         throw Exception('Failed to update profile: ${response.statusCode}');
@@ -626,17 +716,34 @@ class ApiService {
   // Store Details APIs
   static Future<Map<String, dynamic>> getStoreDetails(String phone) async {
     try {
+      // Check cache first (60 seconds TTL)
+      final cacheKey = 'store_details_$phone';
+      final cached = _ApiCache.get<Map<String, dynamic>>(cacheKey);
+      if (cached != null) {
+        print('✅ Returning cached store details for: $phone');
+        return cached;
+      }
+      
+      print('📡 Fetching fresh store details for: $phone');
       final response = await http.get(Uri.parse('$API_BASE/user/store-details/$phone'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         // Backend returns {"success": true, "store_details": {...}}.
         // Unwrap and return the inner store_details map if present so callers
         // receive the address fields directly (street, city, state, pincode, landmark).
+        Map<String, dynamic> result;
         if (data is Map && data.containsKey('store_details')) {
-          return Map<String, dynamic>.from(data['store_details'] ?? {});
+          result = Map<String, dynamic>.from(data['store_details'] ?? {});
+        } else {
+          // Fallback: return top-level map as a map<string,dynamic>
+          result = Map<String, dynamic>.from(data);
         }
-        // Fallback: return top-level map as a map<string,dynamic>
-        return Map<String, dynamic>.from(data);
+        
+        // Cache for 60 seconds
+        _ApiCache.set(cacheKey, result, const Duration(seconds: 60));
+        print('✅ Cached store details for: $phone');
+        
+        return result;
       } else {
         throw Exception('Failed to load store details: ${response.statusCode}');
       }
@@ -653,6 +760,9 @@ class ApiService {
         body: json.encode(storeDetails),
       );
       if (response.statusCode == 200) {
+        // Clear cache after update
+        _ApiCache.clear('store_details_$phone');
+        _ApiCache.clear('user_profile_$phone');
         return json.decode(response.body);
       } else {
         throw Exception('Failed to update store details: ${response.statusCode}');

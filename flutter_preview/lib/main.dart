@@ -828,6 +828,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Clear expired cache entries when app resumes
+      ApiService.clearExpiredCache();
+      
       _checkProfileCompleteness();
       _loadUserFavorites();
       

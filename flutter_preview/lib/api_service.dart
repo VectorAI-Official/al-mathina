@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 
 // Production backend URL on Render (with Cloudflare CDN)
@@ -820,6 +821,12 @@ class ApiService {
     required Map<String, dynamic> deliveryAddress,
   }) async {
     try {
+      print('\n🛒 [ORDER] Creating order...');
+      print('📱 [ORDER] User phone: $userPhone');
+      print('💰 [ORDER] Total amount: ₹$totalAmount');
+      print('📦 [ORDER] Items count: ${items.length}');
+      print('💳 [ORDER] Payment method: $paymentMethod');
+      
       final orderData = {
         'user_phone': userPhone,
         'items': items,
@@ -829,17 +836,28 @@ class ApiService {
         'status': 'pending',
       };
       
+      final url = '$API_BASE/user/orders';
+      print('🌐 [ORDER] POST URL: $url');
+      print('📤 [ORDER] Request body: ${json.encode(orderData).substring(0, 200)}...');
+      
       final response = await http.post(
-        Uri.parse('$API_BASE/user/orders'),
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(orderData),
       );
+      
+      print('📡 [ORDER] Response status: ${response.statusCode}');
+      print('📥 [ORDER] Response body: ${response.body.substring(0, min(500, response.body.length))}');
+      
       if (response.statusCode == 200) {
+        print('✅ [ORDER] Order created successfully!');
         return json.decode(response.body);
       } else {
+        print('❌ [ORDER] Failed with status ${response.statusCode}');
         throw Exception('Failed to create order: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ [ORDER] Error: $e');
       throw Exception('Error creating order: $e');
     }
   }

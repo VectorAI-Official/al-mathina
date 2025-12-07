@@ -6723,6 +6723,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setString('userPhone', newPhone);
                     
+                    // Update saved accounts list with new phone number
+                    print('📝 [PROFILE] Updating saved accounts with new phone...');
+                    final savedAccounts = await SharedPrefsService.getSavedAccounts();
+                    final oldAccountIndex = savedAccounts.indexWhere((acc) => acc.phoneNumber == phone);
+                    if (oldAccountIndex != -1) {
+                      // Remove old account and add updated one
+                      final oldAccount = savedAccounts[oldAccountIndex];
+                      await SharedPrefsService.removeAccount(phone);
+                      await SharedPrefsService.saveAccount(SavedAccount(
+                        phoneNumber: newPhone,
+                        storeName: oldAccount.storeName,
+                        lastLogin: DateTime.now(),
+                      ));
+                      print('✅ [PROFILE] Saved accounts updated: $phone → $newPhone');
+                    }
+                    
                     // Clear cache so new data is fetched
                     ApiService.clearCache();
                     

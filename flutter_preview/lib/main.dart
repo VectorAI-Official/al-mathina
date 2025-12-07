@@ -6378,7 +6378,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         bottom: 0,
                         right: 0,
                         child: GestureDetector(
-                          onTap: () => _showEditProfileDialog(context, userName, userEmail, userPhone),
+                          onTap: () => _showEditProfileDialog(
+                            context,
+                            userName,
+                            userEmail,
+                            userPhone,
+                            onProfileUpdated: _loadUserProfile,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
@@ -6600,7 +6606,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _showEditProfileDialog(BuildContext context, String currentName, String currentEmail, String phone) async {
+  Future<void> _showEditProfileDialog(
+    BuildContext context,
+    String currentName,
+    String currentEmail,
+    String phone,
+    {VoidCallback? onProfileUpdated}
+  ) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final nameController = TextEditingController(text: currentName);
     final phoneController = TextEditingController(text: phone);
@@ -6755,6 +6767,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   
                   // Reload profile to show updated data
                   _loadUserProfile();
+                  
+                  // Notify parent to update validation state
+                  if (onProfileUpdated != null) {
+                    onProfileUpdated();
+                  }
                 }
               } catch (e) {
                 if (context.mounted) {

@@ -23,11 +23,22 @@ async def save_fcm_token(request: FCMTokenRequest):
     """
     Save or update user's FCM token for push notifications
     Supports multiple devices per phone number
+    Auto-cleans old inactive tokens (>90 days) to save storage
     """
     try:
         logger.info(f"📱 Attempting to save FCM token for phone: {request.phone}")
         supabase = get_supabase_client()
         logger.info(f"✅ Supabase client obtained successfully")
+        
+        # Clean up old inactive tokens (>90 days) to save storage
+        from datetime import timedelta
+        ninety_days_ago = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        try:
+            cleanup_result = supabase.table("user_devices").delete().lt("last_active", ninety_days_ago).execute()
+            if cleanup_result.data:
+                logger.info(f"🧹 Cleaned up {len(cleanup_result.data)} old inactive FCM tokens (>90 days)")
+        except Exception as cleanup_error:
+            logger.warning(f"⚠️ Token cleanup failed (non-critical): {cleanup_error}")
         
         # Save to user_devices table (multi-device support)
         device_result = supabase.table("user_devices").upsert({

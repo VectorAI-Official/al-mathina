@@ -361,7 +361,7 @@ function displayStoreOrders(orders) {
         const itemCount = order.items?.length || 0;
         
         return `
-            <div class="order-slim-card ${statusClass}">
+            <div class="order-slim-card ${statusClass}" onclick="viewOrderDetails('${order.order_id}')" style="cursor: pointer;" title="Click to view order details">
                 <div class="order-slim-header">
                     <div class="order-id">
                         <i class="fas fa-receipt"></i>
@@ -1025,6 +1025,195 @@ function fallbackWhatsAppShare() {
 }
 
 // ============ END PDF EXPORT FUNCTION ============
+
+// ============ ORDER DETAILS MODAL ============
+// View order details in modal
+async function viewOrderDetails(orderId) {
+    try {
+        const modal = document.getElementById('orderDetailsModal');
+        const content = document.getElementById('orderDetailsContent');
+        
+        if (!content) {
+            console.error('orderDetailsContent element not found');
+            return;
+        }
+        
+        // Show loading state
+        content.innerHTML = `
+            <div class="modal-body" style="text-align: center; padding: 40px;">
+                <div class="spinner" style="margin: 0 auto 20px;"></div>
+                <p>Loading order details...</p>
+            </div>
+        `;
+        modal.style.display = 'flex';
+        
+        // Fetch order details
+        const response = await fetch(`/api/admin/orders/${orderId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            showOrderDetailsContent(data.order);
+        } else {
+            content.innerHTML = `
+                <div class="modal-body" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
+                    <h3>Error</h3>
+                    <p>Failed to load order details</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading order details:', error);
+        const content = document.getElementById('orderDetailsContent');
+        if (content) {
+            content.innerHTML = `
+                <div class="modal-body" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f44336; margin-bottom: 20px;"></i>
+                    <h3>Error</h3>
+                    <p>Error loading order details: ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Show order details content
+function showOrderDetailsContent(order) {
+    const content = document.getElementById('orderDetailsContent');
+    
+    content.innerHTML = `
+        <div class="modal-body">
+            <div class="order-details-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #e0e0e0;">
+                <div>
+                    <h2 style="margin: 0 0 10px 0; color: #1B5E20;">Order #${order.order_id}</h2>
+                    <p style="margin: 0; color: #666; font-size: 14px;">${formatDateTime(order.created_at)}</p>
+                </div>
+                <span class="status-badge status-${order.status}" style="padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 13px; text-transform: uppercase;">
+                    ${order.status}
+                </span>
+            </div>
+            
+            <div class="order-sections" style="display: grid; gap: 25px;">
+                <!-- Customer Information -->
+                <div class="detail-section" style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #1B5E20; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-user-circle"></i> Customer Information
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div>
+                            <label style="display: block; color: #666; font-size: 13px; margin-bottom: 5px;">Name</label>
+                            <span style="font-weight: 600;">${order.user_name || 'Unknown'}</span>
+                        </div>
+                        <div>
+                            <label style="display: block; color: #666; font-size: 13px; margin-bottom: 5px;">Phone</label>
+                            <span style="font-weight: 600;">${order.user_phone}</span>
+                        </div>
+                        ${order.user_store_name ? `
+                            <div>
+                                <label style="display: block; color: #666; font-size: 13px; margin-bottom: 5px;">Store Name</label>
+                                <span style="font-weight: 600;">${order.user_store_name}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- Delivery Address -->
+                ${order.user_store_address && (order.user_store_address.street || order.user_store_address.city) ? `
+                    <div class="detail-section" style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin: 0 0 15px 0; color: #1B5E20; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-map-marker-alt"></i> Delivery Address
+                        </h3>
+                        <div style="line-height: 1.6; color: #333;">
+                            ${order.user_store_address.street || ''}<br>
+                            ${order.user_store_address.city || ''}, ${order.user_store_address.state || ''} - ${order.user_store_address.pincode || ''}
+                            ${order.user_store_address.landmark ? `<br>Landmark: ${order.user_store_address.landmark}` : ''}
+                        </div>
+                    </div>
+                ` : order.delivery_address && (order.delivery_address.street || order.delivery_address.city) ? `
+                    <div class="detail-section" style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin: 0 0 15px 0; color: #1B5E20; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-map-marker-alt"></i> Delivery Address
+                        </h3>
+                        <div style="line-height: 1.6; color: #333;">
+                            ${order.delivery_address.street || ''}<br>
+                            ${order.delivery_address.city || ''}, ${order.delivery_address.state || ''} - ${order.delivery_address.pincode || ''}
+                            ${order.delivery_address.landmark ? `<br>Landmark: ${order.delivery_address.landmark}` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Order Items -->
+                <div class="detail-section" style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #1B5E20; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-box-open"></i> Order Items (${order.items.length})
+                    </h3>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #fff; border-bottom: 2px solid #4CAF50;">
+                                    <th style="padding: 12px; text-align: left; font-size: 13px; color: #1B5E20;">Product</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 13px; color: #1B5E20;">Weight</th>
+                                    <th style="padding: 12px; text-align: right; font-size: 13px; color: #1B5E20;">Price</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 13px; color: #1B5E20;">Qty</th>
+                                    <th style="padding: 12px; text-align: right; font-size: 13px; color: #1B5E20;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${order.items.map(item => `
+                                    <tr style="border-bottom: 1px solid #e0e0e0;">
+                                        <td style="padding: 12px;"><strong>${item.product_name}</strong></td>
+                                        <td style="padding: 12px; text-align: center;">${item.weight || '-'}</td>
+                                        <td style="padding: 12px; text-align: right;">₹${parseFloat(item.price).toFixed(2)}</td>
+                                        <td style="padding: 12px; text-align: center;">×${item.quantity}</td>
+                                        <td style="padding: 12px; text-align: right;"><strong>₹${(item.price * item.quantity).toFixed(2)}</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr style="background: #fff; border-top: 2px solid #4CAF50;">
+                                    <td colspan="4" style="padding: 15px; text-align: right; font-weight: 600; color: #1B5E20;">Grand Total:</td>
+                                    <td style="padding: 15px; text-align: right; font-size: 18px; font-weight: 700; color: #4CAF50;">₹${parseFloat(order.total_amount).toFixed(2)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Payment & Status -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="detail-section" style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin: 0 0 10px 0; color: #1B5E20; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-credit-card"></i> Payment
+                        </h3>
+                        <p style="margin: 0; font-weight: 600;">${order.payment_method || 'Cash on Delivery'}</p>
+                    </div>
+                    <div class="detail-section" style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+                        <h3 style="margin: 0 0 10px 0; color: #1B5E20; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-info-circle"></i> Status
+                        </h3>
+                        <p style="margin: 0; font-weight: 600; text-transform: capitalize;">${order.status}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px; text-align: right; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+                <button onclick="closeOrderDetailsModal()" class="btn btn-secondary" style="padding: 12px 30px; font-size: 15px;">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Close order details modal
+function closeOrderDetailsModal() {
+    const modal = document.getElementById('orderDetailsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// ============ END ORDER DETAILS MODAL ============
 
 // Add animation styles
 const style = document.createElement('style');

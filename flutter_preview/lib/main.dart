@@ -706,17 +706,6 @@ class _SplashScreenState extends State<SplashScreen> {
     print('   isOldUser: $isOldUser');
     print('   userPhone: ${userPhone ?? "NOT SET"}');
     
-    // Refresh FCM token if user is logged in
-    if (userPhone != null && userPhone.isNotEmpty) {
-      print('\n🔔 [SPLASH] Refreshing FCM token for logged-in user...');
-      try {
-        await FCMService().refreshToken();
-        print('   ✅ FCM token refreshed successfully');
-      } catch (e) {
-        print('   ⚠️ FCM token refresh failed: $e');
-      }
-    }
-    
     // Get current language for preloading
     final provider = Provider.of<AppProvider>(context, listen: false);
     final lang = provider.currentLanguage;

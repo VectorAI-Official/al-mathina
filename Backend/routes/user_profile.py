@@ -288,6 +288,9 @@ async def get_user_orders(phone: str, request: Request):
 @router.post("/orders")
 async def create_order(request: Request):
     """Create a new order - automatically splits by section"""
+    print("="*80, flush=True)
+    print("🚀 ORDER ENDPOINT HIT - START OF FUNCTION", flush=True)
+    print("="*80, flush=True)
     try:
         from datetime import datetime, timedelta, timezone
         from collections import defaultdict
@@ -354,6 +357,12 @@ async def create_order(request: Request):
             })
             
             logger.info(f"Created order {order_id} for section '{section}' (MongoDB ID: {result.inserted_id}) for user {user_phone}")
+        
+        print("="*80, flush=True)
+        print("🎯 ALL ORDERS CREATED SUCCESSFULLY", flush=True)
+        print(f"🎯 Total orders: {len(created_orders)}", flush=True)
+        print("🎯 NOW ATTEMPTING FCM NOTIFICATION...", flush=True)
+        print("="*80, flush=True)
         
         # 🔔 SEND PUSH NOTIFICATION TO USER (for all split orders combined)
         print("\n" + "*"*60, flush=True)

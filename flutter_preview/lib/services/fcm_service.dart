@@ -99,6 +99,29 @@ class FCMService {
     }
   }
 
+  /// Refresh FCM token and save to backend (called on app startup for logged-in users)
+  Future<void> refreshToken() async {
+    try {
+      print('🔄 FCM: Refreshing token...');
+      
+      // Get current token
+      final token = await messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        _fcmToken = token;
+        print('✅ FCM: Token obtained: ${token.substring(0, 30)}...');
+        
+        // Save to backend
+        await _saveFCMTokenToBackend(token);
+        print('✅ FCM: Token saved to backend');
+      } else {
+        print('⚠️ FCM: No token available');
+      }
+    } catch (e) {
+      print('❌ FCM: Token refresh failed: $e');
+      rethrow;
+    }
+  }
+
   /// Initialize local notifications plugin
   Future<void> _initializeLocalNotifications() async {
     final AndroidInitializationSettings initializationSettingsAndroid =

@@ -15,16 +15,64 @@ Key directories & files
 
 - `Backend/` — FastAPI backend
   - `Backend/main.py`, `Backend/main_local.py` — app entrypoints used with uvicorn.
+  - `Backend/main_production.py` — production entrypoint (deployed on Render).
   - `Backend/routes/flutter.py` — Flutter-optimized API endpoints (home, products, subcategories, Most Bought).
   - `Backend/routes/admin_local.py` — Admin dashboard API endpoints (categories, products, Most Bought management).
+  - `Backend/routes/fcm.py` — Firebase Cloud Messaging endpoints for push notifications.
+  - `Backend/routes/user_profile.py` — User profile and order creation with FCM notifications.
+  - `Backend/utils/fcm_service.py` — Firebase Admin SDK notification service.
   - `Backend/category_metadata.py`, `Backend/database/*` — DB helpers and migration scripts.
   - `Backend/README.md` — canonical development & startup instructions.
   - `Backend/tools/` — small helper scripts (e.g., `check_subcategory_images.py`).
   - `Backend/static/admin/` — Admin dashboard frontend (HTML/CSS/JS).
+  - **CRITICAL: Requirements files** (see "Deployment & Requirements" section below).
 
-- `flutter_preview/` — Flutter app used for mobile/web preview
+- flutter_preview/` — Flutter app used for mobile/web preview
   - `flutter_preview/lib/api_service.dart` — central API models and helper `getImageUrl()`.
   - `flutter_preview/lib/main.dart` — UI and navigation; look here for layout changes.
+  - `flutter_preview/lib/services/fcm_service.dart` — Firebase Cloud Messaging service for push notifications.
+  - `flutter_preview/lib/screens/phone_auth_screen.dart` — Phone auth with FCM token refresh on login.
+
+Deployment & Requirements (CRITICAL)
+
+**The backend has THREE different requirements files - ALL must be kept in sync when adding new dependencies:**
+
+1. **`Backend/requirements.txt`** - Full development dependencies (500+ packages)
+   - Used for: Local development with venv
+   - When to update: When adding ANY new Python package during development
+
+2. **`Backend/requirements.production.txt`** - Minimal production dependencies (~30 packages)
+   - Used for: Render.com production deployment (non-Docker)
+   - When to update: When adding packages needed for production runtime
+   - **MUST include**: All packages imported in main_production.py and production routes
+
+3. **`Backend/requirements-docker.txt`** - Minimal Docker build dependencies (~25 packages)
+   - Used for: Docker builds (via Dockerfile)
+   - Referenced in: `Backend/Dockerfile` (line 13: `COPY requirements-docker.txt requirements.txt`)
+   - When to update: When adding packages needed for Docker/containerized deployment
+   - **MUST include**: All packages imported in main_production.py and production routes
+
+**CRITICAL RULE**: When adding a new Python dependency:
+- ✅ ALWAYS update ALL THREE requirements files if the package is needed in production
+- ✅ Test locally first, then update production files
+- ✅ Common packages to sync: database clients (supabase, pymongo), cloud services (firebase-admin, cloudinary), API frameworks (fastapi, uvicorn)
+- ❌ NEVER add dev-only packages (pytest, black, flake8) to production/docker requirements
+- ❌ NEVER assume one requirements file will work for all environments
+
+**Recent Example (Dec 2025)**: Added FCM push notifications:
+- Added `supabase==2.11.2` and `firebase-admin==6.5.0`
+- Updated requirements.txt ✅
+- Updated requirements.production.txt ✅
+- Updated requirements-docker.txt ✅
+- Deployment failed twice because forgot to update production and docker files
+
+**Deployment Target**: Render.com (https://al-mathina.onrender.com)
+- Dockerfile-based deployment
+- Auto-deploys on git push to main branch
+- Uses `main_production.py` as entrypoint
+- Monitor at: Render dashboard
+
+
 
 Developer workflows (commands you can run)
 
@@ -72,6 +120,18 @@ Project-specific conventions & patterns
   - All Flutter API calls include timestamp query parameter: `?t=${DateTime.now().millisecondsSinceEpoch}`
   - HTTP headers: `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`, `Expires: 0`
   - This prevents stale data from being displayed after admin changes.
+
+- FCM Push Notifications System
+  - **Backend**: `Backend/routes/fcm.py` handles token save/retrieve
+  - **Backend Service**: `Backend/utils/fcm_service.py` sends notifications via Firebase Admin SDK
+  - **Database**: Supabase `users` table stores FCM tokens (columns: id, phone, fcm_token, store_name, email, name)
+  - **Firebase Config**: `Backend/firebase-service-account.json` (secret, not in git)
+  - **Environment Variables**: SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY
+  - **Order Notifications**: Sent automatically when orders are created in `routes/user_profile.py`
+  - **Split Orders**: Single notification sent for all split orders combined
+  - **Flutter**: `flutter_preview/lib/services/fcm_service.dart` handles token generation and refresh
+  - **Token Refresh**: Automatically triggered after phone auth login
+  - **Notification Branding**: Al-Mathina green (#28a745), sound, vibration enabled
 
 Safety & small-edit policy
 

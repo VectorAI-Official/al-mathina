@@ -684,9 +684,6 @@ class ApiService {
       throw Exception('Error loading user profile: $e');
     }
   }
-      throw Exception('Error loading user profile: $e');
-    }
-  }
 
   static Future<Map<String, dynamic>> updateUserProfile(String phone, String? name, String? email) async {
     try {

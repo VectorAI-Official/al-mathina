@@ -12,7 +12,8 @@ class FCMService {
   factory FCMService() => _instance;
   FCMService._internal();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging? _messaging;
+  FirebaseMessaging get messaging => _messaging ?? FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   
   String? _fcmToken;
@@ -24,8 +25,11 @@ class FCMService {
       // Initialize Firebase
       await Firebase.initializeApp();
       
+      // Initialize messaging after Firebase is ready
+      _messaging = FirebaseMessaging.instance;
+      
       // Request notification permission
-      NotificationSettings settings = await _messaging.requestPermission(
+      NotificationSettings settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
@@ -36,14 +40,14 @@ class FCMService {
         print('✅ FCM: User granted notification permission');
         
         // Get FCM token
-        _fcmToken = await _messaging.getToken();
+        _fcmToken = await messaging.getToken();
         print('✅ FCM Token: $_fcmToken');
         
         // Save token to backend
         await _saveFCMTokenToBackend(_fcmToken!);
         
         // Listen for token refresh
-        _messaging.onTokenRefresh.listen((newToken) {
+        messaging.onTokenRefresh.listen((newToken) {
           print('🔄 FCM Token refreshed: $newToken');
           _fcmToken = newToken;
           _saveFCMTokenToBackend(newToken);
@@ -157,7 +161,7 @@ class FCMService {
   /// Manually refresh FCM token (call after login)
   Future<void> refreshToken() async {
     try {
-      final token = await _messaging.getToken();
+      final token = await messaging.getToken();
       if (token != null) {
         _fcmToken = token;
         await _saveFCMTokenToBackend(token);

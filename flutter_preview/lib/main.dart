@@ -688,7 +688,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final splashStartTime = DateTime.now();
     print('\n╔═══════════════════════════════════════════════════════════╗');
     print('║              SPLASH SCREEN STARTED                        ║');
-    print('║              Backend: ${ApiService.API_BASE}');
+    print('║              Backend: $API_BASE');
     print('╚═══════════════════════════════════════════════════════════╝');
     
     // Start the 2-second splash timer

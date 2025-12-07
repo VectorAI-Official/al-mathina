@@ -390,6 +390,10 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
                     print('   uid: ${account.uid}');
                     print('   phoneNumber: ${account.phoneNumber}');
                     print('   storeName: ${account.storeName}');
+                    print('   isCurrentUser: $isCurrentUser (uid == $_currentUserUid)');
+                    print('   Card is ${isCurrentUser ? "DISABLED (current user)" : "ENABLED (can switch)"}');
+                    print('🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨🎨');
+                    print('');
                     print('   storeName is null: ${account.storeName == null}');
                     print('   storeName is empty: ${account.storeName?.isEmpty}');
                     print('   hasStoreName: ${account.storeName != null && account.storeName!.isNotEmpty}');
@@ -463,8 +467,13 @@ class _AccountSwitcherPageState extends State<AccountSwitcherPage> {
                                 tooltip: 'Remove account',
                               ),
                         onTap: isCurrentUser
-                            ? null
-                            : () => _switchAccount(account),
+                            ? () {
+                                print('⚠️ Tapped current user card - ignoring (already logged in as ${account.phoneNumber})');
+                              }
+                            : () {
+                                print('✅ Tapped account card - initiating switch to ${account.phoneNumber}');
+                                _switchAccount(account);
+                              },
                       ),
                     );
                   },

@@ -75,6 +75,19 @@ class Order(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+# Version check endpoint to verify deployment
+@router.get("/version")
+async def get_version():
+    """Check backend version and deployment timestamp"""
+    from datetime import datetime
+    return {
+        "version": "2.0.0-FIXED-LOGGING",
+        "deployed_at": "2025-12-07T18:30:00Z",
+        "timestamp": datetime.now().isoformat(),
+        "logging": "ENHANCED",
+        "status": "✅ Backend is alive with enhanced logging"
+    }
+
 # Get or create user profile
 @router.get("/profile/{phone}")
 async def get_user_profile(phone: str, request: Request):
@@ -390,9 +403,20 @@ async def get_user_orders(phone: str, request: Request):
 @router.post("/orders")
 async def create_order(request: Request):
     """Create a new order - automatically splits by section"""
-    print("="*80, flush=True)
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
+    
+    print("\n" + "="*80, flush=True)
     print("🚀 ORDER ENDPOINT HIT - START OF FUNCTION", flush=True)
-    print("="*80, flush=True)
+    print(f"🚀 Timestamp: {datetime.now().isoformat()}", flush=True)
+    print(f"🚀 Request method: {request.method}", flush=True)
+    print(f"🚀 Request URL: {request.url}", flush=True)
+    print("="*80 + "\n", flush=True)
+    
+    logger.error("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER TEST")
+    logger.warning("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER WARNING")
+    logger.info("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER INFO")
     try:
         from datetime import datetime, timedelta, timezone
         from collections import defaultdict

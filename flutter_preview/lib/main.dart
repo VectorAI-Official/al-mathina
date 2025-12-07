@@ -6888,13 +6888,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   print('🔄 [DIALOG SWITCH] Switching to: ${account.phoneNumber}');
                                   print('🔄 [DIALOG SWITCH] Store: ${account.storeName ?? "N/A"}');
                                   
-                                  // Save the context before closing dialog
-                                  final navigatorContext = context;
-                                  print('💾 [DIALOG SWITCH] Saved navigator context: ${navigatorContext.mounted}');
-                                  
-                                  Navigator.pop(dialogContext);
-                                  print('✅ [DIALOG SWITCH] Dialog closed');
-                                  
                                   print('📋 [DIALOG SWITCH] Updating userPhone in SharedPreferences...');
                                   final prefs = await SharedPreferences.getInstance();
                                   await prefs.setString('userPhone', account.phoneNumber);
@@ -6904,29 +6897,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ApiService.clearCache();
                                   print('✅ [DIALOG SWITCH] Cache cleared');
                                   
-                                  print('🔄 [DIALOG SWITCH] Showing loading dialog...');
-                                  print('   Context mounted: ${navigatorContext.mounted}');
-                                  if (navigatorContext.mounted) {
-                                    showDialog(
-                                      context: navigatorContext,
-                                      barrierDismissible: false,
-                                      builder: (_) => const Center(
-                                        child: CircularProgressIndicator(color: kPrimaryColor),
-                                      ),
-                                    );
-                                    print('✅ [DIALOG SWITCH] Loading dialog shown');
-                                  } else {
-                                    print('⚠️ [DIALOG SWITCH] Context unmounted - cannot show loading dialog');
-                                  }
+                                  // Close dialog and navigate immediately (don't wait)
+                                  Navigator.pop(dialogContext);
+                                  print('✅ [DIALOG SWITCH] Dialog closed');
                                   
-                                  print('⏳ [DIALOG SWITCH] Waiting 300ms...');
-                                  await Future.delayed(const Duration(milliseconds: 300));
-                                  print('✅ [DIALOG SWITCH] Wait complete');
-                                  
+                                  // Navigate immediately using the outer context
                                   print('🚀 [DIALOG SWITCH] Navigating to MainScreen...');
-                                  print('   Context mounted: ${navigatorContext.mounted}');
-                                  if (navigatorContext.mounted) {
-                                    Navigator.of(navigatorContext).pushAndRemoveUntil(
+                                  print('   Context mounted: ${context.mounted}');
+                                  
+                                  if (context.mounted) {
+                                    // Use pushAndRemoveUntil to clear stack and go to MainScreen
+                                    Navigator.of(context).pushAndRemoveUntil(
                                       MaterialPageRoute(
                                         builder: (_) {
                                           print('🏗️  [DIALOG SWITCH] Building MainScreen...');
@@ -6935,9 +6916,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                       (route) => false,
                                     );
-                                    print('✅ [DIALOG SWITCH] Navigation pushed');
+                                    print('✅ [DIALOG SWITCH] Navigation completed');
                                   } else {
-                                    print('⚠️ [DIALOG SWITCH] Context not mounted - skipping navigation');
+                                    print('⚠️ [DIALOG SWITCH] Context not mounted after dialog close');
                                   }
                                   
                                   print('╔═══════════════════════════════════════════════════════════╗');

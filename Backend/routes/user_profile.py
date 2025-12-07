@@ -356,6 +356,12 @@ async def create_order(request: Request):
             logger.info(f"Created order {order_id} for section '{section}' (MongoDB ID: {result.inserted_id}) for user {user_phone}")
         
         # 🔔 SEND PUSH NOTIFICATION TO USER (for all split orders combined)
+        print("\n" + "*"*60, flush=True)
+        print("🔔 ORDER: Starting FCM notification process...", flush=True)
+        print(f"🔔 ORDER: User phone: {user_phone}", flush=True)
+        print(f"🔔 ORDER: Total amount: ₹{total_amount}", flush=True)
+        print(f"🔔 ORDER: Number of split orders: {len(created_orders)}", flush=True)
+        print("*"*60, flush=True)
         try:
             logger.info("\n" + "*"*60)
             logger.info("🔔 ORDER: Starting FCM notification process...")
@@ -407,9 +413,13 @@ async def create_order(request: Request):
                 
         except Exception as fcm_error:
             # Don't fail order creation if notification fails
+            print(f"❌ ORDER: EXCEPTION during FCM: {fcm_error}", flush=True)
+            print(f"❌ ORDER: Exception type: {type(fcm_error).__name__}", flush=True)
+            import traceback
+            print(f"❌ ORDER: Traceback: {traceback.format_exc()}", flush=True)
+            print("*"*60 + "\n", flush=True)
             logger.error(f"❌ ORDER: Exception during FCM notification: {fcm_error}")
             logger.error(f"❌ ORDER: Exception type: {type(fcm_error).__name__}")
-            import traceback
             logger.error(f"❌ ORDER: Traceback: {traceback.format_exc()}")
             logger.error("*"*60 + "\n")
         

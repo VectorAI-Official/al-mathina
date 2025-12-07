@@ -497,6 +497,20 @@ function formatDate(dateString) {
     });
 }
 
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    const options = { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    };
+    return date.toLocaleString('en-US', options);
+}
+
 function formatDateRelative(dateString) {
     if (!dateString) return 'Never';
     const date = new Date(dateString);

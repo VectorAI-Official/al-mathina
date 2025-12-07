@@ -422,17 +422,23 @@ async def create_order(request: Request):
         from collections import defaultdict
         import uuid
         
+        print("📥 Step 1: Reading request body...", flush=True)
         # Get request body
         order_data = await request.json()
+        print(f"✅ Step 1: Request body received, keys: {list(order_data.keys())}", flush=True)
         
+        print("📊 Step 2: Connecting to MongoDB...", flush=True)
         db = get_mongo_db()
         orders_collection = db['orders']
+        print("✅ Step 2: MongoDB connected", flush=True)
         
+        print("🔍 Step 3: Extracting order data...", flush=True)
         user_phone = order_data.get('user_phone')
         items = order_data.get('items', [])
         delivery_address = order_data.get('delivery_address', {})
         payment_method = order_data.get('payment_method', 'cod')
         total_amount = order_data.get('total_amount', 0)
+        print(f"✅ Step 3: user_phone={user_phone}, items_count={len(items)}, total={total_amount}", flush=True)
         
         if not user_phone or not items or not delivery_address:
             raise HTTPException(status_code=400, detail="Missing required fields: user_phone, items, delivery_address")
@@ -582,7 +588,20 @@ async def create_order(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating order: {e}")
+        print("\n" + "❌"*40, flush=True)
+        print(f"❌ CRITICAL ERROR IN ORDER CREATION", flush=True)
+        print(f"❌ Error type: {type(e).__name__}", flush=True)
+        print(f"❌ Error message: {str(e)}", flush=True)
+        print("❌ Full traceback:", flush=True)
+        import traceback
+        print(traceback.format_exc(), flush=True)
+        print("❌"*40 + "\n", flush=True)
+        
+        logger.error(f"❌ CRITICAL ERROR IN ORDER CREATION")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
 
 # Get single order details by order_id

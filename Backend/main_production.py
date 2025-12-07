@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 
 # Import routes
-from routes import flutter, user_profile, admin_orders, admin_stores
+from routes import flutter, user_profile, admin_orders, admin_stores, fcm
 from routes import admin_production as admin  # Production admin routes with Cloudinary
 
 # Simple session storage (in production, use Redis or database)
@@ -125,6 +125,7 @@ app.include_router(flutter.router, tags=["Flutter API"])
 app.include_router(user_profile.router, tags=["User Profile"])
 app.include_router(admin_orders.router, tags=["Admin Orders"])
 app.include_router(admin_stores.router, tags=["Admin Stores"])
+app.include_router(fcm.router, tags=["FCM Notifications"])
 
 # Production admin routes with Cloudinary integration
 app.include_router(admin.router, tags=["Admin API - Production"])
@@ -178,9 +179,9 @@ async def admin_orders_page(request: Request):
     with open("static/admin/orders.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
-@app.get("/admin/stores", response_class=HTMLResponse)
-async def admin_stores_page(request: Request):
-    """Serve admin stores page"""
+@app.get("/admin/revenue", response_class=HTMLResponse)
+async def admin_revenue_page(request: Request):
+    """Serve admin revenue management page"""
     with open("static/admin/stores.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 

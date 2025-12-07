@@ -189,20 +189,6 @@ function displayStores(stores) {
                     </p>
                 </div>
             </div>
-            <div class="store-card-body">
-                <div class="store-info-item">
-                    <i class="fas fa-user"></i>
-                    <span>${escapeHtml(store.name || 'No Name')}</span>
-                </div>
-                <div class="store-info-item">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <span>${escapeHtml(store.city || 'N/A')}, ${escapeHtml(store.state || 'N/A')}</span>
-                </div>
-                <div class="store-info-item">
-                    <i class="fas fa-calendar"></i>
-                    <span>Joined ${formatDate(store.created_at)}</span>
-                </div>
-            </div>
             <div class="store-card-footer">
                 <div class="store-stat">
                     <i class="fas fa-shopping-cart"></i>
@@ -283,26 +269,7 @@ function clearSearch() {
     filterStores();
 }
 
-// Clear all filters
-function clearFilters() {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('clearSearchBtn').style.display = 'none';
-    
-    // Clear date filter state
-    selectedDateFilter.type = 'all';
-    selectedDateFilter.singleDate = null;
-    selectedDateFilter.startDate = null;
-    selectedDateFilter.endDate = null;
-    
-    document.getElementById('dateFilter').value = 'all';
-    document.getElementById('dateDisplayGroup').style.display = 'none';
-    
-    // Clear filters for API call
-    currentFilters.start_date = '';
-    currentFilters.end_date = '';
-    
-    loadStores(true);
-}
+
 
 // View store detail
 async function viewStoreDetail(phone) {
@@ -762,6 +729,302 @@ function clearDateFilter() {
 }
 
 // ============ END DATE FILTER FUNCTIONS ============
+
+// ============ PDF EXPORT FUNCTION ============
+// Helper function to render Tamil text as image
+async function renderTextAsImage(text, fontSize = 10) {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size - adjusted for consistent sizing
+        canvas.width = 300;
+        canvas.height = 30;
+        
+        // Set font with Tamil support - matching PDF text size
+        ctx.font = `${fontSize}px 'Noto Sans Tamil', Arial, sans-serif`;
+        ctx.fillStyle = '#000000';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        
+        // Draw text
+        ctx.fillText(text, 2, 15);
+        
+        // Convert to data URL
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+async function exportToPDF() {
+    try {
+        // Show loading
+        showLoading();
+        
+        // Fetch ALL stores matching current filters
+        const params = new URLSearchParams();
+        if (currentFilters.search) params.append('search', currentFilters.search);
+        if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
+        if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
+        params.append('limit', 10000);
+        params.append('skip', 0);
+        
+        const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch stores: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const allStoresForExport = data.stores || [];
+        
+        // Get jsPDF from global
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Get current statistics
+        const totalStores = document.getElementById('totalStores').textContent;
+        const totalOrders = document.getElementById('totalOrders').textContent;
+        const totalRevenue = document.getElementById('totalRevenue').textContent.replace(/₹/g, 'Rs.');
+        const avgPerStore = document.getElementById('avgPerStore').textContent.replace(/₹/g, 'Rs.');
+        
+        // Set document properties
+        doc.setProperties({
+            title: 'Revenue Management Report',
+            subject: 'Store Revenue Report',
+            author: 'AL-Madhina Admin',
+            keywords: 'revenue, stores, orders',
+            creator: 'AL-Madhina System'
+        });
+        
+        // Add AL-Madhina branding at top
+        doc.setFontSize(24);
+        doc.setTextColor(40, 167, 69); // Green color
+        doc.text('Al-Mathina', 14, 15);
+        
+        // Add header
+        doc.setFontSize(18);
+        doc.setTextColor(40, 167, 69);
+        doc.text('Revenue Management Report', 14, 25);
+        
+        // Add date
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        const today = new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        doc.text(`Generated: ${today}`, 14, 32);
+        
+        // Add filter information
+        let yPos = 40;
+        if (currentFilters.search) {
+            doc.text(`Search Filter: ${currentFilters.search}`, 14, yPos);
+            yPos += 5;
+        }
+        if (currentFilters.start_date && currentFilters.end_date) {
+            const startDate = new Date(currentFilters.start_date).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+            const endDate = new Date(currentFilters.end_date).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+            doc.text(`Date Range: ${startDate} - ${endDate}`, 14, yPos);
+            yPos += 5;
+        } else if (currentFilters.start_date) {
+            const singleDate = new Date(currentFilters.start_date).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+            doc.text(`Date: ${singleDate}`, 14, yPos);
+            yPos += 5;
+        }
+        
+        yPos += 5;
+        
+        // Add summary statistics
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text('Summary Statistics', 14, yPos);
+        yPos += 7;
+        
+        doc.setFontSize(10);
+        const stats = [
+            ['Total Stores', totalStores],
+            ['Total Orders', totalOrders],
+            ['Total Revenue', totalRevenue],
+            ['Average per Store', avgPerStore]
+        ];
+        
+        doc.autoTable({
+            startY: yPos,
+            head: [['Metric', 'Value']],
+            body: stats,
+            theme: 'grid',
+            headStyles: { fillColor: [40, 167, 69] },
+            margin: { left: 14, right: 14 },
+            styles: { font: 'helvetica', fontSize: 10 }
+        });
+        
+        yPos = doc.lastAutoTable.finalY + 10;
+        
+        // Add store details header
+        doc.setFontSize(12);
+        doc.text('Store Details', 14, yPos);
+        yPos += 7;
+        
+        // Render stores with Tamil support using images
+        doc.setFontSize(10);
+        doc.setTextColor(0);
+        
+        // Table header
+        doc.setFillColor(40, 167, 69);
+        doc.rect(14, yPos, 200, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.text('Store Name', 16, yPos + 5);
+        doc.text('Orders', 120, yPos + 5);
+        doc.text('Revenue', 160, yPos + 5);
+        yPos += 8;
+        
+        // Add stores one by one
+        doc.setTextColor(0);
+        let rowColor = true;
+        
+        for (let i = 0; i < allStoresForExport.length; i++) {
+            const store = allStoresForExport[i];
+            const storeName = store.store_name || 'Unnamed Store';
+            const hasTamil = /[\u0B80-\u0BFF]/.test(storeName);
+            
+            // Check if we need a new page
+            if (yPos > 270) {
+                doc.addPage();
+                yPos = 20;
+                
+                // Re-add header on new page
+                doc.setFillColor(40, 167, 69);
+                doc.rect(14, yPos, 200, 8, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text('Store Name', 16, yPos + 5);
+                doc.text('Orders', 120, yPos + 5);
+                doc.text('Revenue', 160, yPos + 5);
+                yPos += 8;
+                doc.setTextColor(0);
+                rowColor = true;
+            }
+            
+            // Alternate row background
+            if (rowColor) {
+                doc.setFillColor(245, 245, 245);
+                doc.rect(14, yPos, 200, 10, 'F');
+            }
+            rowColor = !rowColor;
+            
+            // Add store name (as image if Tamil, as text if English)
+            if (hasTamil) {
+                const imgData = await renderTextAsImage(storeName, 10);
+                doc.addImage(imgData, 'PNG', 16, yPos + 2, 80, 6);
+            } else {
+                doc.text(storeName, 16, yPos + 6);
+            }
+            
+            // Add orders and revenue
+            doc.text(store.order_count.toString(), 120, yPos + 6);
+            doc.text(`Rs.${formatCurrency(store.total_revenue)}`, 160, yPos + 6);
+            
+            yPos += 10;
+        }
+        
+        // Add footer with page numbers
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(
+                `Page ${i} of ${pageCount}`,
+                doc.internal.pageSize.getWidth() / 2,
+                doc.internal.pageSize.getHeight() - 10,
+                { align: 'center' }
+            );
+        }
+        
+        // Generate filename
+        const filename = `revenue-report-${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        hideLoading();
+        
+        // Save the PDF
+        doc.save(filename);
+        
+        // Show success message
+        showToast('PDF exported successfully!', 'success');
+        
+        // Optionally show WhatsApp share dialog
+        setTimeout(() => {
+            if (confirm('PDF downloaded! Would you like to share it via WhatsApp?')) {
+                shareViaWhatsApp(doc, filename);
+            }
+        }, 500);
+        
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+        hideLoading();
+        showToast('Failed to export PDF', 'error');
+    }
+}
+
+// Share PDF via WhatsApp
+function shareViaWhatsApp(doc, filename) {
+    try {
+        // Convert PDF to blob
+        const pdfBlob = doc.output('blob');
+        
+        // Check if Web Share API is supported
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([pdfBlob], filename, { type: 'application/pdf' })] })) {
+            const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+            
+            navigator.share({
+                title: 'Revenue Management Report',
+                text: 'Store revenue and order statistics',
+                files: [file]
+            })
+            .then(() => console.log('Shared successfully'))
+            .catch((error) => {
+                console.log('Share cancelled or failed:', error);
+                fallbackWhatsAppShare();
+            });
+        } else {
+            // Fallback: WhatsApp Web with text message
+            fallbackWhatsAppShare();
+        }
+    } catch (error) {
+        console.error('Error sharing via WhatsApp:', error);
+        fallbackWhatsAppShare();
+    }
+}
+
+// Fallback WhatsApp share (opens WhatsApp with text message)
+function fallbackWhatsAppShare() {
+    const message = encodeURIComponent(
+        `*Al-Mathina*\n` +
+        `Revenue Management Report\n\n` +
+        `Total Stores: ${document.getElementById('totalStores').textContent}\n` +
+        `Total Orders: ${document.getElementById('totalOrders').textContent}\n` +
+        `Total Revenue: ${document.getElementById('totalRevenue').textContent}\n` +
+        `Average per Store: ${document.getElementById('avgPerStore').textContent}\n\n` +
+        `Generated: ${new Date().toLocaleDateString('en-IN')}\n\n` +
+        `(Full PDF report has been downloaded to your device)`
+    );
+    
+    const whatsappUrl = `https://wa.me/?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+}
+
+// ============ END PDF EXPORT FUNCTION ============
 
 // Add animation styles
 const style = document.createElement('style');

@@ -9,6 +9,8 @@ from typing import Optional, List
 from datetime import datetime
 from bson import ObjectId
 from database.mongodb_client import get_mongo_db
+from database.supabase_client import get_supabase_client
+from utils.fcm_service import fcm_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -352,6 +354,37 @@ async def create_order(request: Request):
             })
             
             logger.info(f"Created order {order_id} for section '{section}' (MongoDB ID: {result.inserted_id}) for user {user_phone}")
+        
+        # 🔔 SEND PUSH NOTIFICATION TO USER (for all split orders combined)
+        try:
+            supabase = get_supabase_client()
+            fcm_result = supabase.table("users").select("fcm_token, store_name").eq("phone", user_phone).execute()
+            
+            if fcm_result.data and fcm_result.data[0].get("fcm_token"):
+                fcm_token = fcm_result.data[0]["fcm_token"]
+                store_name = fcm_result.data[0].get("store_name")
+                
+                # Send single notification for all orders
+                total_items = sum(len(order['items']) for order in created_orders)
+                
+                notification_sent = await fcm_service.send_order_notification(
+                    fcm_token=fcm_token,
+                    order_id=created_orders[0]['order_id'],  # Use first order ID
+                    total_amount=float(total_amount),  # Total across all orders
+                    items_count=total_items,
+                    store_name=store_name
+                )
+                
+                if notification_sent:
+                    logger.info(f"✅ Push notification sent for {len(created_orders)} split order(s)")
+                else:
+                    logger.warning(f"⚠️ Failed to send push notification")
+            else:
+                logger.info(f"ℹ️ No FCM token found for user {user_phone}")
+                
+        except Exception as fcm_error:
+            # Don't fail order creation if notification fails
+            logger.error(f"❌ Error sending FCM notification: {fcm_error}")
         
         return {
             "success": True,

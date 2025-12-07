@@ -7,10 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api_service.dart';
 import 'screens/phone_auth_screen.dart';
 import 'screens/account_switcher_page.dart';
 import 'services/shared_prefs_service.dart';
+import 'services/fcm_service.dart';
 import 'models/saved_account.dart';
 import 'widgets/voice_search_dialog.dart';
 
@@ -567,8 +569,18 @@ class AppProvider with ChangeNotifier {
   }
 }
 
+// Background message handler (must be top-level)
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  print('📩 Background notification: ${message.notification?.title}');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase Cloud Messaging
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  await FCMService().initialize();
 
   // Create AppProvider and load saved language preference
   final appProvider = AppProvider();
@@ -6118,17 +6130,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       print('DEBUG: Calling API with phone: $phone');
-      final response = await ApiService.getUserProfile(phone);
       
-      // Try to get store details, but don't fail if it errors
-      Map<String, dynamic>? storeDetails;
-      try {
-        storeDetails = await ApiService.getStoreDetails(phone);
-      } catch (storeError) {
-        print('DEBUG: Store details error (non-critical): $storeError');
-        // Set storeDetails to null if it fails - store is optional
-        storeDetails = null;
-      }
+      // Run both API calls in parallel for faster loading
+      final results = await Future.wait([
+        ApiService.getUserProfile(phone),
+        ApiService.getStoreDetails(phone).catchError((e) {
+          print('DEBUG: Store details error (non-critical): $e');
+          return <String, dynamic>{}; // Return empty map on error
+        }),
+      ]);
+      
+      final response = results[0] as Map<String, dynamic>;
+      final storeDetails = (results[1] as Map<String, dynamic>).isEmpty ? null : results[1] as Map<String, dynamic>;
       
       print('DEBUG: API Response: $response');
       
@@ -6671,94 +6684,142 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         title: const Text('Switch Account', style: TextStyle(fontWeight: FontWeight.bold)),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // List of saved accounts
+              // Scrollable list of saved accounts
               if (savedAccounts.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Text('No saved accounts', style: TextStyle(color: Colors.grey)),
                 )
               else
-                ...savedAccounts.map((account) {
-                  final isCurrentAccount = account.phoneNumber == currentPhone;
-                  
-                  // Debug log
-                  print('🎨 Profile Switch Account Dialog - Building account:');
-                  print('   phoneNumber: ${account.phoneNumber}');
-                  print('   storeName: ${account.storeName}');
-                  
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: kPrimaryColor,
-                      child: Text(
-                        account.storeName != null && account.storeName!.isNotEmpty
-                            ? account.storeName!.substring(0, 1).toUpperCase()
-                            : account.phoneNumber.substring(account.phoneNumber.length - 2),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(dialogContext).size.height * 0.5,
                     ),
-                    title: Text(
-                      account.storeName != null && account.storeName!.isNotEmpty
-                          ? account.storeName!
-                          : account.phoneNumber,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
-                    subtitle: Text(
-                      account.phoneNumber,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 13,
-                      ),
-                    ),
-                    trailing: isCurrentAccount
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : const Icon(Icons.chevron_right, color: Colors.grey),
-                    onTap: isCurrentAccount
-                        ? null
-                        : () async {
-                            Navigator.pop(dialogContext); // Close dialog
-                            
-                            // Switch account by updating SharedPreferences (no re-authentication needed)
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('userPhone', account.phoneNumber);
-                            
-                            // Show loading
-                            if (context.mounted) {
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (_) => const Center(
-                                  child: CircularProgressIndicator(color: kPrimaryColor),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: savedAccounts.length,
+                      itemBuilder: (context, index) {
+                        final account = savedAccounts[index];
+                        final isCurrentAccount = account.phoneNumber == currentPhone;
+                        
+                        return ListTile(
+                          leading: IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            onPressed: () async {
+                              // Get provider for language
+                              final provider = Provider.of<AppProvider>(dialogContext, listen: false);
+                              
+                              // Show confirmation dialog
+                              final confirm = await showDialog<bool>(
+                                context: dialogContext,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: Colors.white,
+                                  title: Text(
+                                    provider.currentLanguage == 'ta' ? 'கணக்கை நீக்கு' : 'Delete Account',
+                                    style: const TextStyle(
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  content: Text(
+                                    provider.currentLanguage == 'ta'
+                                        ? '${account.storeName ?? account.phoneNumber} இந்த சாதனத்திலிருந்து நீக்க விரும்புகிறீர்களா?\n\nஇது சேமிக்கப்பட்ட உள்நுழைவை மட்டுமே நீக்கும், கணக்கை நீக்காது.'
+                                        : 'Are you sure you want to remove ${account.storeName ?? account.phoneNumber} from this device?\n\nThis will only remove the saved login, not delete the account.',
+                                    style: const TextStyle(
+                                      color: Colors.black87,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: Text(
+                                        provider.currentLanguage == 'ta' ? 'ரத்து செய்' : 'Cancel',
+                                        style: const TextStyle(color: Colors.black54),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                      child: Text(
+                                        provider.currentLanguage == 'ta' ? 'நீக்கு' : 'Delete',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
-                            }
-                            
-                            // Wait a moment for the preference to be saved
-                            await Future.delayed(const Duration(milliseconds: 300));
-                            
-                            // Navigate to MainScreen and refresh (without key to avoid duplicates)
-                            if (context.mounted) {
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (_) => const MainScreen(),
-                                ),
-                                (route) => false,
-                              );
-                            }
-                          },
-                  );
-                }).toList(),
+                              
+                              if (confirm == true) {
+                                await SharedPrefsService.removeAccount(account.phoneNumber);
+                                Navigator.pop(dialogContext);
+                                // Re-show dialog with updated list
+                                if (context.mounted) {
+                                  _showAccountSwitcherDialog(context);
+                                }
+                              }
+                            },
+                          ),
+                          title: Text(
+                            account.storeName != null && account.storeName!.isNotEmpty
+                                ? account.storeName!
+                                : account.phoneNumber,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                          subtitle: Text(
+                            account.phoneNumber,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
+                            ),
+                          ),
+                          trailing: isCurrentAccount
+                              ? const Icon(Icons.check_circle, color: Colors.green)
+                              : const Icon(Icons.chevron_right, color: Colors.grey),
+                          onTap: isCurrentAccount
+                              ? null
+                              : () async {
+                                  Navigator.pop(dialogContext);
+                                  
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.setString('userPhone', account.phoneNumber);
+                                  
+                                  if (context.mounted) {
+                                    showDialog(
+                                      context: context,
+                                      barrierDismissible: false,
+                                      builder: (_) => const Center(
+                                        child: CircularProgressIndicator(color: kPrimaryColor),
+                                      ),
+                                    );
+                                  }
+                                  
+                                  await Future.delayed(const Duration(milliseconds: 300));
+                                  
+                                  if (context.mounted) {
+                                    Navigator.of(context).pushAndRemoveUntil(
+                                      MaterialPageRoute(
+                                        builder: (_) => const MainScreen(),
+                                      ),
+                                      (route) => false,
+                                    );
+                                  }
+                                },
+                        );
+                      },
+                    ),
+                  ),
+                ),
               const Divider(),
               // Add Account button
               ListTile(

@@ -41,6 +41,9 @@ dependencies:
   speech_to_text: ^7.0.0
   permission_handler: ^11.3.1
   android_intent_plus: ^5.3.1
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.5
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:

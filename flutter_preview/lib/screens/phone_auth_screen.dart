@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../services/shared_prefs_service.dart';
+import '../services/fcm_service.dart';
 import '../models/saved_account.dart';
 import '../api_service.dart';
 import '../main.dart' show MainScreen, mainScreenKey, AppProvider;
@@ -141,6 +142,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     print('Account saved: ${account.phoneNumber} (${account.uid}) - ${account.storeName}');
     print('🔵🔵🔵 SAVE ACCOUNT COMPLETE 🔵🔵🔵');
     print('');
+    
+    // Refresh FCM token after successful login
+    print('🔔 Refreshing FCM token for push notifications...');
+    await FCMService().refreshToken();
     
     widget.onAuthSuccess?.call();
     

@@ -129,15 +129,26 @@ class SharedPrefsService {
     }
   }
 
-  /// Remove an account by uid
-  static Future<void> removeAccount(String uid) async {
+  /// Remove an account by phone number
+  static Future<void> removeAccount(String phoneNumber) async {
+    print('');
+    print('═══════════════════════════════════════════════════════════════');
+    print('🗑️ SharedPrefsService.removeAccount CALLED');
+    print('   📥 INPUT: phoneNumber=$phoneNumber');
+    print('═══════════════════════════════════════════════════════════════');
+    
     final prefs = await SharedPreferences.getInstance();
     final accounts = await getSavedAccounts();
-
-    accounts.removeWhere((acc) => acc.uid == uid);
+    
+    print('📚 Accounts before removal: ${accounts.length}');
+    accounts.removeWhere((acc) => acc.phoneNumber == phoneNumber);
+    print('📚 Accounts after removal: ${accounts.length}');
 
     final jsonList = accounts.map((acc) => acc.toJson()).toList();
     await prefs.setString(_savedAccountsKey, jsonEncode(jsonList));
+    print('✅ Account removed and preferences saved');
+    print('═══════════════════════════════════════════════════════════════');
+    print('');
   }
 
   /// Clear all saved accounts

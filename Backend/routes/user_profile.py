@@ -357,16 +357,33 @@ async def create_order(request: Request):
         
         # 🔔 SEND PUSH NOTIFICATION TO USER (for all split orders combined)
         try:
+            logger.info("\n" + "*"*60)
+            logger.info("🔔 ORDER: Starting FCM notification process...")
+            logger.info(f"🔔 ORDER: User phone: {user_phone}")
+            logger.info(f"🔔 ORDER: Total amount: ₹{total_amount}")
+            logger.info(f"🔔 ORDER: Number of split orders: {len(created_orders)}")
+            logger.info("*"*60)
+            
+            logger.info("🗄️ ORDER: Getting Supabase client...")
             supabase = get_supabase_client()
+            logger.info("✅ ORDER: Supabase client obtained")
+            
+            logger.info(f"🔍 ORDER: Querying FCM token for phone: {user_phone}")
             fcm_result = supabase.table("users").select("fcm_token, store_name").eq("phone", user_phone).execute()
+            logger.info(f"✅ ORDER: Query completed, data: {fcm_result.data}")
             
             if fcm_result.data and fcm_result.data[0].get("fcm_token"):
                 fcm_token = fcm_result.data[0]["fcm_token"]
                 store_name = fcm_result.data[0].get("store_name")
+                logger.info(f"✅ ORDER: Found FCM token: {fcm_token[:30]}...")
+                logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
                 
                 # Send single notification for all orders
                 total_items = sum(len(order['items']) for order in created_orders)
+                logger.info(f"📊 ORDER: Total items across all orders: {total_items}")
+                logger.info(f"📦 ORDER: First order ID: {created_orders[0]['order_id']}")
                 
+                logger.info("📤 ORDER: Calling FCM service to send notification...")
                 notification_sent = await fcm_service.send_order_notification(
                     fcm_token=fcm_token,
                     order_id=created_orders[0]['order_id'],  # Use first order ID
@@ -376,15 +393,25 @@ async def create_order(request: Request):
                 )
                 
                 if notification_sent:
-                    logger.info(f"✅ Push notification sent for {len(created_orders)} split order(s)")
+                    logger.info(f"✅ ORDER: Push notification sent successfully for {len(created_orders)} split order(s)!")
+                    logger.info("🎉 ORDER: User should receive notification now")
                 else:
-                    logger.warning(f"⚠️ Failed to send push notification")
+                    logger.error(f"❌ ORDER: Failed to send push notification")
+                    logger.error("❌ ORDER: Check FCM service logs above for details")
             else:
-                logger.info(f"ℹ️ No FCM token found for user {user_phone}")
+                logger.warning(f"⚠️ ORDER: No FCM token found for user {user_phone}")
+                logger.warning(f"⚠️ ORDER: User needs to login again to save FCM token")
+                logger.warning(f"⚠️ ORDER: Query result: {fcm_result.data}")
+            
+            logger.info("*"*60 + "\n")
                 
         except Exception as fcm_error:
             # Don't fail order creation if notification fails
-            logger.error(f"❌ Error sending FCM notification: {fcm_error}")
+            logger.error(f"❌ ORDER: Exception during FCM notification: {fcm_error}")
+            logger.error(f"❌ ORDER: Exception type: {type(fcm_error).__name__}")
+            import traceback
+            logger.error(f"❌ ORDER: Traceback: {traceback.format_exc()}")
+            logger.error("*"*60 + "\n")
         
         return {
             "success": True,

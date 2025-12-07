@@ -33,9 +33,10 @@ class FCMService:
         Initialize Firebase Admin SDK with service account
         """
         try:
+            logger.info("🚀 FCM: Starting Firebase initialization...")
             # Check if Firebase is already initialized
             if firebase_admin._apps:
-                logger.info("✅ Firebase Admin SDK already initialized")
+                logger.info("✅ FCM: Firebase Admin SDK already initialized")
                 return
             
             # Load service account credentials
@@ -46,17 +47,26 @@ class FCMService:
                 'firebase-service-account.json'
             )
             
+            logger.info(f"🔍 FCM: Looking for credentials at: {service_account_path}")
+            logger.info(f"🔍 FCM: Current working directory: {os.getcwd()}")
+            logger.info(f"🔍 FCM: File exists: {os.path.exists(service_account_path)}")
+            
             if not os.path.exists(service_account_path):
-                logger.warning(f"⚠️ Firebase service account file not found: {service_account_path}")
-                logger.warning("Push notifications will not work. Download from Firebase Console.")
+                logger.error(f"❌ FCM: Firebase service account file not found: {service_account_path}")
+                logger.error("❌ FCM: Push notifications will NOT work. Download from Firebase Console.")
                 return
             
+            logger.info("📄 FCM: Loading service account credentials...")
             cred = credentials.Certificate(service_account_path)
             firebase_admin.initialize_app(cred)
-            logger.info("✅ Firebase Admin SDK initialized successfully")
+            logger.info("✅ FCM: Firebase Admin SDK initialized successfully!")
+            logger.info("🎉 FCM: Ready to send push notifications")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Firebase Admin SDK: {str(e)}")
+            logger.error(f"❌ FCM: Failed to initialize Firebase Admin SDK: {str(e)}")
+            logger.error(f"❌ FCM: Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"❌ FCM: Traceback: {traceback.format_exc()}")
     
     async def send_order_notification(
         self,
@@ -80,10 +90,22 @@ class FCMService:
             bool: True if notification sent successfully
         """
         try:
+            logger.info("\n" + "="*60)
+            logger.info("📱 FCM: SENDING ORDER NOTIFICATION")
+            logger.info(f"📱 FCM: Order ID: {order_id}")
+            logger.info(f"📱 FCM: Total Amount: ₹{total_amount:,.2f}")
+            logger.info(f"📱 FCM: Items Count: {items_count}")
+            logger.info(f"📱 FCM: Store Name: {store_name or 'N/A'}")
+            logger.info(f"📱 FCM: Token (first 30 chars): {fcm_token[:30]}...")
+            logger.info("="*60)
+            
             # Check if Firebase is initialized
             if not firebase_admin._apps:
-                logger.warning("⚠️ Firebase not initialized. Cannot send notification.")
+                logger.error("❌ FCM: Firebase not initialized. Cannot send notification.")
+                logger.error("❌ FCM: Did firebase-service-account.json load correctly?")
                 return False
+            
+            logger.info("✅ FCM: Firebase is initialized, preparing message...")
             
             # Prepare notification message with Al-Mathina branding
             title = "🎉 Order Received!"
@@ -91,6 +113,9 @@ class FCMService:
             
             if store_name:
                 body += f"\n\nThank you, {store_name}! 🙏"
+            
+            logger.info(f"📝 FCM: Title: {title}")
+            logger.info(f"📝 FCM: Body: {body}")
             
             # Create FCM message
             message = messaging.Message(
@@ -118,16 +143,25 @@ class FCMService:
                 token=fcm_token
             )
             
+            logger.info("📤 FCM: Sending message to Firebase...")
             # Send message
             response = messaging.send(message)
-            logger.info(f"✅ Push notification sent successfully: {response}")
-            logger.info(f"   Order: {order_id}, User FCM Token: {fcm_token[:20]}...")
+            logger.info(f"✅ FCM: Push notification sent successfully!")
+            logger.info(f"✅ FCM: Firebase response: {response}")
+            logger.info(f"✅ FCM: Order: {order_id}")
+            logger.info("="*60 + "\n")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to send push notification: {str(e)}")
-            logger.error(f"   Order: {order_id}, FCM Token: {fcm_token[:20] if fcm_token else 'None'}...")
+            logger.error(f"❌ FCM: Failed to send push notification")
+            logger.error(f"❌ FCM: Error: {str(e)}")
+            logger.error(f"❌ FCM: Error type: {type(e).__name__}")
+            logger.error(f"❌ FCM: Order: {order_id}")
+            logger.error(f"❌ FCM: Token: {fcm_token[:30] if fcm_token else 'None'}...")
+            import traceback
+            logger.error(f"❌ FCM: Traceback: {traceback.format_exc()}")
+            logger.error("="*60 + "\n")
             return False
     
     async def send_custom_notification(

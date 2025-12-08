@@ -130,20 +130,30 @@ class EmailService:
             # Build items list HTML
             items_html = ""
             for idx, item in enumerate(items, 1):
-                # Items from MongoDB have these fields: productName, quantity, price, weight, section, etc.
-                item_name = item.get('productName', item.get('name', 'Unknown'))
+                # Items from MongoDB - handle multiple field name formats
+                # Flutter sends: product_name, weight, quantity, price
+                # Some older code might use: productName
+                # Support both for compatibility
+                item_name = (
+                    item.get('product_name') or      # Primary: Flutter format
+                    item.get('productName') or        # Fallback: camelCase
+                    item.get('name') or               # Legacy fallback
+                    'Unknown'
+                )
+                
                 weight = item.get('weight', '')
                 quantity = item.get('quantity', 1)
                 price = item.get('price', 0)
                 total = quantity * price
                 
                 # Combine name with weight for display
+                # Handle Tamil characters properly with fallback font
                 display_name = f"{item_name} ({weight})" if weight else item_name
                 
                 items_html += f"""
                 <tr>
                     <td>{idx}</td>
-                    <td>{display_name}</td>
+                    <td style="word-wrap: break-word; font-family: Arial, 'Noto Sans Tamil', sans-serif;">{display_name}</td>
                     <td style="text-align: center;">{quantity}</td>
                     <td style="text-align: right;">₹{price:,.2f}</td>
                     <td style="text-align: right;">₹{total:,.2f}</td>
@@ -173,8 +183,16 @@ class EmailService:
             <!DOCTYPE html>
             <html>
             <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }}
+                    body {{ 
+                        font-family: Arial, 'Noto Sans Tamil', 'Lohit Tamil', sans-serif; 
+                        line-height: 1.6; 
+                        color: #333; 
+                        margin: 0; 
+                        padding: 0; 
+                    }}
                     .container {{ max-width: 600px; margin: 0 auto; padding: 10px; }}
                     @media screen and (max-width: 640px) {{
                         .container {{ max-width: 100%; padding: 5px; }}
@@ -182,11 +200,33 @@ class EmailService:
                     .header {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
                     .content {{ background: #f8f9fa; padding: 20px; }}
                     .order-details {{ background: white; padding: 15px; border-radius: 5px; margin: 10px 0; }}
-                    .table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
-                    .table th {{ background: #28a745; color: white; padding: 8px 4px; text-align: left; font-size: 12px; }}
-                    .table td {{ padding: 8px 4px; border-bottom: 1px solid #ddd; font-size: 12px; word-wrap: break-word; }}
+                    .table {{ 
+                        width: 100%; 
+                        border-collapse: collapse; 
+                        table-layout: fixed; 
+                        font-family: Arial, 'Noto Sans Tamil', sans-serif;
+                    }}
+                    .table th {{ 
+                        background: #28a745; 
+                        color: white; 
+                        padding: 8px 4px; 
+                        text-align: left; 
+                        font-size: 12px; 
+                        font-weight: 600;
+                    }}
+                    .table td {{ 
+                        padding: 8px 4px; 
+                        border-bottom: 1px solid #ddd; 
+                        font-size: 13px; 
+                        word-wrap: break-word; 
+                        overflow-wrap: break-word;
+                        min-width: 0;
+                    }}
                     @media screen and (max-width: 640px) {{
-                        .table th, .table td {{ padding: 6px 2px; font-size: 11px; }}
+                        .table th, .table td {{ 
+                            padding: 6px 2px; 
+                            font-size: 11px; 
+                        }}
                         .order-details {{ padding: 10px; }}
                     }}
                     .total {{ font-size: 18px; font-weight: bold; color: #28a745; text-align: right; padding: 10px 0; }}
@@ -219,10 +259,10 @@ class EmailService:
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 8%;">#</th>
-                                        <th style="width: 40%;">Item</th>
-                                        <th style="width: 12%; text-align: center;">Qty</th>
-                                        <th style="width: 20%; text-align: right;">Price</th>
+                                        <th style="width: 6%;">#</th>
+                                        <th style="width: 42%;">Item</th>
+                                        <th style="width: 13%; text-align: center;">Qty</th>
+                                        <th style="width: 19%; text-align: right;">Price</th>
                                         <th style="width: 20%; text-align: right;">Total</th>
                                     </tr>
                                 </thead>

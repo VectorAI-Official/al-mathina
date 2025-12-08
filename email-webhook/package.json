@@ -1,6 +1,7 @@
 {
   "name": "al-mathina-email-webhook",
   "version": "1.0.0",
+  "type": "module",
   "description": "Vercel webhook for unlimited free email sending",
   "main": "api/send-email.js",
   "dependencies": {

@@ -171,6 +171,16 @@ If you modify or add an API endpoint
 
 - Update `Backend/README.md` and `FLUTTER_ROUTES_TESTING.md` (or create a short note in `Backend/tools/` with curl examples).
 - Add a small script under `Backend/tools/` to validate the response shape automatically (example: `check_most_bought_images.py`).
+- **CRITICAL**: Follow database optimization rules from `.github/copilot-instructions-performance.md`
+  - NEVER query databases inside loops (N+1 problem)
+  - Use aggregation pipelines ($lookup) for JOINs
+  - Batch queries with $in for multiple records
+  - Test with realistic data volumes (100+ records)
+
+## Detailed Copilot Instructions (Read These!)
+
+- **Email System**: `.github/copilot-instructions-email.md` - Complete email notification architecture
+- **Performance**: `.github/copilot-instructions-performance.md` - Database optimization patterns and anti-patterns
 
 When to ask the developer
 

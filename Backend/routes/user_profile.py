@@ -408,7 +408,10 @@ async def get_user_orders(phone: str, request: Request):
 
 # Background task function for sending order email
 async def send_order_email_background(order_id: str):
-    """Send order notification email in background - fetches data from MongoDB"""
+    """
+    Send order notification email in background
+    Uses MongoDB aggregation pipeline for optimized data fetching (single query)
+    """
     print("\n" + "*"*60, flush=True)
     print("📧 BACKGROUND: Starting email notification...", flush=True)
     print(f"📧 BACKGROUND: Order ID: {order_id}", flush=True)
@@ -419,30 +422,52 @@ async def send_order_email_background(order_id: str):
         logger.info("📧 BACKGROUND: Sending admin email notification...")
         logger.info(f"📧 BACKGROUND: Order: {order_id}")
         
-        # Fetch complete order from MongoDB
+        # OPTIMIZED: Use aggregation pipeline to fetch order + user in single query
+        # This is like a JOIN in SQL - much faster than 2 separate queries
         db = get_mongo_db()
         orders_collection = db['orders']
-        order = orders_collection.find_one({"order_id": order_id})
         
-        if not order:
+        pipeline = [
+            # Match the specific order
+            {"$match": {"order_id": order_id}},
+            # Join with users collection to get store name
+            {"$lookup": {
+                "from": "users",
+                "localField": "user_phone",
+                "foreignField": "phone",
+                "as": "user_data"
+            }},
+            # Project only needed fields to reduce data transfer
+            {"$project": {
+                "order_id": 1,
+                "user_phone": 1,
+                "items": 1,
+                "total_amount": 1,
+                "delivery_address": 1,
+                "payment_method": 1,
+                "store_name": {"$arrayElemAt": ["$user_data.name", 0]}  # Extract name from joined array
+            }}
+        ]
+        
+        result = list(orders_collection.aggregate(pipeline))
+        
+        if not result:
             logger.error(f"❌ BACKGROUND: Order {order_id} not found!")
             print(f"❌ BACKGROUND: Order {order_id} not found in database!", flush=True)
             return
         
-        # Get user details from MongoDB users collection
-        users_collection = db['users']
-        user_phone = order.get('user_phone')
-        user = users_collection.find_one({"phone": user_phone})
-        store_name = user.get("name") if user else None  # 'name' field in MongoDB users
+        # Extract order data from aggregation result
+        order = result[0]
+        store_name = order.get('store_name')  # Already fetched via JOIN
         
         logger.info(f"✅ BACKGROUND: Order found - {len(order.get('items', []))} items")
         logger.info(f"🏪 BACKGROUND: Store: {store_name or 'N/A'}")
-        print(f"✅ BACKGROUND: Order data loaded from MongoDB", flush=True)
+        print(f"✅ BACKGROUND: Order + User data loaded in single query (optimized)", flush=True)
         
         # Send email to admin with all order details from database
         email_sent = await email_service.send_order_notification_to_admin(
-            order_id=order_id,
-            user_phone=user_phone,
+            order_id=order.get('order_id'),
+            user_phone=order.get('user_phone'),
             store_name=store_name,
             items=order.get('items', []),
             total_amount=order.get('total_amount', 0),

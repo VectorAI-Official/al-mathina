@@ -407,16 +407,8 @@ async def get_user_orders(phone: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Background task function for sending order email
-async def send_order_email_background(
-    order_id: str,
-    user_phone: str,
-    store_name: Optional[str],
-    items: list,
-    total_amount: float,
-    delivery_address: dict,
-    payment_method: str
-):
-    """Send order notification email in background (non-blocking)"""
+async def send_order_email_background(order_id: str):
+    """Send order notification email in background - fetches data from MongoDB"""
     print("\n" + "*"*60, flush=True)
     print("📧 BACKGROUND: Starting email notification...", flush=True)
     print(f"📧 BACKGROUND: Order ID: {order_id}", flush=True)
@@ -427,15 +419,35 @@ async def send_order_email_background(
         logger.info("📧 BACKGROUND: Sending admin email notification...")
         logger.info(f"📧 BACKGROUND: Order: {order_id}")
         
-        # Send email to admin with all order details
+        # Fetch complete order from MongoDB
+        db = get_mongo_db()
+        orders_collection = db['orders']
+        order = orders_collection.find_one({"order_id": order_id})
+        
+        if not order:
+            logger.error(f"❌ BACKGROUND: Order {order_id} not found!")
+            print(f"❌ BACKGROUND: Order {order_id} not found in database!", flush=True)
+            return
+        
+        # Get user details from Supabase
+        supabase = get_supabase_client()
+        user_phone = order.get('user_phone')
+        user_result = supabase.table("users").select("store_name").eq("phone", user_phone).execute()
+        store_name = user_result.data[0].get("store_name") if user_result.data else None
+        
+        logger.info(f"✅ BACKGROUND: Order found - {len(order.get('items', []))} items")
+        logger.info(f"🏪 BACKGROUND: Store: {store_name or 'N/A'}")
+        print(f"✅ BACKGROUND: Order data loaded from MongoDB", flush=True)
+        
+        # Send email to admin with all order details from database
         email_sent = await email_service.send_order_notification_to_admin(
             order_id=order_id,
             user_phone=user_phone,
             store_name=store_name,
-            items=items,
-            total_amount=total_amount,
-            delivery_address=delivery_address,
-            payment_method=payment_method
+            items=order.get('items', []),
+            total_amount=order.get('total_amount', 0),
+            delivery_address=order.get('delivery_address', {}),
+            payment_method=order.get('payment_method', 'cod')
         )
         
         if email_sent:
@@ -657,13 +669,7 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
         
         background_tasks.add_task(
             send_order_email_background,
-            order_id=created_orders[0]['order_id'],
-            user_phone=user_phone,
-            store_name=store_name,
-            items=items,
-            total_amount=total_amount,
-            delivery_address=delivery_address,
-            payment_method=payment_method
+            order_id=created_orders[0]['order_id']
         )
         
         print("✅ EMAIL: Background task scheduled (will run after response)", flush=True)

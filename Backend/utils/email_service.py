@@ -130,14 +130,20 @@ class EmailService:
             # Build items list HTML
             items_html = ""
             for idx, item in enumerate(items, 1):
-                item_name = item.get('name', 'Unknown')
+                # Items from MongoDB have these fields: productName, quantity, price, weight, section, etc.
+                item_name = item.get('productName', item.get('name', 'Unknown'))
+                weight = item.get('weight', '')
                 quantity = item.get('quantity', 1)
                 price = item.get('price', 0)
                 total = quantity * price
+                
+                # Combine name with weight for display
+                display_name = f"{item_name} ({weight})" if weight else item_name
+                
                 items_html += f"""
                 <tr>
                     <td>{idx}</td>
-                    <td>{item_name}</td>
+                    <td>{display_name}</td>
                     <td style="text-align: center;">{quantity}</td>
                     <td style="text-align: right;">₹{price:,.2f}</td>
                     <td style="text-align: right;">₹{total:,.2f}</td>
@@ -160,7 +166,7 @@ class EmailService:
             address_html = "<br>".join(address_parts) if address_parts else "Not provided"
             
             # Order management link - use hash navigation for proper search
-            order_link = f"https://al-mathina.onrender.com/admin/#orders?search={order_id}"
+            order_link = f"https://al-mathina.onrender.com/admin/orders?search={order_id}"
             
             # HTML email body
             html_body = f"""

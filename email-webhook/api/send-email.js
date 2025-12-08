@@ -5,7 +5,7 @@
 
 export default async function handler(req, res) {
   // Dynamic import to handle module resolution
-  const { default: nodemailer } = await import('nodemailer');
+  const nodemailer = await import('nodemailer');
   console.log('🔍 Request received');
   console.log('Method:', req.method);
   
@@ -49,7 +49,9 @@ export default async function handler(req, res) {
 
   // Create SMTP transporter with Gmail
   console.log('🔧 Creating transporter...');
-  const transporter = nodemailer.createTransporter({
+  console.log('Nodemailer type:', typeof nodemailer);
+  console.log('Nodemailer keys:', Object.keys(nodemailer));
+  const transporter = nodemailer.default.createTransporter({
     service: 'gmail',
     auth: {
       user: process.env.SMTP_USER,

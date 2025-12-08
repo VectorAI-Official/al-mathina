@@ -11,6 +11,7 @@ from bson import ObjectId
 from database.mongodb_client import get_mongo_db
 from database.supabase_client import get_supabase_client
 from utils.fcm_service import fcm_service
+from utils.email_service import email_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -579,6 +580,48 @@ async def create_order(request: Request):
             logger.error(f"❌ ORDER: Exception during FCM notification: {fcm_error}")
             logger.error(f"❌ ORDER: Exception type: {type(fcm_error).__name__}")
             logger.error(f"❌ ORDER: Traceback: {traceback.format_exc()}")
+            logger.error("*"*60 + "\n")
+        
+        # 📧 SEND EMAIL NOTIFICATION TO ADMIN
+        print("\n" + "*"*60, flush=True)
+        print("📧 EMAIL: Starting admin notification process...", flush=True)
+        print(f"📧 EMAIL: Order ID: {created_orders[0]['order_id']}", flush=True)
+        print("*"*60, flush=True)
+        try:
+            logger.info("\n" + "*"*60)
+            logger.info("📧 EMAIL: Sending admin notification...")
+            logger.info(f"📧 EMAIL: Order: {created_orders[0]['order_id']}")
+            
+            # Send email to admin with all order details
+            email_sent = await email_service.send_order_notification_to_admin(
+                order_id=created_orders[0]['order_id'],
+                user_phone=user_phone,
+                store_name=store_name if 'store_name' in locals() else None,
+                items=items,
+                total_amount=total_amount,
+                delivery_address=delivery_address,
+                payment_method=payment_method
+            )
+            
+            if email_sent:
+                logger.info("✅ EMAIL: Admin notification sent successfully!")
+                print("✅ EMAIL: Admin notification sent!", flush=True)
+            else:
+                logger.warning("⚠️ EMAIL: Admin notification not sent (service may be disabled)")
+                print("⚠️ EMAIL: Notification not sent", flush=True)
+            
+            logger.info("*"*60 + "\n")
+            print("*"*60 + "\n", flush=True)
+            
+        except Exception as email_error:
+            # Don't fail order creation if email fails
+            print(f"❌ EMAIL: EXCEPTION: {email_error}", flush=True)
+            print(f"❌ EMAIL: Exception type: {type(email_error).__name__}", flush=True)
+            print(f"❌ EMAIL: Traceback: {traceback.format_exc()}", flush=True)
+            print("*"*60 + "\n", flush=True)
+            logger.error(f"❌ EMAIL: Exception during email notification: {email_error}")
+            logger.error(f"❌ EMAIL: Exception type: {type(email_error).__name__}")
+            logger.error(f"❌ EMAIL: Traceback: {traceback.format_exc()}")
             logger.error("*"*60 + "\n")
         
         return {

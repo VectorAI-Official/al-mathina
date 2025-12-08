@@ -122,8 +122,35 @@ async function loadOrders() {
         if (data.success) {
             allOrders = data.orders;
             filteredOrders = data.orders; // Initialize filtered orders with all orders
-            displayOrders(allOrders);
-            updateOrderStats();
+            
+            // Check URL parameters for search/filter on page load
+            const urlParams = new URLSearchParams(window.location.search);
+            const searchParam = urlParams.get('search');
+            const statusParam = urlParams.get('status');
+            
+            if (searchParam) {
+                console.log(`🔍 Auto-searching for: ${searchParam}`);
+                const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
+                if (searchInput) {
+                    searchInput.value = searchParam;
+                }
+            }
+            
+            if (statusParam) {
+                console.log(`🔍 Auto-filtering status: ${statusParam}`);
+                const statusFilter = document.getElementById('statusFilter');
+                if (statusFilter) {
+                    statusFilter.value = statusParam;
+                }
+            }
+            
+            // Apply filters if URL parameters exist
+            if (searchParam || statusParam) {
+                filterOrders();
+            } else {
+                displayOrders(allOrders);
+                updateOrderStats();
+            }
         } else {
             showError('ordersContainer', 'Failed to load orders');
         }
@@ -1400,6 +1427,20 @@ function filterOrders() {
         const statusFilter = statusFilterElement?.value || '';
         
         console.log(`   Filtering ${allOrders.length} orders - Search: "${searchTerm}", Status: "${statusFilter}"`);
+        
+        // Update URL with search parameters for automation
+        const url = new URL(window.location);
+        if (searchTerm) {
+            url.searchParams.set('search', searchTerm);
+        } else {
+            url.searchParams.delete('search');
+        }
+        if (statusFilter) {
+            url.searchParams.set('status', statusFilter);
+        } else {
+            url.searchParams.delete('status');
+        }
+        window.history.replaceState({}, '', url);
         
         // Update clear button visibility
         updateClearButtonVisibility();

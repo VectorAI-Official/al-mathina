@@ -470,12 +470,16 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
     import uuid
     import sys
     import traceback
+    import logging
     
+    # Force immediate log output for Render
     sys.stdout.flush()
     sys.stderr.flush()
+    logging.basicConfig(level=logging.INFO, force=True)
     
     print("\n" + "="*80, flush=True)
-    print("🚀 ORDER ENDPOINT HIT - START OF FUNCTION", flush=True)
+    print("🚀🚀🚀 ORDER ENDPOINT HIT - START OF FUNCTION", flush=True)
+    print(f"🚀 RENDER LOG TEST: {datetime.now()}", flush=True)
     print(f"🚀 Timestamp: {datetime.now().isoformat()}", flush=True)
     print(f"🚀 Request method: {request.method}", flush=True)
     print(f"🚀 Request URL: {request.url}", flush=True)

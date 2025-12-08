@@ -62,10 +62,8 @@ class EmailService:
                 # Fallback to default admin emails
                 self.admin_emails = [
                     'faizalbashafaizalbasha07@gmail.com',
-                    'sathishsuba2208@gmail.com',
-                    'abuarsath30@gmail.com' 
                 ]
-                logger.info("ℹ️ EMAIL: Using default admin emails (3 recipients)")
+                logger.info("ℹ️ EMAIL: Using default admin emails")
             
             # Check if webhook is configured
             if self.webhook_url and self.webhook_secret:
@@ -138,11 +136,11 @@ class EmailService:
                 total = quantity * price
                 items_html += f"""
                 <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{idx}</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{item_name}</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">{quantity}</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹{price:,.2f}</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹{total:,.2f}</td>
+                    <td>{idx}</td>
+                    <td>{item_name}</td>
+                    <td style="text-align: center;">{quantity}</td>
+                    <td style="text-align: right;">₹{price:,.2f}</td>
+                    <td style="text-align: right;">₹{total:,.2f}</td>
                 </tr>
                 """
             
@@ -170,14 +168,21 @@ class EmailService:
             <html>
             <head>
                 <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 10px; }}
+                    @media screen and (max-width: 640px) {{
+                        .container {{ max-width: 100%; padding: 5px; }}
+                    }}
                     .header {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
                     .content {{ background: #f8f9fa; padding: 20px; }}
-                    .order-details {{ background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }}
-                    .table-wrapper {{ overflow-x: auto; margin: 15px 0; }}
-                    .table {{ width: 100%; border-collapse: collapse; min-width: 500px; }}
-                    .table th {{ background: #28a745; color: white; padding: 10px; text-align: left; white-space: nowrap; }}
+                    .order-details {{ background: white; padding: 15px; border-radius: 5px; margin: 10px 0; }}
+                    .table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+                    .table th {{ background: #28a745; color: white; padding: 8px 4px; text-align: left; font-size: 12px; }}
+                    .table td {{ padding: 8px 4px; border-bottom: 1px solid #ddd; font-size: 12px; word-wrap: break-word; }}
+                    @media screen and (max-width: 640px) {{
+                        .table th, .table td {{ padding: 6px 2px; font-size: 11px; }}
+                        .order-details {{ padding: 10px; }}
+                    }}
                     .total {{ font-size: 18px; font-weight: bold; color: #28a745; text-align: right; padding: 10px 0; }}
                     .button {{ display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 15px 0; }}
                     .footer {{ background: #e9ecef; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }}
@@ -205,22 +210,20 @@ class EmailService:
                         
                         <div class="order-details">
                             <h2 style="color: #28a745; margin-top: 0;">Order Items</h2>
-                            <div class="table-wrapper">
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th>#</th>
-                                        <th>Item</th>
-                                        <th style="text-align: center;">Qty</th>
-                                        <th style="text-align: right;">Price</th>
-                                        <th style="text-align: right;">Total</th>
+                                        <th style="width: 8%;">#</th>
+                                        <th style="width: 40%;">Item</th>
+                                        <th style="width: 12%; text-align: center;">Qty</th>
+                                        <th style="width: 20%; text-align: right;">Price</th>
+                                        <th style="width: 20%; text-align: right;">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {items_html}
                                 </tbody>
                             </table>
-                            </div>
                             <div class="total">
                                 Total Amount: ₹{total_amount:,.2f}
                             </div>

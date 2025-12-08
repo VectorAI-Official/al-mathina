@@ -560,10 +560,21 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
         print("🎯 NOW ATTEMPTING FCM NOTIFICATION...", flush=True)
         print("="*80, flush=True)
         
+        # 🏪 GET USER DETAILS (for both FCM and email)
+        logger.info("🗄️ ORDER: Getting Supabase client for user details...")
+        supabase = get_supabase_client()
+        logger.info("✅ ORDER: Supabase client obtained")
+        
+        # Get store_name from users table (needed for both FCM and email)
+        user_result = supabase.table("users").select("store_name").eq("phone", user_phone).execute()
+        store_name = user_result.data[0].get("store_name") if user_result.data else None
+        logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
+        
         # 🔔 SEND PUSH NOTIFICATION TO USER (for all split orders combined)
         print("\n" + "*"*60, flush=True)
         print("🔔 ORDER: Starting FCM notification process...", flush=True)
         print(f"🔔 ORDER: User phone: {user_phone}", flush=True)
+        print(f"🔔 ORDER: Store name: {store_name or 'N/A'}", flush=True)
         print(f"🔔 ORDER: Total amount: ₹{total_amount}", flush=True)
         print(f"🔔 ORDER: Number of split orders: {len(created_orders)}", flush=True)
         print("*"*60, flush=True)
@@ -571,23 +582,15 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
             logger.info("\n" + "*"*60)
             logger.info("🔔 ORDER: Starting FCM notification process...")
             logger.info(f"🔔 ORDER: User phone: {user_phone}")
+            logger.info(f"🔔 ORDER: Store name: {store_name or 'N/A'}")
             logger.info(f"🔔 ORDER: Total amount: ₹{total_amount}")
             logger.info(f"🔔 ORDER: Number of split orders: {len(created_orders)}")
             logger.info("*"*60)
-            
-            logger.info("🗄️ ORDER: Getting Supabase client...")
-            supabase = get_supabase_client()
-            logger.info("✅ ORDER: Supabase client obtained")
             
             logger.info(f"🔍 ORDER: Querying ALL FCM tokens for phone: {user_phone}")
             # Query user_devices table for multi-device support (column is 'phone', not 'user_phone')
             devices_result = supabase.table("user_devices").select("fcm_token").eq("phone", user_phone).execute()
             logger.info(f"✅ ORDER: Query completed, found {len(devices_result.data) if devices_result.data else 0} device(s)")
-            
-            # Also get store_name from users table
-            user_result = supabase.table("users").select("store_name").eq("phone", user_phone).execute()
-            store_name = user_result.data[0].get("store_name") if user_result.data else None
-            logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
             
             if devices_result.data:
                 device_count = len(devices_result.data)
@@ -652,7 +655,7 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
             send_order_email_background,
             order_id=created_orders[0]['order_id'],
             user_phone=user_phone,
-            store_name=store_name if 'store_name' in locals() else None,
+            store_name=store_name,
             items=items,
             total_amount=total_amount,
             delivery_address=delivery_address,

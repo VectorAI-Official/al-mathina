@@ -161,8 +161,8 @@ class EmailService:
             
             address_html = "<br>".join(address_parts) if address_parts else "Not provided"
             
-            # Order management link
-            order_link = f"https://al-mathina.onrender.com/admin/orders?order_id={order_id}"
+            # Order management link - use hash navigation for proper search
+            order_link = f"https://al-mathina.onrender.com/admin/#orders?search={order_id}"
             
             # HTML email body
             html_body = f"""
@@ -175,8 +175,9 @@ class EmailService:
                     .header {{ background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
                     .content {{ background: #f8f9fa; padding: 20px; }}
                     .order-details {{ background: white; padding: 15px; border-radius: 5px; margin: 15px 0; }}
-                    .table {{ width: 100%; border-collapse: collapse; margin: 15px 0; }}
-                    .table th {{ background: #28a745; color: white; padding: 10px; text-align: left; }}
+                    .table-wrapper {{ overflow-x: auto; margin: 15px 0; }}
+                    .table {{ width: 100%; border-collapse: collapse; min-width: 500px; }}
+                    .table th {{ background: #28a745; color: white; padding: 10px; text-align: left; white-space: nowrap; }}
                     .total {{ font-size: 18px; font-weight: bold; color: #28a745; text-align: right; padding: 10px 0; }}
                     .button {{ display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 15px 0; }}
                     .footer {{ background: #e9ecef; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }}
@@ -204,6 +205,7 @@ class EmailService:
                         
                         <div class="order-details">
                             <h2 style="color: #28a745; margin-top: 0;">Order Items</h2>
+                            <div class="table-wrapper">
                             <table class="table">
                                 <thead>
                                     <tr>
@@ -218,6 +220,7 @@ class EmailService:
                                     {items_html}
                                 </tbody>
                             </table>
+                            </div>
                             <div class="total">
                                 Total Amount: ₹{total_amount:,.2f}
                             </div>

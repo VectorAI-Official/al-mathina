@@ -5,7 +5,7 @@
 
 const nodemailer = require('nodemailer');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Security: Check API key
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || apiKey !== process.env.API_SECRET) {
@@ -65,4 +65,4 @@ export default async function handler(req, res) {
       error: error.message 
     });
   }
-}
+};

@@ -3,9 +3,9 @@
  * Unlimited, free email sending via Gmail SMTP
  */
 
-import nodemailer from 'nodemailer';
-
 export default async function handler(req, res) {
+  // Dynamic import to handle module resolution
+  const { default: nodemailer } = await import('nodemailer');
   console.log('🔍 Request received');
   console.log('Method:', req.method);
   

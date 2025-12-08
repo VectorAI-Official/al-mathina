@@ -429,11 +429,11 @@ async def send_order_email_background(order_id: str):
             print(f"❌ BACKGROUND: Order {order_id} not found in database!", flush=True)
             return
         
-        # Get user details from Supabase
-        supabase = get_supabase_client()
+        # Get user details from MongoDB users collection
+        users_collection = db['users']
         user_phone = order.get('user_phone')
-        user_result = supabase.table("users").select("store_name").eq("phone", user_phone).execute()
-        store_name = user_result.data[0].get("store_name") if user_result.data else None
+        user = users_collection.find_one({"phone": user_phone})
+        store_name = user.get("name") if user else None  # 'name' field in MongoDB users
         
         logger.info(f"✅ BACKGROUND: Order found - {len(order.get('items', []))} items")
         logger.info(f"🏪 BACKGROUND: Store: {store_name or 'N/A'}")
@@ -576,15 +576,17 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
         print("🎯 NOW ATTEMPTING FCM NOTIFICATION...", flush=True)
         print("="*80, flush=True)
         
-        # 🏪 GET USER DETAILS (for both FCM and email)
-        logger.info("🗄️ ORDER: Getting Supabase client for user details...")
+        # 🏪 GET USER DETAILS FROM MONGODB (for email)
+        logger.info("🗄️ ORDER: Getting user details from MongoDB...")
+        users_collection = db['users']
+        user = users_collection.find_one({"phone": user_phone})
+        store_name = user.get("name") if user else None  # 'name' field stores store name
+        logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
+        
+        # 📱 GET FCM TOKENS FROM SUPABASE (for push notifications)
+        logger.info("🔔 ORDER: Getting Supabase client for FCM tokens...")
         supabase = get_supabase_client()
         logger.info("✅ ORDER: Supabase client obtained")
-        
-        # Get store_name from users table (needed for both FCM and email)
-        user_result = supabase.table("users").select("store_name").eq("phone", user_phone).execute()
-        store_name = user_result.data[0].get("store_name") if user_result.data else None
-        logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
         
         # 🔔 SEND PUSH NOTIFICATION TO USER (for all split orders combined)
         print("\n" + "*"*60, flush=True)

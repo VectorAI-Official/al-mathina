@@ -24,11 +24,13 @@ Admin Email Delivered
 ### MongoDB Collections
 1. **orders** - Complete order documents
    - Fields: `order_id`, `user_phone`, `items[]`, `total_amount`, `delivery_address`, `payment_method`, `section`, `status`
-   - Items structure: `{productName, weight, quantity, price, section, mainCategory, subcategory}`
+   - Items structure: `{product_name, weight, quantity, price, section, main_category, subcategory}`
 
 2. **users** - Customer profiles
-   - Fields: `phone` (unique), `name` (STORE NAME), `email`, `addresses[]`
-   - **IMPORTANT**: `name` field stores the store/business name, NOT personal name
+   - Fields: `phone` (unique), `name` (personal name), `email`, `addresses[]`
+   - **store_details** subdocument: `{store_name, street, city, state, pincode, landmark}`
+   - **CRITICAL**: `name` = personal name, `store_details.store_name` = business name
+   - **ALWAYS USE**: `user.get('store_details', {}).get('store_name')` for store name in orders/emails
 
 3. **products** - Product catalog
    - Fields: `productName`, `price`, `weight`, `section`, `mainCategory`, `subcategory`, `imageUrl`
@@ -66,14 +68,31 @@ SMTP_PASSWORD=<gmail-app-password>  # 16-char app password
 async def send_order_email_background(order_id: str):
     db = get_mongo_db()
     
-    # Get complete order
-    order = db['orders'].find_one({"order_id": order_id})
+    # Get complete order WITH user details (JOIN)
+    pipeline = [
+        {"$match": {"order_id": order_id}},
+        {"$lookup": {
+            "from": "users",
+            "localField": "user_phone",
+            "foreignField": "phone",
+            "as": "user_data"
+        }},
+        {"$project": {
+            "order_id": 1,
+            "items": 1,
+            "total_amount": 1,
+            "delivery_address": 1,
+            "payment_method": 1,
+            # CRITICAL: Extract from store_details subdocument
+            "store_name": {"$arrayElemAt": ["$user_data.store_details.store_name", 0]}
+        }}
+    ]
+    order = list(db['orders'].aggregate(pipeline))[0]
     
-    # Get store name from MongoDB users (NOT Supabase)
-    user = db['users'].find_one({"phone": order['user_phone']})
-    store_name = user.get("name") if user else None
+    # Store name is now directly in order
+    store_name = order.get("store_name")
     
-    # Items already have productName, weight, price, quantity
+    # Items have product_name, weight, price, quantity
     items = order.get('items', [])
 ```
 
@@ -89,11 +108,16 @@ background_tasks.add_task(
 
 ### ✅ Correct: Item Field Mapping
 ```python
-# MongoDB items have these fields:
-item_name = item.get('productName')  # Primary field
-weight = item.get('weight')           # Product size/weight
-quantity = item.get('quantity')       # Order quantity
-price = item.get('price')             # Unit price
+# MongoDB items have these fields (from Flutter):
+item_name = (
+    item.get('product_name') or    # Primary: Flutter sends this
+    item.get('productName') or      # Fallback: legacy camelCase
+    item.get('name') or             # Old format fallback
+    'Unknown'
+)
+weight = item.get('weight')         # Product size/weight
+quantity = item.get('quantity')     # Order quantity
+price = item.get('price')           # Unit price
 
 # Display format: "Rice (25kg)"
 display_name = f"{item_name} ({weight})" if weight else item_name
@@ -165,12 +189,36 @@ logger.info("📧 EMAIL: Sending notification")
 ## Common Issues & Solutions
 
 ### Issue: Email shows "Unknown" for item names
-**Cause**: Using `item.get('name')` instead of `item.get('productName')`
-**Fix**: Always use `productName` field from MongoDB order items
+**Cause**: Using `item.get('name')` or `item.get('productName')` but Flutter sends `product_name`
+**Fix**: Always check `product_name` first, then fallbacks
 
-### Issue: Store name shows "Not provided"
-**Cause**: Querying Supabase instead of MongoDB for store name
-**Fix**: Query MongoDB `users` collection, use `name` field
+### Issue: Store name shows personal name instead of business name
+**Cause**: Using `user.get('name')` which is the personal name field
+**Fix**: Use `user.get('store_details', {}).get('store_name')` for business name
+
+### Issue: Store name shows "Not provided" or wrong name
+**Cause**: Using `user.get('name')` instead of `user.get('store_details', {}).get('store_name')`
+**Fix**: Query MongoDB `users` collection, extract from `store_details.store_name` subdocument
+
+**User Document Structure:**
+```json
+{
+  "phone": "+918870986738",
+  "name": "faizal",  // Personal name (DON'T use for store)
+  "email": "user@example.com",
+  "store_details": {
+    "store_name": "Faizal Store",  // USE THIS for orders/emails
+    "street": "123 Main St",
+    "city": "Chennai",
+    "state": "Tamil Nadu",
+    "pincode": "600001",
+    "landmark": "Near Temple"
+  },
+  "addresses": [],
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
 
 ### Issue: Email not sent (no logs in Render)
 **Cause**: stdout/stderr not flushed
@@ -273,13 +321,15 @@ print(order['items'])  # Shows productName, weight, etc.
 ### Check User Store Name
 ```python
 user = db['users'].find_one({"phone": "+918870986738"})
-print(user.get('name'))  # Store name
+print(user.get('name'))  # Personal name (e.g., "faizal")
+print(user.get('store_details', {}).get('store_name'))  # Store name (e.g., "Faizal Store")
 ```
 
 ## Never Do This
 
 ❌ Query Supabase for store names
-❌ Use `item.get('name')` for product names
+❌ Use `user.get('name')` for store name (it's personal name!)
+❌ Use `item.get('name')` for product names (Flutter sends `product_name`)
 ❌ Pass incomplete data to background tasks
 ❌ Use horizontal scroll for email tables
 ❌ Forget `flush=True` in print statements
@@ -291,8 +341,8 @@ print(user.get('name'))  # Store name
 ## Always Do This
 
 ✅ Fetch complete order from MongoDB by order_id
-✅ Get store name from MongoDB users.name
-✅ Use `productName` field for item names
+✅ Get store name from `user.store_details.store_name` subdocument
+✅ Use `product_name` field for item names (primary), with fallbacks
 ✅ Use background tasks for email sending
 ✅ Force stdout flush for Render logs
 ✅ Use aggregation pipelines for complex queries

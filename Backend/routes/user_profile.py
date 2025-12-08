@@ -445,7 +445,7 @@ async def send_order_email_background(order_id: str):
                 "total_amount": 1,
                 "delivery_address": 1,
                 "payment_method": 1,
-                "store_name": {"$arrayElemAt": ["$user_data.name", 0]}  # Extract name from joined array
+                "store_name": {"$arrayElemAt": ["$user_data.store_details.store_name", 0]}  # Extract store name from store_details
             }}
         ]
         
@@ -605,7 +605,8 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
         logger.info("🗄️ ORDER: Getting user details from MongoDB...")
         users_collection = db['users']
         user = users_collection.find_one({"phone": user_phone})
-        store_name = user.get("name") if user else None  # 'name' field stores store name
+        # Get store name from store_details subdocument
+        store_name = user.get("store_details", {}).get("store_name") if user else None
         logger.info(f"✅ ORDER: Store name: {store_name or 'N/A'}")
         
         # 📱 GET FCM TOKENS FROM SUPABASE (for push notifications)

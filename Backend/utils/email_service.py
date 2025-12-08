@@ -35,7 +35,21 @@ class EmailService:
             logger.info("📧 EMAIL: Starting initialization...")
             
             # Get Vercel webhook configuration
-            self.webhook_url = os.getenv('EMAIL_WEBHOOK_URL', '')
+            webhook_base = os.getenv('EMAIL_WEBHOOK_URL', '').strip()
+            
+            # Build full webhook URL if not already complete
+            if webhook_base:
+                if not webhook_base.startswith('http'):
+                    # Add https:// and endpoint path
+                    self.webhook_url = f"https://{webhook_base}/api/send-email"
+                elif not webhook_base.endswith('/api/send-email'):
+                    # Add endpoint path if missing
+                    self.webhook_url = f"{webhook_base}/api/send-email"
+                else:
+                    self.webhook_url = webhook_base
+            else:
+                self.webhook_url = ''
+            
             self.webhook_secret = os.getenv('EMAIL_WEBHOOK_SECRET', '')
             
             # Admin emails - multiple recipients supported

@@ -61,7 +61,7 @@ class EmailService:
             else:
                 # Fallback to default admin emails
                 self.admin_emails = [
-                    'faizalbashafaizalbasha07@gmail.com',
+                    'faizalbashafaizalbasha07@gmail.com'
                 ]
                 logger.info("ℹ️ EMAIL: Using default admin emails")
             

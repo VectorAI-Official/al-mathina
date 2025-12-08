@@ -3,7 +3,7 @@ User Profile Management Routes for Flutter App
 Handles user data, preferences, and order history
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -400,9 +400,64 @@ async def get_user_orders(phone: str, request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Background task function for sending order email
+async def send_order_email_background(
+    order_id: str,
+    user_phone: str,
+    store_name: Optional[str],
+    items: list,
+    total_amount: float,
+    delivery_address: dict,
+    payment_method: str
+):
+    """Send order notification email in background (non-blocking)"""
+    print("\n" + "*"*60, flush=True)
+    print("📧 BACKGROUND: Starting email notification...", flush=True)
+    print(f"📧 BACKGROUND: Order ID: {order_id}", flush=True)
+    print("*"*60, flush=True)
+    
+    try:
+        logger.info("\n" + "*"*60)
+        logger.info("📧 BACKGROUND: Sending admin email notification...")
+        logger.info(f"📧 BACKGROUND: Order: {order_id}")
+        
+        # Send email to admin with all order details
+        email_sent = await email_service.send_order_notification_to_admin(
+            order_id=order_id,
+            user_phone=user_phone,
+            store_name=store_name,
+            items=items,
+            total_amount=total_amount,
+            delivery_address=delivery_address,
+            payment_method=payment_method
+        )
+        
+        if email_sent:
+            logger.info("✅ BACKGROUND: Email sent successfully!")
+            print("✅ BACKGROUND: Email delivered!", flush=True)
+        else:
+            logger.warning("⚠️ BACKGROUND: Email not sent (service may be disabled)")
+            print("⚠️ BACKGROUND: Email service disabled", flush=True)
+        
+        logger.info("*"*60 + "\n")
+        print("*"*60 + "\n", flush=True)
+        
+    except Exception as email_error:
+        # Log error but don't fail (user already got their response)
+        print(f"❌ BACKGROUND: Email failed: {email_error}", flush=True)
+        print(f"❌ BACKGROUND: Type: {type(email_error).__name__}", flush=True)
+        import traceback
+        print(f"❌ BACKGROUND: Traceback: {traceback.format_exc()}", flush=True)
+        print("*"*60 + "\n", flush=True)
+        
+        logger.error(f"❌ BACKGROUND: Email notification failed: {email_error}")
+        logger.error(f"❌ BACKGROUND: Exception type: {type(email_error).__name__}")
+        logger.error(f"❌ BACKGROUND: Traceback: {traceback.format_exc()}")
+        logger.error("*"*60 + "\n")
+
 # Create order
 @router.post("/orders")
-async def create_order(request: Request):
+async def create_order(request: Request, background_tasks: BackgroundTasks):
     """Create a new order - automatically splits by section"""
     from datetime import datetime, timedelta, timezone
     from collections import defaultdict
@@ -582,48 +637,26 @@ async def create_order(request: Request):
             logger.error(f"❌ ORDER: Traceback: {traceback.format_exc()}")
             logger.error("*"*60 + "\n")
         
-        # 📧 SEND EMAIL NOTIFICATION TO ADMIN
-        print("\n" + "*"*60, flush=True)
-        print("📧 EMAIL: Starting admin notification process...", flush=True)
-        print(f"📧 EMAIL: Order ID: {created_orders[0]['order_id']}", flush=True)
-        print("*"*60, flush=True)
-        try:
-            logger.info("\n" + "*"*60)
-            logger.info("📧 EMAIL: Sending admin notification...")
-            logger.info(f"📧 EMAIL: Order: {created_orders[0]['order_id']}")
-            
-            # Send email to admin with all order details
-            email_sent = await email_service.send_order_notification_to_admin(
-                order_id=created_orders[0]['order_id'],
-                user_phone=user_phone,
-                store_name=store_name if 'store_name' in locals() else None,
-                items=items,
-                total_amount=total_amount,
-                delivery_address=delivery_address,
-                payment_method=payment_method
-            )
-            
-            if email_sent:
-                logger.info("✅ EMAIL: Admin notification sent successfully!")
-                print("✅ EMAIL: Admin notification sent!", flush=True)
-            else:
-                logger.warning("⚠️ EMAIL: Admin notification not sent (service may be disabled)")
-                print("⚠️ EMAIL: Notification not sent", flush=True)
-            
-            logger.info("*"*60 + "\n")
-            print("*"*60 + "\n", flush=True)
-            
-        except Exception as email_error:
-            # Don't fail order creation if email fails
-            print(f"❌ EMAIL: EXCEPTION: {email_error}", flush=True)
-            print(f"❌ EMAIL: Exception type: {type(email_error).__name__}", flush=True)
-            print(f"❌ EMAIL: Traceback: {traceback.format_exc()}", flush=True)
-            print("*"*60 + "\n", flush=True)
-            logger.error(f"❌ EMAIL: Exception during email notification: {email_error}")
-            logger.error(f"❌ EMAIL: Exception type: {type(email_error).__name__}")
-            logger.error(f"❌ EMAIL: Traceback: {traceback.format_exc()}")
-            logger.error("*"*60 + "\n")
+        # 📧 SEND EMAIL NOTIFICATION TO ADMIN (IN BACKGROUND)
+        # This runs after the response is sent to the user
+        print("📧 EMAIL: Scheduling background task...", flush=True)
+        logger.info("📧 EMAIL: Adding email notification to background tasks")
         
+        background_tasks.add_task(
+            send_order_email_background,
+            order_id=created_orders[0]['order_id'],
+            user_phone=user_phone,
+            store_name=store_name if 'store_name' in locals() else None,
+            items=items,
+            total_amount=total_amount,
+            delivery_address=delivery_address,
+            payment_method=payment_method
+        )
+        
+        print("✅ EMAIL: Background task scheduled (will run after response)", flush=True)
+        logger.info("✅ EMAIL: Background task scheduled")
+        
+        # Return response immediately (email will be sent in background)
         return {
             "success": True,
             "message": f"Created {len(created_orders)} order(s) - split by section",

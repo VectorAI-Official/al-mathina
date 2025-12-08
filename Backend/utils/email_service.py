@@ -38,23 +38,26 @@ class EmailService:
             
             # Get email credentials from environment variables
             self.smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-            self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
+            self.smtp_port = int(os.getenv('SMTP_PORT', '465'))  # Default to 465 (SSL) for Render
+            self.use_ssl = os.getenv('SMTP_USE_SSL', 'true').lower() == 'true'  # Use SSL by default
             self.smtp_user = os.getenv('SMTP_USER', '')  # Your Gmail address
             self.smtp_password = os.getenv('SMTP_PASSWORD', '')  # App-specific password
             
             # Admin emails - multiple recipients supported
-            admin_emails_env = os.getenv('ADMIN_EMAIL', self.smtp_user)
-            # Split by comma if multiple emails provided
-            self.admin_emails = [email.strip() for email in admin_emails_env.split(',') if email.strip()]
+            admin_emails_env = os.getenv('ADMIN_EMAIL', '')
             
-            # Fallback to default admin emails if not configured
-            if not self.admin_emails or not any(self.admin_emails):
+            # If ADMIN_EMAIL env var is set, use it (comma-separated)
+            if admin_emails_env:
+                self.admin_emails = [email.strip() for email in admin_emails_env.split(',') if email.strip()]
+                logger.info(f"ℹ️ EMAIL: Using admin emails from env: {len(self.admin_emails)} recipients")
+            else:
+                # Fallback to default admin emails
                 self.admin_emails = [
                     'faizalbashafaizalbasha07@gmail.com',
                     'sathishsuba2208@gmail.com',
                     'abuarsath30@gmail.com' 
                 ]
-                logger.info("ℹ️ EMAIL: Using default admin emails")
+                logger.info("ℹ️ EMAIL: Using default admin emails (3 recipients)")
             
             if not self.smtp_user or not self.smtp_password:
                 logger.warning("⚠️ EMAIL: SMTP credentials not configured")
@@ -62,7 +65,9 @@ class EmailService:
                 logger.warning("⚠️ EMAIL: Email notifications will be disabled")
                 self.enabled = False
             else:
+                protocol = "SSL" if self.use_ssl else "TLS"
                 logger.info(f"✅ EMAIL: Configured to send from: {self.smtp_user}")
+                logger.info(f"✅ EMAIL: Using {protocol} on port {self.smtp_port}")
                 logger.info(f"✅ EMAIL: Admin notifications to: {', '.join(self.admin_emails)}")
                 self.enabled = True
             
@@ -246,14 +251,23 @@ class EmailService:
             print(f"📧 EMAIL: Recipients: {', '.join(self.admin_emails)}", flush=True)
             
             # Send email to all admin recipients with timeout
-            logger.info(f"📤 EMAIL: Connecting to {self.smtp_host}:{self.smtp_port}...")
-            print(f"📤 EMAIL: Connecting to SMTP server...", flush=True)
+            protocol = "SSL" if self.use_ssl else "TLS"
+            logger.info(f"📤 EMAIL: Connecting to {self.smtp_host}:{self.smtp_port} ({protocol})...")
+            print(f"📤 EMAIL: Connecting to SMTP server ({protocol})...", flush=True)
             
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
+            if self.use_ssl:
+                # Use SMTP_SSL for port 465 (SSL)
+                server = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=30)
+                logger.info("🔐 EMAIL: SSL connection established")
+                print("🔐 EMAIL: SSL connection established", flush=True)
+            else:
+                # Use SMTP with STARTTLS for port 587 (TLS)
+                server = smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30)
                 logger.info("🔐 EMAIL: Starting TLS...")
                 print("🔐 EMAIL: Securing connection...", flush=True)
                 server.starttls()
-                
+            
+            try:
                 logger.info("🔐 EMAIL: Authenticating...")
                 print("🔐 EMAIL: Logging in...", flush=True)
                 server.login(self.smtp_user, self.smtp_password)
@@ -269,12 +283,15 @@ class EmailService:
                     except Exception as send_error:
                         logger.error(f"   ✗ [{idx}/{len(self.admin_emails)}] Failed to send to {admin_email}: {send_error}")
                         print(f"   ✗ Failed: {admin_email}", flush=True)
-            
-            logger.info(f"✅ EMAIL: Notification process completed")
-            logger.info(f"✅ EMAIL: All recipients: {', '.join(self.admin_emails)}")
-            print(f"✅ EMAIL: Emails sent successfully!", flush=True)
-            logger.info("="*60 + "\n")
-            return True
+                
+                logger.info(f"✅ EMAIL: Notification process completed")
+                logger.info(f"✅ EMAIL: All recipients: {', '.join(self.admin_emails)}")
+                print(f"✅ EMAIL: Emails sent successfully!", flush=True)
+                logger.info("="*60 + "\n")
+                return True
+                
+            finally:
+                server.quit()
             
         except Exception as e:
             logger.error(f"❌ EMAIL: Failed to send notification")

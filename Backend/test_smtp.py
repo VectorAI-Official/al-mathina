@@ -11,7 +11,8 @@ from datetime import datetime
 
 # SMTP Configuration (same as in email_service.py)
 SMTP_HOST = 'smtp.gmail.com'
-SMTP_PORT = 587
+SMTP_PORT = 465  # Changed to 465 for SSL
+USE_SSL = True  # Use SSL instead of TLS
 SMTP_USER = 'almathina64@gmail.com'
 SMTP_PASSWORD = 'cgpj fbdz srve oqhn'
 
@@ -26,6 +27,7 @@ def test_smtp():
     
     print(f"\n📧 Configuration:")
     print(f"   Host: {SMTP_HOST}:{SMTP_PORT}")
+    print(f"   Protocol: {'SSL' if USE_SSL else 'TLS'}")
     print(f"   From: {SMTP_USER}")
     print(f"   To: {TEST_RECIPIENT}")
     print(f"   Password: {'*' * len(SMTP_PASSWORD)} (masked)")
@@ -68,22 +70,39 @@ def test_smtp():
         
         html_part = MIMEText(html_body, 'html')
         message.attach(html_part)
-        
+        # Send email with SSL or TLS
         print(f"\n📤 Step 1: Connecting to {SMTP_HOST}:{SMTP_PORT}...")
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-            print("✅ Step 1: Connected!")
+        
+        if USE_SSL:
+            # Use SMTP_SSL for port 465
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30)
+            print("✅ Step 1: Connected with SSL!")
             
-            print("\n🔐 Step 2: Starting TLS encryption...")
-            server.starttls()
-            print("✅ Step 2: TLS enabled!")
-            
-            print("\n🔐 Step 3: Authenticating...")
+            print("\n🔐 Step 2: Authenticating...")
             server.login(SMTP_USER, SMTP_PASSWORD)
-            print("✅ Step 3: Authenticated!")
+            print("✅ Step 2: Authenticated!")
             
-            print(f"\n📨 Step 4: Sending email to {TEST_RECIPIENT}...")
+            print(f"\n📨 Step 3: Sending email to {TEST_RECIPIENT}...")
             server.sendmail(SMTP_USER, TEST_RECIPIENT, message.as_string())
-            print("✅ Step 4: Email sent!")
+            print("✅ Step 3: Email sent!")
+            
+            server.quit()
+        else:
+            # Use SMTP with STARTTLS for port 587
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+                print("✅ Step 1: Connected!")
+                
+                print("\n🔐 Step 2: Starting TLS encryption...")
+                server.starttls()
+                print("✅ Step 2: TLS enabled!")
+                
+                print("\n🔐 Step 3: Authenticating...")
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                print("✅ Step 3: Authenticated!")
+                
+                print(f"\n📨 Step 4: Sending email to {TEST_RECIPIENT}...")
+                server.sendmail(SMTP_USER, TEST_RECIPIENT, message.as_string())
+                print("✅ Step 4: Email sent!")
         
         print("\n" + "="*60)
         print("🎉 SUCCESS! Test email sent successfully!")

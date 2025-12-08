@@ -41,7 +41,20 @@ class EmailService:
             self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
             self.smtp_user = os.getenv('SMTP_USER', '')  # Your Gmail address
             self.smtp_password = os.getenv('SMTP_PASSWORD', '')  # App-specific password
-            self.admin_email = os.getenv('ADMIN_EMAIL', self.smtp_user)  # Admin email to receive notifications
+            
+            # Admin emails - multiple recipients supported
+            admin_emails_env = os.getenv('ADMIN_EMAIL', self.smtp_user)
+            # Split by comma if multiple emails provided
+            self.admin_emails = [email.strip() for email in admin_emails_env.split(',') if email.strip()]
+            
+            # Fallback to default admin emails if not configured
+            if not self.admin_emails or not any(self.admin_emails):
+                self.admin_emails = [
+                    'faizalbashafaizalbasha07@gmail.com',
+                    'sathishsuba2208@gmail.com',
+                    'abuarsath30@gmail.com'
+                ]
+                logger.info("ℹ️ EMAIL: Using default admin emails")
             
             if not self.smtp_user or not self.smtp_password:
                 logger.warning("⚠️ EMAIL: SMTP credentials not configured")
@@ -50,7 +63,7 @@ class EmailService:
                 self.enabled = False
             else:
                 logger.info(f"✅ EMAIL: Configured to send from: {self.smtp_user}")
-                logger.info(f"✅ EMAIL: Admin notifications to: {self.admin_email}")
+                logger.info(f"✅ EMAIL: Admin notifications to: {', '.join(self.admin_emails)}")
                 self.enabled = True
             
         except Exception as e:
@@ -217,23 +230,26 @@ class EmailService:
             # Create message
             message = MIMEMultipart('alternative')
             message['From'] = self.smtp_user
-            message['To'] = self.admin_email
+            message['To'] = ', '.join(self.admin_emails)
             message['Subject'] = subject
             
             # Attach HTML body
             html_part = MIMEText(html_body, 'html')
             message.attach(html_part)
             
-            # Send email
+            # Send email to all admin recipients
             logger.info(f"📤 EMAIL: Connecting to {self.smtp_host}:{self.smtp_port}...")
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
                 logger.info("🔐 EMAIL: Authenticating...")
                 server.login(self.smtp_user, self.smtp_password)
-                logger.info("📨 EMAIL: Sending message...")
-                server.send_message(message)
+                logger.info(f"📨 EMAIL: Sending to {len(self.admin_emails)} recipient(s)...")
+                for admin_email in self.admin_emails:
+                    server.sendmail(self.smtp_user, admin_email, message.as_string())
+                    logger.info(f"   ✓ Sent to: {admin_email}")
             
-            logger.info(f"✅ EMAIL: Notification sent successfully to {self.admin_email}")
+            logger.info(f"✅ EMAIL: Notification sent successfully to all admins")
+            logger.info(f"✅ EMAIL: Recipients: {', '.join(self.admin_emails)}")
             logger.info("="*60 + "\n")
             return True
             

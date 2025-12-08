@@ -16,6 +16,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# MODULE LOAD INDICATOR - Will print when file is imported
+print("=" * 80, flush=True)
+print("🔥🔥🔥 USER_PROFILE.PY MODULE LOADED - BACKGROUND TASKS VERSION", flush=True)
+print("=" * 80, flush=True)
+logger.error("🔥🔥🔥 USER_PROFILE.PY MODULE LOADED - BACKGROUND TASKS VERSION")
+
 router = APIRouter(prefix="/api/flutter/user", tags=["User Profile"])
 
 # Pydantic models

@@ -50,9 +50,7 @@ class EmailService:
             # Fallback to default admin emails if not configured
             if not self.admin_emails or not any(self.admin_emails):
                 self.admin_emails = [
-                    'faizalbashafaizalbasha07@gmail.com',
-                    'sathishsuba2208@gmail.com',
-                    'abuarsath30@gmail.com'
+                    'faizalbashafaizalbasha07@gmail.com'
                 ]
                 logger.info("ℹ️ EMAIL: Using default admin emails")
             

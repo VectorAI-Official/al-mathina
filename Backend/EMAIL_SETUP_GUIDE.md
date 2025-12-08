@@ -29,7 +29,7 @@ Email notifications are sent to admin when customers place orders. The system us
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=xxxx xxxx xxxx xxxx  # 16-char app password from Step 2
+SMTP_PASSWORD=xcgpj fbdz srve oqhn  # 16-char app password from Step 2
 ADMIN_EMAIL=your-email@gmail.com  # Email to receive order notifications
 ```
 

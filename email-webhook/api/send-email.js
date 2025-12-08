@@ -51,7 +51,7 @@ export default async function handler(req, res) {
   console.log('🔧 Creating transporter...');
   console.log('Nodemailer type:', typeof nodemailer);
   console.log('Nodemailer keys:', Object.keys(nodemailer));
-  const transporter = nodemailer.default.createTransporter({
+  const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: process.env.SMTP_USER,

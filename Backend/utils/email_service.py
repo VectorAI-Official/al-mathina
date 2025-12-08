@@ -98,7 +98,9 @@ class EmailService:
             bool: True if email sent successfully
         """
         if not self.enabled:
-            logger.warning("⚠️ EMAIL: Service not enabled, skipping")
+            logger.warning("⚠️ EMAIL: Service not enabled (credentials missing)")
+            logger.warning("⚠️ EMAIL: Set SMTP_USER and SMTP_PASSWORD on Render")
+            print("⚠️ EMAIL: Service disabled - skipping", flush=True)
             return False
         
         try:
@@ -235,19 +237,40 @@ class EmailService:
             html_part = MIMEText(html_body, 'html')
             message.attach(html_part)
             
-            # Send email to all admin recipients
-            logger.info(f"📤 EMAIL: Connecting to {self.smtp_host}:{self.smtp_port}...")
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
-                logger.info("🔐 EMAIL: Authenticating...")
-                server.login(self.smtp_user, self.smtp_password)
-                logger.info(f"📨 EMAIL: Sending to {len(self.admin_emails)} recipient(s)...")
-                for admin_email in self.admin_emails:
-                    server.sendmail(self.smtp_user, admin_email, message.as_string())
-                    logger.info(f"   ✓ Sent to: {admin_email}")
+            # Log recipient emails before sending
+            logger.info(f"📧 EMAIL: Preparing to send to {len(self.admin_emails)} recipient(s):")
+            for idx, email in enumerate(self.admin_emails, 1):
+                logger.info(f"   {idx}. {email}")
+            print(f"📧 EMAIL: Recipients: {', '.join(self.admin_emails)}", flush=True)
             
-            logger.info(f"✅ EMAIL: Notification sent successfully to all admins")
-            logger.info(f"✅ EMAIL: Recipients: {', '.join(self.admin_emails)}")
+            # Send email to all admin recipients with timeout
+            logger.info(f"📤 EMAIL: Connecting to {self.smtp_host}:{self.smtp_port}...")
+            print(f"📤 EMAIL: Connecting to SMTP server...", flush=True)
+            
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
+                logger.info("🔐 EMAIL: Starting TLS...")
+                print("🔐 EMAIL: Securing connection...", flush=True)
+                server.starttls()
+                
+                logger.info("🔐 EMAIL: Authenticating...")
+                print("🔐 EMAIL: Logging in...", flush=True)
+                server.login(self.smtp_user, self.smtp_password)
+                
+                logger.info(f"📨 EMAIL: Sending to {len(self.admin_emails)} recipient(s)...")
+                print(f"📨 EMAIL: Sending to {len(self.admin_emails)} admins...", flush=True)
+                
+                for idx, admin_email in enumerate(self.admin_emails, 1):
+                    try:
+                        server.sendmail(self.smtp_user, admin_email, message.as_string())
+                        logger.info(f"   ✓ [{idx}/{len(self.admin_emails)}] Sent to: {admin_email}")
+                        print(f"   ✓ Sent to: {admin_email}", flush=True)
+                    except Exception as send_error:
+                        logger.error(f"   ✗ [{idx}/{len(self.admin_emails)}] Failed to send to {admin_email}: {send_error}")
+                        print(f"   ✗ Failed: {admin_email}", flush=True)
+            
+            logger.info(f"✅ EMAIL: Notification process completed")
+            logger.info(f"✅ EMAIL: All recipients: {', '.join(self.admin_emails)}")
+            print(f"✅ EMAIL: Emails sent successfully!", flush=True)
             logger.info("="*60 + "\n")
             return True
             

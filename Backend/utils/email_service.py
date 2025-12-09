@@ -90,6 +90,7 @@ class EmailService:
         order_id: str,
         user_phone: str,
         store_name: Optional[str],
+        section: Optional[str],
         items: List[dict],
         total_amount: float,
         delivery_address: dict,
@@ -102,6 +103,7 @@ class EmailService:
             order_id: Order ID
             user_phone: Customer phone number
             store_name: Customer store name
+            section: Order section (for split orders)
             items: List of order items
             total_amount: Total order amount
             delivery_address: Delivery address details
@@ -120,12 +122,16 @@ class EmailService:
             logger.info("\n" + "="*60)
             logger.info("📧 EMAIL: Sending admin notification via webhook")
             logger.info(f"📧 EMAIL: Order ID: {order_id}")
+            logger.info(f"📧 EMAIL: Section: {section or 'N/A'}")
             logger.info(f"📧 EMAIL: Customer: {store_name or 'N/A'} ({user_phone})")
             logger.info(f"📧 EMAIL: Total: ₹{total_amount:,.2f}")
             logger.info("="*60)
             
-            # Create email content
-            subject = f"🛒 New Order Received - {order_id}"
+            # Build email subject with section info for split orders
+            if section:
+                subject = f"🛒 New Order - {section} - {order_id}"
+            else:
+                subject = f"🛒 New Order Received - {order_id}"
             
             # Build items list HTML
             items_html = ""

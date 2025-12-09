@@ -441,6 +441,7 @@ async def send_order_email_background(order_id: str):
             {"$project": {
                 "order_id": 1,
                 "user_phone": 1,
+                "section": 1,  # Include section for split order emails
                 "items": 1,
                 "total_amount": 1,
                 "delivery_address": 1,
@@ -469,6 +470,7 @@ async def send_order_email_background(order_id: str):
             order_id=order.get('order_id'),
             user_phone=order.get('user_phone'),
             store_name=store_name,
+            section=order.get('section'),  # Pass section for split order context
             items=order.get('items', []),
             total_amount=order.get('total_amount', 0),
             delivery_address=order.get('delivery_address', {}),
@@ -690,18 +692,21 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
             logger.error(f"❌ ORDER: Traceback: {traceback.format_exc()}")
             logger.error("*"*60 + "\n")
         
-        # 📧 SEND EMAIL NOTIFICATION TO ADMIN (IN BACKGROUND)
-        # This runs after the response is sent to the user
-        print("📧 EMAIL: Scheduling background task...", flush=True)
-        logger.info("📧 EMAIL: Adding email notification to background tasks")
+        # 📧 SEND EMAIL NOTIFICATIONS TO ADMIN (IN BACKGROUND)
+        # Send SEPARATE email for EACH split order (critical for order tracking)
+        print(f"📧 EMAIL: Scheduling {len(created_orders)} background email tasks...", flush=True)
+        logger.info(f"📧 EMAIL: Adding {len(created_orders)} email notifications to background tasks")
         
-        background_tasks.add_task(
-            send_order_email_background,
-            order_id=created_orders[0]['order_id']
-        )
+        for idx, order in enumerate(created_orders, 1):
+            background_tasks.add_task(
+                send_order_email_background,
+                order_id=order['order_id']
+            )
+            print(f"   ✓ Email task {idx}/{len(created_orders)}: {order['order_id']} (section: {order['section']})", flush=True)
+            logger.info(f"   ✓ Email task {idx}: {order['order_id']} - {order['section']}")
         
-        print("✅ EMAIL: Background task scheduled (will run after response)", flush=True)
-        logger.info("✅ EMAIL: Background task scheduled")
+        print(f"✅ EMAIL: {len(created_orders)} background tasks scheduled (will run after response)", flush=True)
+        logger.info(f"✅ EMAIL: All {len(created_orders)} background tasks scheduled")
         
         # Return response immediately (email will be sent in background)
         return {

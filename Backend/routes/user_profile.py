@@ -13,11 +13,33 @@ from database.supabase_client import get_supabase_client
 from utils.fcm_service import fcm_service
 from utils.email_service import email_service
 import logging
+import sys
+import os
 
+# Configure aggressive logging for Render visibility
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    stream=sys.stderr,
+    force=True
+)
 logger = logging.getLogger(__name__)
 
+# Force unbuffered I/O
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+else:
+    # Python 3.6 fallback
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 1)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 1)
+
 # MODULE LOAD INDICATOR - Will print when file is imported
-print("=" * 80, flush=True)
+sys.stderr.write("=" * 80 + "\n")
+sys.stderr.write(f"📦 user_profile.py loaded at {datetime.now()}\n")
+sys.stderr.write(f"🔧 Environment: {os.getenv('RENDER', 'local')}\n")
+sys.stderr.write("=" * 80 + "\n")
+sys.stderr.flush()
 print("🔥🔥🔥 USER_PROFILE.PY MODULE LOADED - BACKGROUND TASKS VERSION", flush=True)
 print("=" * 80, flush=True)
 logger.error("🔥🔥🔥 USER_PROFILE.PY MODULE LOADED - BACKGROUND TASKS VERSION")
@@ -511,28 +533,33 @@ async def create_order(request: Request, background_tasks: BackgroundTasks):
     import traceback
     import logging
     
-    # Force immediate log output for Render
-    sys.stdout.flush()
+    # ULTRA-AGGRESSIVE LOGGING FOR RENDER
+    log_msg = f"\n{'='*80}\n🚀🚀🚀 ORDER ENDPOINT HIT - {datetime.now().isoformat()}\n"
+    log_msg += f"🚀 Request method: {request.method}\n"
+    log_msg += f"🚀 Request URL: {request.url}\n"
+    log_msg += f"{'='*80}\n"
+    
+    # Write directly to stderr (unbuffered)
+    sys.stderr.write(log_msg)
     sys.stderr.flush()
-    logging.basicConfig(level=logging.INFO, force=True)
     
-    print("\n" + "="*80, flush=True)
-    print("🚀🚀🚀 ORDER ENDPOINT HIT - START OF FUNCTION", flush=True)
-    print(f"🚀 RENDER LOG TEST: {datetime.now()}", flush=True)
-    print(f"🚀 Timestamp: {datetime.now().isoformat()}", flush=True)
-    print(f"🚀 Request method: {request.method}", flush=True)
-    print(f"🚀 Request URL: {request.url}", flush=True)
-    print("="*80 + "\n", flush=True)
+    # Also use all log levels
+    logger.critical("🚀 ORDER ENDPOINT HIT - CRITICAL LOG")
+    logger.error("🚀 ORDER ENDPOINT HIT - ERROR LOG")
+    logger.warning("🚀 ORDER ENDPOINT HIT - WARNING LOG")
+    logger.info("🚀 ORDER ENDPOINT HIT - INFO LOG")
     
-    logger.error("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER TEST")
-    logger.warning("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER WARNING")
-    logger.info("🚀🚀🚀 ORDER ENDPOINT HIT - LOGGER INFO")
+    # Print to stdout as backup
+    print(log_msg, flush=True)
+    
     try:
         
-        print("📥 Step 1: Reading request body...", flush=True)
+        sys.stderr.write("📥 Step 1: Reading request body...\n")
+        sys.stderr.flush()
         # Get request body
         order_data = await request.json()
-        print(f"✅ Step 1: Request body received, keys: {list(order_data.keys())}", flush=True)
+        sys.stderr.write(f"✅ Step 1: Request body received, keys: {list(order_data.keys())}\n")
+        sys.stderr.flush()
         
         print("📊 Step 2: Connecting to MongoDB...", flush=True)
         db = get_mongo_db()

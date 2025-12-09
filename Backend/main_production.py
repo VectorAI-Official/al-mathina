@@ -43,10 +43,33 @@ def delete_session(session_id: str) -> None:
 # Set environment variable to ensure production config is used
 os.environ['ENVIRONMENT'] = 'production'
 
-# Force unbuffered output for Docker/Render
+# Force unbuffered output for Docker/Render - CRITICAL for log visibility
 import sys
-sys.stdout.reconfigure(line_buffering=True)
-sys.stderr.reconfigure(line_buffering=True)
+
+# Method 1: Reconfigure streams (Python 3.7+)
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+else:
+    # Method 2: Fallback for older Python
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 1)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 1)
+
+# Configure root logger for immediate output
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+    stream=sys.stderr,
+    force=True
+)
+
+# Startup log to confirm unbuffered mode
+sys.stderr.write("="*80 + "\n")
+sys.stderr.write("🚀 AL-Madhina Backend Starting (PRODUCTION)\n")
+sys.stderr.write(f"🔧 Python: {sys.version}\n")
+sys.stderr.write(f"🔧 Unbuffered I/O: Enabled\n")
+sys.stderr.write("="*80 + "\n")
+sys.stderr.flush()
 
 # Configure logging with forced flushing
 logging.basicConfig(

@@ -1080,8 +1080,7 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
-      ${shareMode ? `padding: ${pagePadding}px;` : 'max-width: 1000px; padding: 40px;'}
-      padding-bottom: ${shareMode ? '120px' : printMode ? '40px' : '20px'}; /* Extra bottom padding for WhatsApp PDF */
+      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 25mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 40px;'}
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1235,9 +1234,22 @@ function generateInvoiceHTML(order, opts = {}) {
       text-align: right;
     }
     
+    /* Page break control for share mode (same as print) */
+    ${shareMode ? `
+    .invoice-header,
+    .invoice-details,
+    .items-table thead,
+    .items-table tbody tr,
+    .total-section,
+    .invoice-footer {
+      page-break-inside: avoid;
+    }
+    ` : ''}
+    
     /* Total Section */
     .total-section {
       margin-top: 30px;
+      ${shareMode ? 'margin-bottom: 15mm;' : ''} /* Same as print mode */
       padding: 20px;
       background: #F5F5F5;
       border: 2px solid #004D40;
@@ -1264,7 +1276,7 @@ function generateInvoiceHTML(order, opts = {}) {
     .invoice-footer {
       margin-top: 50px;
       padding-top: 25px;
-      ${shareMode ? 'padding-bottom: 60px;' : ''} /* Extra bottom space for WhatsApp PDF */
+      ${shareMode ? 'padding-bottom: 10mm;' : ''} /* Same as print mode */
       border-top: 3px solid #E0E0E0;
       text-align: center;
       width: 100%;

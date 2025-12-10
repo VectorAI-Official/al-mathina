@@ -1081,7 +1081,7 @@ function generateInvoiceHTML(order, opts = {}) {
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
       ${shareMode ? `padding: ${pagePadding}px;` : 'max-width: 1000px; padding: 40px;'}
-      ${shareMode || printMode ? `padding-bottom: 60px;` : ''} /* Add bottom spacing for share and print */
+      padding-bottom: ${shareMode ? '80px' : printMode ? '40px' : '20px'}; /* Prevent content from breaking at page end */
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1295,7 +1295,7 @@ function generateInvoiceHTML(order, opts = {}) {
         width: 100%;
         max-width: 100%;
         padding: 15mm;
-        padding-bottom: 20mm; /* Bottom spacing for print */
+        padding-bottom: 25mm; /* Increased bottom spacing to prevent content break */
       }
       
       .items-table tbody tr:hover {
@@ -1309,6 +1309,14 @@ function generateInvoiceHTML(order, opts = {}) {
       .total-section,
       .invoice-footer {
         page-break-inside: avoid;
+      }
+      
+      .total-section {
+        margin-bottom: 15mm; /* Add margin before footer */
+      }
+      
+      .invoice-footer {
+        padding-bottom: 10mm; /* Extra padding at bottom of invoice */
       }
       
       /* Add page break after large tables */

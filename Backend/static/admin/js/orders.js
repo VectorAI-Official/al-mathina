@@ -734,6 +734,11 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
+        // Add margins to prevent content from touching page edges
+        const topMargin = 10; // 10mm top margin
+        const bottomMargin = 15; // 15mm bottom margin - CRITICAL for readability
+        const effectivePageHeight = pdfHeight - topMargin - bottomMargin;
+        
         // Calculate image dimensions
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -741,30 +746,30 @@ async function shareInvoiceWhatsApp(orderId) {
         // Convert canvas to image with optimized quality
         const imgData = canvas.toDataURL('image/jpeg', 0.85); // Reduced from 0.95 for speed
         
-        // Check if content fits on one page
-        if (imgHeight <= pdfHeight) {
-            // Single page - add directly
-            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+        // Check if content fits on one page (with margins)
+        if (imgHeight <= effectivePageHeight) {
+            // Single page - add with top margin
+            pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight, undefined, 'FAST');
         } else {
-            // Multi-page - split content across pages
+            // Multi-page - split content across pages with proper margins
             let heightLeft = imgHeight;
             let position = 0;
             let page = 0;
             
-            // Add first page
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-            heightLeft -= pdfHeight;
+            // Add first page with top margin
+            pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight, undefined, 'FAST');
+            heightLeft -= effectivePageHeight;
             
-            // Add subsequent pages
+            // Add subsequent pages with margins
             while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
+                position = -(imgHeight - heightLeft - topMargin);
                 pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-                heightLeft -= pdfHeight;
+                pdf.addImage(imgData, 'JPEG', 0, position + topMargin, imgWidth, imgHeight, undefined, 'FAST');
+                heightLeft -= effectivePageHeight;
                 page++;
             }
             
-            console.log(`📄 Generated ${page + 1}-page PDF`);
+            console.log(`📄 Generated ${page + 1}-page PDF with ${bottomMargin}mm bottom margins`);
         }
         
         // Generate PDF blob

@@ -735,10 +735,6 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
-        // Page margins
-        const topMargin = 10; // 10mm top margin for pages 2+
-        const usableHeight = pdfHeight - topMargin; // Height available on subsequent pages
-        
         // Calculate image dimensions to fit PDF width
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -748,24 +744,23 @@ async function shareInvoiceWhatsApp(orderId) {
         
         // Add image to PDF with proper pagination
         if (imgHeight <= pdfHeight) {
-            // Single page - fits perfectly, no top margin needed
+            // Single page - fits perfectly
             pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
         } else {
             // Multi-page - split content across pages
             let position = 0;
             let heightLeft = imgHeight;
             
-            // First page - no top margin
-            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+            // First page
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
             heightLeft -= pdfHeight;
             
-            // Additional pages - with top margin
+            // Additional pages
             while (heightLeft > 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
-                // Add top margin to subsequent pages by offsetting the image position
-                pdf.addImage(imgData, 'JPEG', 0, position + topMargin, imgWidth, imgHeight);
-                heightLeft -= usableHeight;
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
             }
         }
         
@@ -1085,7 +1080,7 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
-      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 50mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 50px;'}
+      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 40mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 40px;'}
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1277,28 +1272,23 @@ function generateInvoiceHTML(order, opts = {}) {
       margin-right: 15px;
     }
     
-    /* Footer */
+    /* Footer - Acts as white space at bottom of each page */
     .invoice-footer {
       margin-top: 50px;
-      padding-top: 25px;
-      ${shareMode ? 'padding-bottom: 20mm;' : ''} /* Increased spacing */
-      border-top: 3px solid #E0E0E0;
+      padding-top: 0;
+      ${shareMode ? 'padding-bottom: 20mm;' : ''} /* White space */
+      border-top: none; /* Remove border */
       text-align: center;
       width: 100%;
+      background: transparent; /* Ensure white space */
     }
     
     .invoice-footer p {
-      font-size: ${shareMode ? '10px' : '13px'};
-      color: #757575;
-      margin: 8px 0;
-      line-height: 1.6;
+      display: none; /* Hide any text */
     }
     
     .invoice-footer .thank-you {
-      font-size: ${shareMode ? '13px' : '16px'};
-      color: #004D40;
-      font-weight: 600;
-      margin-bottom: 10px;
+      display: none; /* Hide any text */
     }
     
     /* Print Styles */
@@ -1313,7 +1303,7 @@ function generateInvoiceHTML(order, opts = {}) {
         width: 100%;
         max-width: 100%;
         padding: 15mm;
-        padding-bottom: 50mm; /* Increased bottom spacing to prevent content break */
+        padding-bottom: 40mm; /* Increased bottom spacing to prevent content break */
       }
       
       .items-table tbody tr:hover {
@@ -1334,7 +1324,8 @@ function generateInvoiceHTML(order, opts = {}) {
       }
       
       .invoice-footer {
-        padding-bottom: 20mm; /* Extra padding at bottom of invoice */
+        padding-bottom: 20mm; /* White space at bottom of invoice */
+        border-top: none; /* No border */
       }
       
       /* Add page break after large tables */
@@ -1422,10 +1413,8 @@ function generateInvoiceHTML(order, opts = {}) {
       <span class="grand-total">₹${parseFloat(order.total_amount).toFixed(2)}</span>
     </div>
     
-    <!-- Footer -->
-    <div class="invoice-footer">
-      <!-- Footer text removed as per user request -->
-    </div>
+    <!-- Footer - Empty white space for page padding -->
+    <div class="invoice-footer"></div>
   </div>
   
   ${printMode ? `<script>window.onload = () => setTimeout(() => window.print(), 200);</script>` : ''}

@@ -695,8 +695,9 @@ async function shareInvoiceWhatsApp(orderId) {
         // Get actual rendered dimensions
         const invoiceElement = container.querySelector('.invoice-container');
         const actualWidth = invoiceElement.offsetWidth || 794;
+        const actualHeight = invoiceElement.scrollHeight; // Use scrollHeight to capture full content including padding
         
-        console.log(`Rendering canvas at ${actualWidth}px width`);
+        console.log(`Rendering canvas at ${actualWidth}px width x ${actualHeight}px height`);
         
         // Capture invoice as canvas with optimized settings
         const canvas = await html2canvas(invoiceElement, {
@@ -706,7 +707,9 @@ async function shareInvoiceWhatsApp(orderId) {
             backgroundColor: '#ffffff',
             logging: false,
             width: actualWidth,
+            height: actualHeight, // Explicitly set height to capture all content
             windowWidth: actualWidth,
+            windowHeight: actualHeight,
             scrollY: -window.scrollY,
             scrollX: -window.scrollX,
             foreignObjectRendering: false,
@@ -1081,7 +1084,7 @@ function generateInvoiceHTML(order, opts = {}) {
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
       ${shareMode ? `padding: ${pagePadding}px;` : 'max-width: 1000px; padding: 40px;'}
-      padding-bottom: ${shareMode ? '80px' : printMode ? '40px' : '20px'}; /* Prevent content from breaking at page end */
+      padding-bottom: ${shareMode ? '120px' : printMode ? '40px' : '20px'}; /* Extra bottom padding for WhatsApp PDF */
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1264,6 +1267,7 @@ function generateInvoiceHTML(order, opts = {}) {
     .invoice-footer {
       margin-top: 50px;
       padding-top: 25px;
+      ${shareMode ? 'padding-bottom: 60px;' : ''} /* Extra bottom space for WhatsApp PDF */
       border-top: 3px solid #E0E0E0;
       text-align: center;
       width: 100%;

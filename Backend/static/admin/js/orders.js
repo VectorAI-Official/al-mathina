@@ -1080,7 +1080,7 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
-      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 25mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 40px;'}
+      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 40mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 40px;'}
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1249,7 +1249,7 @@ function generateInvoiceHTML(order, opts = {}) {
     /* Total Section */
     .total-section {
       margin-top: 30px;
-      ${shareMode ? 'margin-bottom: 15mm;' : ''} /* Same as print mode */
+      ${shareMode ? 'margin-bottom: 20mm;' : ''} /* Increased spacing */
       padding: 20px;
       background: #F5F5F5;
       border: 2px solid #004D40;
@@ -1276,7 +1276,7 @@ function generateInvoiceHTML(order, opts = {}) {
     .invoice-footer {
       margin-top: 50px;
       padding-top: 25px;
-      ${shareMode ? 'padding-bottom: 10mm;' : ''} /* Same as print mode */
+      ${shareMode ? 'padding-bottom: 20mm;' : ''} /* Increased spacing */
       border-top: 3px solid #E0E0E0;
       text-align: center;
       width: 100%;
@@ -1308,7 +1308,7 @@ function generateInvoiceHTML(order, opts = {}) {
         width: 100%;
         max-width: 100%;
         padding: 15mm;
-        padding-bottom: 25mm; /* Increased bottom spacing to prevent content break */
+        padding-bottom: 40mm; /* Increased bottom spacing to prevent content break */
       }
       
       .items-table tbody tr:hover {
@@ -1325,11 +1325,11 @@ function generateInvoiceHTML(order, opts = {}) {
       }
       
       .total-section {
-        margin-bottom: 15mm; /* Add margin before footer */
+        margin-bottom: 20mm; /* Add margin before footer */
       }
       
       .invoice-footer {
-        padding-bottom: 10mm; /* Extra padding at bottom of invoice */
+        padding-bottom: 20mm; /* Extra padding at bottom of invoice */
       }
       
       /* Add page break after large tables */

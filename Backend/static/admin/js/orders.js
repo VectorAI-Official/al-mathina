@@ -664,7 +664,7 @@ function printInvoice(orderId) {
     }, 100);
 }
 
-// Share invoice on WhatsApp (generates PDF) - OPTIMIZED
+// Share invoice on WhatsApp (generates PDF) - Uses same logic as Print Invoice
 async function shareInvoiceWhatsApp(orderId) {
     const order = currentOrder;
     if (!order) return;
@@ -672,113 +672,105 @@ async function shareInvoiceWhatsApp(orderId) {
     try {
         console.log('📄 Generating PDF invoice for WhatsApp share...');
         
-        const invoiceHTML = generateInvoiceHTML(order, { shareMode: true });
+        // Generate invoice HTML - same as print but with shareMode for sizing
+        const invoiceHTML = generateInvoiceHTML(order, { shareMode: true, printMode: false });
         
-        // Detect mobile device
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        // Create hidden iframe - SAME APPROACH AS PRINT INVOICE
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '-9999px';
+        iframe.style.width = '210mm'; // A4 width
+        iframe.style.height = '297mm'; // A4 height
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'hidden';
+        document.body.appendChild(iframe);
         
-        // Create a hidden container with A4 dimensions for rendering
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.left = '-9999px';
-        container.style.top = '0';
-        container.style.width = '794px'; // A4 width at 96dpi
-        container.style.background = '#ffffff';
-        container.style.overflow = 'visible';
-        document.body.appendChild(container);
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(invoiceHTML);
+        iframeDoc.close();
         
-        container.innerHTML = invoiceHTML;
+        // Wait for content to fully render (same delay as print)
+        await new Promise(resolve => {
+            iframe.onload = () => setTimeout(resolve, 500);
+        });
         
-        // Reduced wait time for faster generation
-        await new Promise(r => setTimeout(r, isMobile ? 600 : 400));
+        // Get the invoice container from iframe
+        const invoiceElement = iframe.contentWindow.document.querySelector('.invoice-container');
+        if (!invoiceElement) {
+            throw new Error('Invoice element not found');
+        }
         
-        // Get actual rendered dimensions
-        const invoiceElement = container.querySelector('.invoice-container');
-        const actualWidth = invoiceElement.offsetWidth || 794;
-        const actualHeight = invoiceElement.scrollHeight; // Use scrollHeight to capture full content including padding
+        console.log('📸 Capturing invoice as image...');
         
-        console.log(`Rendering canvas at ${actualWidth}px width x ${actualHeight}px height`);
-        
-        // Capture invoice as canvas with optimized settings
+        // Capture with html2canvas
         const canvas = await html2canvas(invoiceElement, {
-            scale: 1.5, // Reduced from 2 for faster generation
+            scale: 2, // High quality
             useCORS: true,
             allowTaint: false,
             backgroundColor: '#ffffff',
             logging: false,
-            width: actualWidth,
-            height: actualHeight, // Explicitly set height to capture all content
-            windowWidth: actualWidth,
-            windowHeight: actualHeight,
-            scrollY: -window.scrollY,
-            scrollX: -window.scrollX,
+            windowWidth: iframe.contentWindow.document.documentElement.scrollWidth,
+            windowHeight: iframe.contentWindow.document.documentElement.scrollHeight,
             foreignObjectRendering: false,
-            imageTimeout: 0,
-            removeContainer: true // Clean up faster
+            imageTimeout: 0
         });
         
-        // Clean up container immediately
-        document.body.removeChild(container);
+        // Clean up iframe
+        document.body.removeChild(iframe);
 
-        // Convert canvas to PDF with optimized compression
+        console.log('📄 Converting to PDF...');
+        
+        // Create PDF - Simple approach matching print quality
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
             format: 'a4',
-            compress: true,
-            precision: 2 // Reduce precision for smaller file size
+            compress: true
         });
         
-        // Get PDF dimensions (A4: 210mm x 297mm)
+        // Get PDF dimensions
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
-        // Add margins to prevent content from touching page edges
-        const topMargin = 10; // 10mm top margin
-        const bottomMargin = 15; // 15mm bottom margin - CRITICAL for readability
-        const effectivePageHeight = pdfHeight - topMargin - bottomMargin;
-        
-        // Calculate image dimensions
+        // Calculate image dimensions to fit PDF width
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
         
-        // Convert canvas to image with optimized quality
-        const imgData = canvas.toDataURL('image/jpeg', 0.85); // Reduced from 0.95 for speed
+        // Convert canvas to high-quality image
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
         
-        // Check if content fits on one page (with margins)
-        if (imgHeight <= effectivePageHeight) {
-            // Single page - add with top margin
-            pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight, undefined, 'FAST');
+        // Add image to PDF with proper pagination
+        if (imgHeight <= pdfHeight) {
+            // Single page - fits perfectly
+            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
         } else {
-            // Multi-page - split content across pages with proper margins
-            let heightLeft = imgHeight;
+            // Multi-page - split content across pages
             let position = 0;
-            let page = 0;
+            let heightLeft = imgHeight;
             
-            // Add first page with top margin
-            pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight, undefined, 'FAST');
-            heightLeft -= effectivePageHeight;
+            // First page
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pdfHeight;
             
-            // Add subsequent pages with margins
+            // Additional pages
             while (heightLeft > 0) {
-                position = -(imgHeight - heightLeft - topMargin);
+                position = heightLeft - imgHeight;
                 pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position + topMargin, imgWidth, imgHeight, undefined, 'FAST');
-                heightLeft -= effectivePageHeight;
-                page++;
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
             }
-            
-            console.log(`📄 Generated ${page + 1}-page PDF with ${bottomMargin}mm bottom margins`);
         }
         
-        // Generate PDF blob
+        // Generate PDF file
         const pdfBlob = pdf.output('blob');
         const pdfFile = new File([pdfBlob], `Invoice_${order.order_id}.pdf`, { type: 'application/pdf' });
         
         console.log('✅ PDF generated:', pdfFile.size, 'bytes');
 
-        // Try to share PDF using Web Share API
+        // Try native share API (works on mobile)
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
             try {
                 await navigator.share({
@@ -794,7 +786,7 @@ async function shareInvoiceWhatsApp(orderId) {
             }
         }
 
-        // Fallback: Download the PDF file
+        // Fallback: Download PDF
         const link = document.createElement('a');
         link.href = URL.createObjectURL(pdfBlob);
         link.download = `Invoice_${order.order_id}.pdf`;

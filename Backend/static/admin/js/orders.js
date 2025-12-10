@@ -735,6 +735,10 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
+        // Page margins
+        const topMargin = 10; // 10mm top margin for pages 2+
+        const usableHeight = pdfHeight - topMargin; // Height available on subsequent pages
+        
         // Calculate image dimensions to fit PDF width
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -744,23 +748,24 @@ async function shareInvoiceWhatsApp(orderId) {
         
         // Add image to PDF with proper pagination
         if (imgHeight <= pdfHeight) {
-            // Single page - fits perfectly
+            // Single page - fits perfectly, no top margin needed
             pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
         } else {
             // Multi-page - split content across pages
             let position = 0;
             let heightLeft = imgHeight;
             
-            // First page
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            // First page - no top margin
+            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
             heightLeft -= pdfHeight;
             
-            // Additional pages
+            // Additional pages - with top margin
             while (heightLeft > 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pdfHeight;
+                // Add top margin to subsequent pages by offsetting the image position
+                pdf.addImage(imgData, 'JPEG', 0, position + topMargin, imgWidth, imgHeight);
+                heightLeft -= usableHeight;
             }
         }
         
@@ -1080,7 +1085,7 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .invoice-container {
       width: ${shareMode ? pageWidth : 'auto'}px;
-      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 40mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 40px;'}
+      ${shareMode ? `padding: ${pagePadding}px; padding-top: 15mm; padding-bottom: 50mm;` : 'max-width: 1000px; padding: 40px; padding-bottom: 50px;'}
       box-sizing: border-box;
       margin: 0 auto;
       background: #ffffff;
@@ -1308,7 +1313,7 @@ function generateInvoiceHTML(order, opts = {}) {
         width: 100%;
         max-width: 100%;
         padding: 15mm;
-        padding-bottom: 40mm; /* Increased bottom spacing to prevent content break */
+        padding-bottom: 50mm; /* Increased bottom spacing to prevent content break */
       }
       
       .items-table tbody tr:hover {

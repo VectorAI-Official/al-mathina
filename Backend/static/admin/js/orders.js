@@ -1310,22 +1310,40 @@ function generateInvoiceHTML(order, opts = {}) {
         background: transparent;
       }
       
+      /* Aggressive page break controls */
       .invoice-header,
       .invoice-details,
       .items-table thead,
       .items-table tbody tr,
       .total-section,
       .invoice-footer {
-        page-break-inside: avoid;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important; /* Modern CSS */
+      }
+      
+      /* Prevent orphan rows */
+      .items-table tbody tr {
+        page-break-after: auto;
+        break-after: auto;
+      }
+      
+      /* Keep last few rows together with total */
+      .items-table tbody tr:nth-last-child(-n+3) {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
       }
       
       .total-section {
         margin-bottom: 20mm; /* Add margin before footer */
+        page-break-before: avoid !important;
+        break-before: avoid !important;
       }
       
       .invoice-footer {
         padding-bottom: 20mm; /* White space at bottom of invoice */
         border-top: none; /* No border */
+        page-break-before: avoid !important;
+        break-before: avoid !important;
       }
       
       /* Add page break after large tables */

@@ -612,7 +612,8 @@ function handleExportSearch() {
     exportSearchTerm = document.getElementById('exportSearchInput').value.toLowerCase();
     const clearBtn = document.getElementById('exportSearchClear');
     clearBtn.style.display = exportSearchTerm ? 'block' : 'none';
-    exportFilteredList = exportSelectedList.filter(s => (s.store_name || '').toLowerCase().includes(exportSearchTerm));
+    // Apply BOTH search and date filter as strict conditions
+    applyExportFilters();
     renderExportPreview();
     renderExportSearchResults(exportSearchTerm);
 }
@@ -621,9 +622,22 @@ function clearExportSearch() {
     document.getElementById('exportSearchInput').value = '';
     document.getElementById('exportSearchClear').style.display = 'none';
     exportSearchTerm = '';
-    exportFilteredList = [...exportSelectedList];
+    // Reapply filters to respect active date filter
+    applyExportFilters();
     renderExportPreview();
     document.getElementById('exportSearchResults').style.display = 'none';
+}
+
+// Apply both search and date filters as strict conditions
+function applyExportFilters() {
+    let filtered = [...exportSelectedList];
+    
+    // Apply search filter if present
+    if (exportSearchTerm) {
+        filtered = filtered.filter(s => (s.store_name || '').toLowerCase().includes(exportSearchTerm));
+    }
+    
+    exportFilteredList = filtered;
 }
 
 function handleExportDateFilterChange() {
@@ -695,6 +709,11 @@ function clearExportDateFilter() {
     document.getElementById('exportDateFilter').value = 'all';
     document.getElementById('exportDateDisplayGroup').style.display = 'none';
     
+    // Also clear search to show all results
+    exportSearchTerm = '';
+    document.getElementById('exportSearchInput').value = '';
+    document.getElementById('exportSearchClear').style.display = 'none';
+    
     // Reload export data with all dates
     loadExportData();
 }
@@ -709,7 +728,8 @@ function addStoreFromSearch(storeName) {
         }
         exportSelectedList.unshift(store);
     }
-    exportFilteredList = exportSelectedList.filter(s => (s.store_name || '').toLowerCase().includes(exportSearchTerm));
+    // Reapply both filters to maintain date filter + search filter as strict conditions
+    applyExportFilters();
     renderExportPreview();
     renderExportSearchResults(exportSearchTerm);
 }
@@ -764,7 +784,8 @@ function renderExportSearchResults(term) {
         return;
     }
 
-    const matches = exportStoreList
+    // Search ONLY within date-filtered stores (exportSelectedList respects date filter)
+    const matches = exportSelectedList
         .filter(s => (s.store_name || '').toLowerCase().includes(term))
         .slice(0, 8);
 

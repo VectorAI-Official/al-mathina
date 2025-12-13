@@ -738,6 +738,8 @@ function editProduct(productId) {
     
     document.getElementById('productWeight').value = product.weight;
     document.getElementById('productPrice').value = product.price;
+    // Fallback to selling price if buying price not yet stored
+    document.getElementById('productBuyingPrice').value = product.buying_price ?? product.price ?? '';
     document.getElementById('productStock').value = product.stock;
     document.getElementById('productDescription').value = product.description || '';
     document.getElementById('productActive').checked = product.active;
@@ -909,7 +911,8 @@ async function handleProductSubmit(e) {
             category_main: mainCategory,
             category_sub: subcategory,
             weight: document.getElementById('productWeight').value,
-            price: parseFloat(document.getElementById('productPrice').value),
+            price: parseFloat(document.getElementById('productPrice').value), // Selling price
+            buying_price: parseFloat(document.getElementById('productBuyingPrice').value), // Cost price (required)
             stock: parseInt(document.getElementById('productStock').value),
             description: document.getElementById('productDescription').value,
             active: document.getElementById('productActive').checked

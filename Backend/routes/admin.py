@@ -180,6 +180,7 @@ async def add_product(
     name: str = Form(...),
     weight: str = Form(...),
     price: float = Form(...),
+    buying_price: float = Form(...),
     stock: int = Form(...),
     description: str = Form(""),
     active: bool = Form(True)
@@ -211,6 +212,7 @@ async def add_product(
             "image_path": f"assets/brands/{brand.lower().replace(' ', '_')}.png",
             "weight": weight,
             "price": price,
+            "buying_price": buying_price,
             "stock": stock,
             "active": active,
             "description": description,
@@ -244,6 +246,7 @@ async def update_product(
     name: Optional[str] = Form(None),
     weight: Optional[str] = Form(None),
     price: Optional[float] = Form(None),
+    buying_price: Optional[float] = Form(None),
     stock: Optional[int] = Form(None),
     description: Optional[str] = Form(None),
     active: Optional[bool] = Form(None)
@@ -271,6 +274,8 @@ async def update_product(
             update_fields["weight"] = weight
         if price is not None:
             update_fields["price"] = price
+        if buying_price is not None:
+            update_fields["buying_price"] = buying_price
         if stock is not None:
             update_fields["stock"] = stock
         if description is not None:

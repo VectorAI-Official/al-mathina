@@ -1493,6 +1493,7 @@ async def add_product_compat(request: Request):
         logger.info(f"   📝 category_sub: {data.get('category_sub')}")
         logger.info(f"   📝 weight: {data.get('weight')}")
         logger.info(f"   📝 price: {data.get('price')}")
+        logger.info(f"   📝 buying_price: {data.get('buying_price')}")
         logger.info(f"   📝 stock: {data.get('stock')}")
         logger.info(f"   📝 description: {data.get('description')}")
         logger.info(f"   📝 active: {data.get('active')}")

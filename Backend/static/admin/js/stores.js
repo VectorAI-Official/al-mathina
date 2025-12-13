@@ -842,8 +842,12 @@ function handleDateFilterChange() {
             datePicker.value = today;
         }
         
+        // Set context to main (revenue management page)
+        sessionStorage.setItem('dateFilterContext', 'main');
         singleDateModal.style.display = 'block';
     } else if (selectedValue === 'range') {
+        // Set context to main (revenue management page) before opening
+        sessionStorage.setItem('dateFilterContext', 'main');
         openRangeDateModal();
     } else if (selectedValue === 'all') {
         clearDateFilter();
@@ -880,6 +884,9 @@ function openRangeDateModal() {
 function closeDateModal() {
     document.getElementById('singleDateModal').style.display = 'none';
     document.getElementById('rangeDateModal').style.display = 'none';
+    
+    // Clear context flag to prevent contamination between revenue and export workflows
+    sessionStorage.removeItem('dateFilterContext');
     
     // Reset dropdown if user cancels
     if (selectedDateFilter.type === 'all') {

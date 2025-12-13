@@ -474,6 +474,12 @@ body {
     overflow-y: auto;
 }
 
+/* Date picker modals appear on top of other modals */
+#singleDateModal,
+#rangeDateModal {
+    z-index: 3000;
+}
+
 .modal-content {
     background: white;
     border-radius: 24px;

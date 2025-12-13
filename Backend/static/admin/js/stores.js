@@ -584,33 +584,84 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// ============ DATE FILTER FUNCTIONS ============
+// ============ PDF EXPORT FUNCTION ============
+let exportStoreList = [];
+let exportFilteredList = [];
 
-// Handle date filter dropdown change
-function handleDateFilterChange() {
-    const dateFilter = document.getElementById('dateFilter').value;
-    
-    if (dateFilter === 'all') {
-        selectedDateFilter.type = 'all';
-        selectedDateFilter.singleDate = null;
-        selectedDateFilter.startDate = null;
-        selectedDateFilter.endDate = null;
-        document.getElementById('dateDisplayGroup').style.display = 'none';
-        filterStores();
-    } else if (dateFilter === 'single') {
-        openSingleDateModal();
-    } else if (dateFilter === 'range') {
-        openRangeDateModal();
+function openExportModal() {
+    document.getElementById('exportPreviewBody').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Loading...</td></tr>';
+    document.getElementById('exportSearchInput').value = '';
+    document.getElementById('exportExtraStore').value = '';
+    document.getElementById('exportModal').style.display = 'block';
+    loadExportData();
+}
+
+function closeExportModal() {
+    document.getElementById('exportModal').style.display = 'none';
+}
+
+function handleExportSearch() {
+    const term = document.getElementById('exportSearchInput').value.toLowerCase();
+    exportFilteredList = exportStoreList.filter(s => (s.store_name || '').toLowerCase().includes(term));
+    renderExportPreview();
+}
+
+function addExtraStoreToExport() {
+    const nameInput = document.getElementById('exportExtraStore');
+    const name = nameInput.value.trim();
+    if (!name) return;
+    exportStoreList.unshift({ store_name: name, order_count: 0, total_revenue: 0 });
+    nameInput.value = '';
+    handleExportSearch();
+}
+
+async function loadExportData() {
+    try {
+        showLoading();
+        const params = new URLSearchParams();
+        if (currentFilters.search) params.append('search', currentFilters.search);
+        if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
+        if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
+        params.append('limit', 10000);
+        params.append('skip', 0);
+        const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        const data = await response.json();
+        exportStoreList = data.stores || [];
+        exportFilteredList = [...exportStoreList];
+        renderExportPreview();
+    } catch (err) {
+        console.error('Export load failed', err);
+        document.getElementById('exportPreviewBody').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#d32f2f;">Failed to load stores</td></tr>';
+    } finally {
+        hideLoading();
     }
 }
 
-// Open single date picker modal
-function openSingleDateModal() {
-    const modal = document.getElementById('singleDateModal');
-    const datePicker = document.getElementById('singleDatePicker');
-    
-    // Set max date to today
-    const today = new Date().toISOString().split('T')[0];
+function renderExportPreview() {
+    const tbody = document.getElementById('exportPreviewBody');
+    if (!exportFilteredList.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">No stores found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = exportFilteredList.map(store => `
+        <tr>
+            <td>${store.store_name || 'Unnamed Store'}</td>
+            <td>${store.order_count || 0}</td>
+            <td>₹${formatCurrency(store.total_revenue || 0)}</td>
+        </tr>
+    `).join('');
+}
+
+async function downloadExportPDF() {
+    await exportToPDF(exportFilteredList);
+    closeExportModal();
+}
+
+
+// Handle date filter dropdown change
+        const allStoresForExport = Array.isArray(arguments[0]) ? arguments[0] : exportStoreList;
     datePicker.max = today;
     
     // Set current value if exists

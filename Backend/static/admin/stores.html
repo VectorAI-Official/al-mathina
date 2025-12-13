@@ -117,7 +117,7 @@
                 </div>
             </div>
             <div class="filter-group">
-                <button class="btn btn-primary" onclick="exportToPDF()">
+                <button class="btn btn-primary" onclick="openExportModal()">
                     <i class="fas fa-file-pdf"></i> Export
                 </button>
             </div>
@@ -333,6 +333,48 @@
                         <button onclick="closeDateModal()" class="btn btn-secondary" style="margin-right: 10px;">Cancel</button>
                         <button onclick="applyDateRange()" class="btn btn-primary">Apply</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Preview Modal -->
+        <div id="exportModal" class="modal" style="display: none;">
+            <div class="modal-content modal-lg">
+                <div class="modal-header">
+                    <h2><i class="fas fa-file-pdf"></i> Export Preview</h2>
+                    <button class="modal-close" onclick="closeExportModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div style="display:flex; gap:12px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:240px; display:flex; gap:8px; align-items:center;">
+                            <i class="fas fa-search" style="color:#666;"></i>
+                            <input id="exportSearchInput" type="text" placeholder="Search stores in export list..." oninput="handleExportSearch()" style="flex:1; padding:8px 10px; border:1px solid #ddd; border-radius:6px;">
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input id="exportExtraStore" type="text" placeholder="Add extra store name" style="padding:8px 10px; border:1px solid #ddd; border-radius:6px; min-width:200px;">
+                            <button class="btn btn-secondary" onclick="addExtraStoreToExport()"><i class="fas fa-plus"></i> Add</button>
+                        </div>
+                    </div>
+                    <div style="max-height:400px; overflow:auto; border:1px solid #eee; border-radius:8px;">
+                        <table class="products-table" style="margin:0;">
+                            <thead>
+                                <tr>
+                                    <th style="width:50%;">Store Name</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="exportPreviewBody">
+                                <tr><td colspan="3" style="text-align:center; padding:20px;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button class="btn-secondary" onclick="closeExportModal()">Cancel</button>
+                    <button class="btn-primary" onclick="downloadExportPDF()"><i class="fas fa-download"></i> Download PDF</button>
                 </div>
             </div>
         </div>

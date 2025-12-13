@@ -608,36 +608,58 @@ function closeExportModal() {
     document.getElementById('exportModal').style.display = 'none';
 }
 
-function handleExportSearch() {
+async function handleExportSearch() {
     exportSearchTerm = document.getElementById('exportSearchInput').value.toLowerCase();
     const clearBtn = document.getElementById('exportSearchClear');
     clearBtn.style.display = exportSearchTerm ? 'block' : 'none';
-    // Apply BOTH search and date filter as strict conditions
-    applyExportFilters();
-    renderExportPreview();
-    renderExportSearchResults(exportSearchTerm);
+    
+    if (exportSearchTerm) {
+        // Query database with date filter + search term
+        await searchExportStores(exportSearchTerm);
+    } else {
+        // No search term - hide search results
+        document.getElementById('exportSearchResults').style.display = 'none';
+    }
 }
 
 function clearExportSearch() {
     document.getElementById('exportSearchInput').value = '';
     document.getElementById('exportSearchClear').style.display = 'none';
     exportSearchTerm = '';
-    // Reapply filters to respect active date filter
-    applyExportFilters();
-    renderExportPreview();
     document.getElementById('exportSearchResults').style.display = 'none';
 }
 
-// Apply both search and date filters as strict conditions
-function applyExportFilters() {
-    let filtered = [...exportSelectedList];
-    
-    // Apply search filter if present
-    if (exportSearchTerm) {
-        filtered = filtered.filter(s => (s.store_name || '').toLowerCase().includes(exportSearchTerm));
+// Search stores from database with date filter applied
+async function searchExportStores(searchTerm) {
+    try {
+        const params = new URLSearchParams();
+        params.append('search', searchTerm);
+        
+        // Apply date filter to search query
+        if (exportDateFilter.type === 'single' && exportDateFilter.singleDate) {
+            params.append('start_date', exportDateFilter.singleDate);
+            params.append('end_date', exportDateFilter.singleDate);
+        } else if (exportDateFilter.type === 'range' && exportDateFilter.startDate && exportDateFilter.endDate) {
+            params.append('start_date', exportDateFilter.startDate);
+            params.append('end_date', exportDateFilter.endDate);
+        }
+        
+        params.append('limit', 10);
+        params.append('skip', 0);
+        
+        const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        
+        const data = await response.json();
+        const searchResults = data.stores || [];
+        
+        renderExportSearchResults(searchResults);
+    } catch (err) {
+        console.error('Export search failed', err);
+        document.getElementById('exportSearchResults').innerHTML = '<div style="padding:12px; color:#d32f2f; text-align:center;">Search failed</div>';
+        document.getElementById('exportSearchResults').style.display = 'block';
     }
-    
-    exportFilteredList = filtered;
 }
 
 function handleExportDateFilterChange() {
@@ -718,20 +740,50 @@ function clearExportDateFilter() {
     loadExportData();
 }
 
-function addStoreFromSearch(storeName) {
+async function addStoreFromSearch(storeName) {
     if (!storeName) return;
-    const existingIndex = exportSelectedList.findIndex(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
-    const store = exportStoreList.find(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
-    if (store) {
-        if (existingIndex >= 0) {
-            exportSelectedList.splice(existingIndex, 1);
+    
+    try {
+        // Fetch the store data from database to get complete info
+        const params = new URLSearchParams();
+        params.append('search', storeName);
+        
+        // Apply current date filter
+        if (exportDateFilter.type === 'single' && exportDateFilter.singleDate) {
+            params.append('start_date', exportDateFilter.singleDate);
+            params.append('end_date', exportDateFilter.singleDate);
+        } else if (exportDateFilter.type === 'range' && exportDateFilter.startDate && exportDateFilter.endDate) {
+            params.append('start_date', exportDateFilter.startDate);
+            params.append('end_date', exportDateFilter.endDate);
         }
-        exportSelectedList.unshift(store);
+        
+        params.append('limit', 1);
+        params.append('skip', 0);
+        
+        const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        
+        const data = await response.json();
+        const stores = data.stores || [];
+        const store = stores.find(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
+        
+        if (store) {
+            // Remove if already exists (to avoid duplicates)
+            const existingIndex = exportSelectedList.findIndex(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
+            if (existingIndex >= 0) {
+                exportSelectedList.splice(existingIndex, 1);
+            }
+            // Add to top of preview table
+            exportSelectedList.unshift(store);
+            exportFilteredList = [...exportSelectedList];
+            renderExportPreview();
+            showToast(`Added "${store.store_name}" to export list`, 'success');
+        }
+    } catch (err) {
+        console.error('Failed to add store:', err);
+        showToast('Failed to add store', 'error');
     }
-    // Reapply both filters to maintain date filter + search filter as strict conditions
-    applyExportFilters();
-    renderExportPreview();
-    renderExportSearchResults(exportSearchTerm);
 }
 
 async function loadExportData(startDate = null, endDate = null) {
@@ -776,35 +828,32 @@ function renderExportPreview() {
     `).join('');
 }
 
-function renderExportSearchResults(term) {
+function renderExportSearchResults(searchResults) {
     const container = document.getElementById('exportSearchResults');
-    if (!term) {
+    
+    if (!searchResults || searchResults.length === 0) {
         container.style.display = 'none';
         container.innerHTML = '';
         return;
     }
 
-    // Search ONLY within date-filtered stores (exportSelectedList respects date filter)
-    const matches = exportSelectedList
-        .filter(s => (s.store_name || '').toLowerCase().includes(term))
-        .slice(0, 8);
-
-    if (!matches.length) {
-        container.style.display = 'none';
-        container.innerHTML = '';
-        return;
-    }
+    const matches = searchResults.slice(0, 8);
 
     container.innerHTML = matches.map(store => {
         const safeName = encodeURIComponent(store.store_name || '');
+        const isInPreview = exportSelectedList.some(s => (s.store_name || '').toLowerCase() === (store.store_name || '').toLowerCase());
+        
         return `
             <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eef2f6; cursor:pointer; transition:background 0.2s;" onmouseenter="this.style.background='#f0f9ff'" onmouseleave="this.style.background='transparent'">
-                <div style="font-weight:500; color:#1f2937; font-size:14px;">${store.store_name || 'Unnamed Store'}</div>
+                <div>
+                    <div style="font-weight:500; color:#1f2937; font-size:14px;">${store.store_name || 'Unnamed Store'}</div>
+                    <div style="font-size:12px; color:#6b7280;">Orders: ${store.order_count || 0} | Revenue: ₹${formatCurrency(store.total_revenue || 0)}</div>
+                </div>
                 <button
                     data-store="${safeName}"
                     onclick="addStoreFromSearch(decodeURIComponent(this.dataset.store))"
-                    style="padding:6px 12px; border:none; border-radius:6px; background:#10b981; color:#fff; cursor:pointer; box-shadow:0 4px 10px rgba(16,185,129,0.2); font-weight:500;">
-                    Add
+                    style="padding:6px 12px; border:none; border-radius:6px; background:${isInPreview ? '#6b7280' : '#10b981'}; color:#fff; cursor:pointer; box-shadow:0 4px 10px rgba(16,185,129,0.2); font-weight:500;">
+                    ${isInPreview ? 'Added' : 'Add'}
                 </button>
             </div>
         `;

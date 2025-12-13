@@ -982,21 +982,6 @@ function applyDateRange() {
     closeDateModal();
     sessionStorage.removeItem('dateFilterContext');
 }
-    
-    // Update display
-    const startObj = new Date(startDate);
-    const endObj = new Date(endDate);
-    const dateDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-    document.getElementById('dateDisplay').textContent = dateDisplay;
-    document.getElementById('dateDisplayGroup').style.display = 'block';
-    
-    // Update filters for API call
-    currentFilters.start_date = startDate;
-    currentFilters.end_date = endDate;
-    
-    closeDateModal();
-    filterStores();
-}
 
 // Clear date filter
 function clearDateFilter() {

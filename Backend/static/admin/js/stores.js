@@ -587,11 +587,15 @@ function showToast(message, type = 'info') {
 // ============ PDF EXPORT FUNCTION ============
 let exportStoreList = [];
 let exportFilteredList = [];
+let exportSelectedList = [];
+let exportSearchTerm = '';
 
 function openExportModal() {
     document.getElementById('exportPreviewBody').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Loading...</td></tr>';
     document.getElementById('exportSearchInput').value = '';
-    document.getElementById('exportExtraStore').value = '';
+    document.getElementById('exportSearchClear').style.display = 'none';
+    document.getElementById('exportSearchResults').style.display = 'none';
+    exportSearchTerm = '';
     document.getElementById('exportModal').style.display = 'block';
     loadExportData();
 }
@@ -601,18 +605,36 @@ function closeExportModal() {
 }
 
 function handleExportSearch() {
-    const term = document.getElementById('exportSearchInput').value.toLowerCase();
-    exportFilteredList = exportStoreList.filter(s => (s.store_name || '').toLowerCase().includes(term));
+    exportSearchTerm = document.getElementById('exportSearchInput').value.toLowerCase();
+    const clearBtn = document.getElementById('exportSearchClear');
+    clearBtn.style.display = exportSearchTerm ? 'block' : 'none';
+    exportFilteredList = exportSelectedList.filter(s => (s.store_name || '').toLowerCase().includes(exportSearchTerm));
     renderExportPreview();
+    renderExportSearchResults(exportSearchTerm);
 }
 
-function addExtraStoreToExport() {
-    const nameInput = document.getElementById('exportExtraStore');
-    const name = nameInput.value.trim();
-    if (!name) return;
-    exportStoreList.unshift({ store_name: name, order_count: 0, total_revenue: 0 });
-    nameInput.value = '';
-    handleExportSearch();
+function clearExportSearch() {
+    document.getElementById('exportSearchInput').value = '';
+    document.getElementById('exportSearchClear').style.display = 'none';
+    exportSearchTerm = '';
+    exportFilteredList = [...exportSelectedList];
+    renderExportPreview();
+    document.getElementById('exportSearchResults').style.display = 'none';
+}
+
+function addStoreFromSearch(storeName) {
+    if (!storeName) return;
+    const existingIndex = exportSelectedList.findIndex(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
+    const store = exportStoreList.find(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
+    if (store) {
+        if (existingIndex >= 0) {
+            exportSelectedList.splice(existingIndex, 1);
+        }
+        exportSelectedList.unshift(store);
+    }
+    exportFilteredList = exportSelectedList.filter(s => (s.store_name || '').toLowerCase().includes(exportSearchTerm));
+    renderExportPreview();
+    renderExportSearchResults(exportSearchTerm);
 }
 
 async function loadExportData() {
@@ -629,7 +651,8 @@ async function loadExportData() {
         });
         const data = await response.json();
         exportStoreList = data.stores || [];
-        exportFilteredList = [...exportStoreList];
+        exportSelectedList = [...exportStoreList];
+        exportFilteredList = [...exportSelectedList];
         renderExportPreview();
     } catch (err) {
         console.error('Export load failed', err);
@@ -654,8 +677,48 @@ function renderExportPreview() {
     `).join('');
 }
 
+function renderExportSearchResults(term) {
+    const container = document.getElementById('exportSearchResults');
+    if (!term) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    const matches = exportStoreList
+        .filter(s => (s.store_name || '').toLowerCase().includes(term))
+        .slice(0, 8);
+
+    if (!matches.length) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = matches.map(store => {
+        const safeName = encodeURIComponent(store.store_name || '');
+        return `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #eef2f6; cursor:pointer; transition:background 0.2s;" onmouseenter="this.style.background='#f0f9ff'" onmouseleave="this.style.background='transparent'">
+                <div style="font-weight:500; color:#1f2937; font-size:14px;">${store.store_name || 'Unnamed Store'}</div>
+                <button
+                    data-store="${safeName}"
+                    onclick="addStoreFromSearch(decodeURIComponent(this.dataset.store))"
+                    style="padding:6px 12px; border:none; border-radius:6px; background:#10b981; color:#fff; cursor:pointer; box-shadow:0 4px 10px rgba(16,185,129,0.2); font-weight:500;">
+                    Add
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    container.style.display = 'block';
+}
+
 async function downloadExportPDF() {
-    await exportToPDF(exportFilteredList);
+    if (!exportSelectedList.length) {
+        showToast('Add at least one store to export', 'error');
+        return;
+    }
+    await exportToPDF(exportSelectedList);
     closeExportModal();
 }
 

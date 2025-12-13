@@ -589,13 +589,17 @@ let exportStoreList = [];
 let exportFilteredList = [];
 let exportSelectedList = [];
 let exportSearchTerm = '';
+let exportDateFilter = { type: 'all', singleDate: null, startDate: null, endDate: null };
 
 function openExportModal() {
     document.getElementById('exportPreviewBody').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Loading...</td></tr>';
     document.getElementById('exportSearchInput').value = '';
     document.getElementById('exportSearchClear').style.display = 'none';
     document.getElementById('exportSearchResults').style.display = 'none';
+    document.getElementById('exportDateFilter').value = 'all';
+    document.getElementById('exportDateDisplayGroup').style.display = 'none';
     exportSearchTerm = '';
+    exportDateFilter = { type: 'all', singleDate: null, startDate: null, endDate: null };
     document.getElementById('exportModal').style.display = 'block';
     loadExportData();
 }
@@ -622,6 +626,79 @@ function clearExportSearch() {
     document.getElementById('exportSearchResults').style.display = 'none';
 }
 
+function handleExportDateFilterChange() {
+    const exportDateFilter = document.getElementById('exportDateFilter');
+    const selectedValue = exportDateFilter.value;
+    
+    if (selectedValue === 'single') {
+        openExportSingleDateModal();
+    } else if (selectedValue === 'range') {
+        openExportRangeDateModal();
+    } else if (selectedValue === 'all') {
+        clearExportDateFilter();
+    }
+}
+
+function openExportSingleDateModal() {
+    const singleDateModal = document.getElementById('singleDateModal');
+    const datePicker = document.getElementById('singleDatePicker');
+    
+    // Set max date to today
+    const today = new Date().toISOString().split('T')[0];
+    datePicker.max = today;
+    
+    // Set current value if exists
+    if (exportDateFilter.singleDate) {
+        datePicker.value = exportDateFilter.singleDate;
+    } else {
+        datePicker.value = today;
+    }
+    
+    // Store context that this is for export
+    sessionStorage.setItem('dateFilterContext', 'export');
+    singleDateModal.style.display = 'block';
+}
+
+function openExportRangeDateModal() {
+    const modal = document.getElementById('rangeDateModal');
+    const startPicker = document.getElementById('startDatePicker');
+    const endPicker = document.getElementById('endDatePicker');
+    
+    // Set max date to today
+    const today = new Date().toISOString().split('T')[0];
+    startPicker.max = today;
+    endPicker.max = today;
+    
+    // Set current values if exist
+    if (exportDateFilter.startDate && exportDateFilter.endDate) {
+        startPicker.value = exportDateFilter.startDate;
+        endPicker.value = exportDateFilter.endDate;
+    } else {
+        // Default to last 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        startPicker.value = sevenDaysAgo.toISOString().split('T')[0];
+        endPicker.value = today;
+    }
+    
+    // Store context that this is for export
+    sessionStorage.setItem('dateFilterContext', 'export');
+    modal.style.display = 'block';
+}
+
+function clearExportDateFilter() {
+    exportDateFilter.type = 'all';
+    exportDateFilter.singleDate = null;
+    exportDateFilter.startDate = null;
+    exportDateFilter.endDate = null;
+    
+    document.getElementById('exportDateFilter').value = 'all';
+    document.getElementById('exportDateDisplayGroup').style.display = 'none';
+    
+    // Reload export data with all dates
+    loadExportData();
+}
+
 function addStoreFromSearch(storeName) {
     if (!storeName) return;
     const existingIndex = exportSelectedList.findIndex(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
@@ -637,13 +714,15 @@ function addStoreFromSearch(storeName) {
     renderExportSearchResults(exportSearchTerm);
 }
 
-async function loadExportData() {
+async function loadExportData(startDate = null, endDate = null) {
     try {
         showLoading();
         const params = new URLSearchParams();
         if (currentFilters.search) params.append('search', currentFilters.search);
-        if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
-        if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (!startDate && currentFilters.start_date) params.append('start_date', currentFilters.start_date);
+        if (!endDate && currentFilters.end_date) params.append('end_date', currentFilters.end_date);
         params.append('limit', 10000);
         params.append('skip', 0);
         const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
@@ -723,6 +802,34 @@ async function downloadExportPDF() {
 }
 
 // Open date range picker modal
+function handleDateFilterChange() {
+    const dateFilter = document.getElementById('dateFilter');
+    const selectedValue = dateFilter.value;
+    
+    if (selectedValue === 'single') {
+        const singleDateModal = document.getElementById('singleDateModal');
+        const datePicker = document.getElementById('singleDatePicker');
+        
+        // Set max date to today
+        const today = new Date().toISOString().split('T')[0];
+        datePicker.max = today;
+        
+        // Set current value if exists
+        if (selectedDateFilter.singleDate) {
+            datePicker.value = selectedDateFilter.singleDate;
+        } else {
+            datePicker.value = today;
+        }
+        
+        singleDateModal.style.display = 'block';
+    } else if (selectedValue === 'range') {
+        openRangeDateModal();
+    } else if (selectedValue === 'all') {
+        clearDateFilter();
+    }
+}
+
+// Open date range picker modal
 function openRangeDateModal() {
     const modal = document.getElementById('rangeDateModal');
     const startPicker = document.getElementById('startDatePicker');
@@ -763,33 +870,58 @@ function closeDateModal() {
 function applySingleDate() {
     const datePicker = document.getElementById('singleDatePicker');
     const selectedDate = datePicker.value;
+    const context = sessionStorage.getItem('dateFilterContext') || 'main';
     
     if (!selectedDate) {
         alert('Please select a date');
         return;
     }
     
-    selectedDateFilter.type = 'single';
-    selectedDateFilter.singleDate = selectedDate;
-    selectedDateFilter.startDate = null;
-    selectedDateFilter.endDate = null;
-    
-    // Update display
-    const dateObj = new Date(selectedDate);
-    const dateDisplay = dateObj.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-    });
-    document.getElementById('dateDisplay').textContent = dateDisplay;
-    document.getElementById('dateDisplayGroup').style.display = 'block';
-    
-    // Update filters for API call
-    currentFilters.start_date = selectedDate;
-    currentFilters.end_date = selectedDate;
+    if (context === 'export') {
+        // Apply to export date filter
+        exportDateFilter.type = 'single';
+        exportDateFilter.singleDate = selectedDate;
+        exportDateFilter.startDate = null;
+        exportDateFilter.endDate = null;
+        
+        // Update display
+        const dateObj = new Date(selectedDate);
+        const dateDisplay = dateObj.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+        document.getElementById('exportDateDisplay').textContent = dateDisplay;
+        document.getElementById('exportDateDisplayGroup').style.display = 'block';
+        
+        // Reload export data with date filter
+        loadExportData(selectedDate, selectedDate);
+    } else {
+        // Apply to main date filter
+        selectedDateFilter.type = 'single';
+        selectedDateFilter.singleDate = selectedDate;
+        selectedDateFilter.startDate = null;
+        selectedDateFilter.endDate = null;
+        
+        // Update display
+        const dateObj = new Date(selectedDate);
+        const dateDisplay = dateObj.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+        document.getElementById('dateDisplay').textContent = dateDisplay;
+        document.getElementById('dateDisplayGroup').style.display = 'block';
+        
+        // Update filters for API call
+        currentFilters.start_date = selectedDate;
+        currentFilters.end_date = selectedDate;
+        
+        filterStores();
+    }
     
     closeDateModal();
-    filterStores();
+    sessionStorage.removeItem('dateFilterContext');
 }
 
 // Apply date range filter
@@ -798,6 +930,7 @@ function applyDateRange() {
     const endPicker = document.getElementById('endDatePicker');
     const startDate = startPicker.value;
     const endDate = endPicker.value;
+    const context = sessionStorage.getItem('dateFilterContext') || 'main';
     
     if (!startDate || !endDate) {
         alert('Please select both start and end dates');
@@ -809,10 +942,46 @@ function applyDateRange() {
         return;
     }
     
-    selectedDateFilter.type = 'range';
-    selectedDateFilter.singleDate = null;
-    selectedDateFilter.startDate = startDate;
-    selectedDateFilter.endDate = endDate;
+    if (context === 'export') {
+        // Apply to export date filter
+        exportDateFilter.type = 'range';
+        exportDateFilter.singleDate = null;
+        exportDateFilter.startDate = startDate;
+        exportDateFilter.endDate = endDate;
+        
+        // Update display
+        const startObj = new Date(startDate);
+        const endObj = new Date(endDate);
+        const dateDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        document.getElementById('exportDateDisplay').textContent = dateDisplay;
+        document.getElementById('exportDateDisplayGroup').style.display = 'block';
+        
+        // Reload export data with date filter
+        loadExportData(startDate, endDate);
+    } else {
+        // Apply to main date filter
+        selectedDateFilter.type = 'range';
+        selectedDateFilter.singleDate = null;
+        selectedDateFilter.startDate = startDate;
+        selectedDateFilter.endDate = endDate;
+        
+        // Update display
+        const startObj = new Date(startDate);
+        const endObj = new Date(endDate);
+        const dateDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        document.getElementById('dateDisplay').textContent = dateDisplay;
+        document.getElementById('dateDisplayGroup').style.display = 'block';
+        
+        // Update filters for API call
+        currentFilters.start_date = startDate;
+        currentFilters.end_date = endDate;
+        
+        filterStores();
+    }
+    
+    closeDateModal();
+    sessionStorage.removeItem('dateFilterContext');
+}
     
     // Update display
     const startObj = new Date(startDate);

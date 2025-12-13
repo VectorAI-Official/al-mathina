@@ -347,6 +347,31 @@
                     </button>
                 </div>
                 <div class="modal-body">
+                    <!-- Date Filter for Export -->
+                    <div style="display:flex; gap:12px; margin-bottom:16px; align-items:center; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:200px;">
+                            <label style="font-weight:600; font-size:13px; color:#374151; display:block; margin-bottom:6px;">
+                                <i class="fas fa-calendar-alt"></i> Filter by Date (Export)
+                            </label>
+                            <select id="exportDateFilter" onchange="handleExportDateFilterChange()" style="width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:14px;">
+                                <option value="all">All Days</option>
+                                <option value="single">Select Date</option>
+                                <option value="range">Date Range</option>
+                            </select>
+                        </div>
+                        <div id="exportDateDisplayGroup" style="display: none; flex:1; min-width:200px;">
+                            <label style="font-weight:600; font-size:13px; color:#374151; display:block; margin-bottom:6px;">
+                                <i class="fas fa-calendar-check"></i> Selected Date(s)
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="exportDateDisplay" style="padding: 8px 12px; background: #f5f5f5; border-radius: 4px; font-size: 13px; flex:1;"></span>
+                                <button onclick="clearExportDateFilter()" class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px; white-space:nowrap;">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Search Bar -->
                     <div style="display:flex; gap:12px; margin-bottom:12px; align-items:center;">
                         <div style="flex:1; display:flex; gap:8px; align-items:center; position:relative;">
                             <i class="fas fa-search" style="color:#666; position:absolute; left:10px;"></i>
@@ -371,7 +396,7 @@
                     </div>
                 </div>
                 <div class="modal-actions" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 18px; background:#f8fafc; border-top:1px solid #e5e7eb; border-radius:0 0 14px 14px; box-shadow:0 -2px 14px rgba(0,0,0,0.03);">
-                    <div style="color:#6b7280; font-size:13px;">Search to filter and download the export list.</div>
+                    <div style="color:#6b7280; font-size:13px;">Filter by date and search to refine the export list.</div>
                     <div style="display:flex; gap:10px; align-items:center;">
                         <button class="btn-secondary" onclick="closeExportModal()" style="padding:10px 16px; border-radius:10px; border:1px solid #e5e7eb; background:#f3f4f6; color:#374151; font-weight:600; box-shadow:0 6px 18px rgba(0,0,0,0.06);">Cancel</button>
                         <button class="btn-primary" onclick="downloadExportPDF()" style="padding:10px 18px; border-radius:10px; background:linear-gradient(90deg, #0ea5e9 0%, #22c55e 100%); border:none; color:#fff; font-weight:700; letter-spacing:0.3px; box-shadow:0 10px 30px rgba(34,197,94,0.28);">Download PDF</button>

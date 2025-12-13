@@ -757,32 +757,48 @@ async function addStoreFromSearch(storeName) {
             params.append('end_date', exportDateFilter.endDate);
         }
         
-        params.append('limit', 1);
+        params.append('limit', 20);  // Increased limit to ensure we find exact match
         params.append('skip', 0);
         
         const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
             headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         const stores = data.stores || [];
+        
+        // Find exact match (case-insensitive)
         const store = stores.find(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
         
         if (store) {
-            // Remove if already exists (to avoid duplicates)
+            // Check if already exists in preview table
             const existingIndex = exportSelectedList.findIndex(s => (s.store_name || '').toLowerCase() === storeName.toLowerCase());
+            
             if (existingIndex >= 0) {
-                exportSelectedList.splice(existingIndex, 1);
+                // Already added - show message
+                showToast(`"${store.store_name}" is already in export list`, 'info');
+            } else {
+                // Add to top of preview table
+                exportSelectedList.unshift(store);
+                exportFilteredList = [...exportSelectedList];
+                renderExportPreview();
+                showToast(`✅ Added "${store.store_name}" to export list`, 'success');
             }
-            // Add to top of preview table
-            exportSelectedList.unshift(store);
-            exportFilteredList = [...exportSelectedList];
-            renderExportPreview();
-            showToast(`Added "${store.store_name}" to export list`, 'success');
+            
+            // Refresh search results to update button state
+            if (exportSearchTerm) {
+                await searchExportStores(exportSearchTerm);
+            }
+        } else {
+            showToast(`Store "${storeName}" not found`, 'warning');
         }
     } catch (err) {
         console.error('Failed to add store:', err);
-        showToast('Failed to add store', 'error');
+        showToast('Failed to add store: ' + err.message, 'error');
     }
 }
 

@@ -659,21 +659,6 @@ async function downloadExportPDF() {
     closeExportModal();
 }
 
-
-// Handle date filter dropdown change
-        const allStoresForExport = Array.isArray(arguments[0]) ? arguments[0] : exportStoreList;
-    datePicker.max = today;
-    
-    // Set current value if exists
-    if (selectedDateFilter.singleDate) {
-        datePicker.value = selectedDateFilter.singleDate;
-    } else {
-        datePicker.value = today;
-    }
-    
-    modal.style.display = 'block';
-}
-
 // Open date range picker modal
 function openRangeDateModal() {
     const modal = document.getElementById('rangeDateModal');
@@ -830,27 +815,32 @@ async function exportToPDF() {
         // Show loading
         showLoading();
         
-        // Fetch ALL stores matching current filters
-        const params = new URLSearchParams();
-        if (currentFilters.search) params.append('search', currentFilters.search);
-        if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
-        if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
-        params.append('limit', 10000);
-        params.append('skip', 0);
-        
-        const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
-            headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
+        // Accept pre-filtered list (from preview modal) or fetch if not provided
+        let allStoresForExport = Array.isArray(arguments[0]) ? arguments[0] : null;
+        if (!allStoresForExport || !allStoresForExport.length) {
+            const params = new URLSearchParams();
+            if (currentFilters.search) params.append('search', currentFilters.search);
+            if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
+            if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
+            params.append('limit', 10000);
+            params.append('skip', 0);
+            
+            const response = await fetch(`/admin/api/stores/list?${params.toString()}`, {
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch stores: ${response.status}`);
             }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to fetch stores: ${response.status}`);
+            
+            const data = await response.json();
+            allStoresForExport = data.stores || [];
+            exportStoreList = allStoresForExport;
+            exportFilteredList = [...exportStoreList];
         }
-        
-        const data = await response.json();
-        const allStoresForExport = data.stores || [];
         
         // Get jsPDF from global
         const { jsPDF } = window.jspdf;

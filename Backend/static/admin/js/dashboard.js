@@ -389,7 +389,7 @@ async function loadProducts() {
         allProducts = [];
         document.getElementById('productsTableBody').innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 40px;">
+                <td colspan="6" style="text-align: center; padding: 40px;">
                     <div style="color: #FF9800; font-size: 48px; margin-bottom: 16px;">📦</div>
                     <div style="color: #757575; font-size: 16px; margin-bottom: 8px;">No products in database</div>
                     <div style="color: #9E9E9E; font-size: 14px;">Add your first product using the "Add Product" button</div>
@@ -407,7 +407,7 @@ function displayProducts(products, append = false) {
     if (products.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: #757575;">
+                <td colspan="6" style="text-align: center; padding: 40px; color: #757575;">
                     📦 No products found
                 </td>
             </tr>
@@ -441,10 +441,8 @@ function displayProducts(products, append = false) {
                 <small>${product.weight}</small><br>
                 <small class="item-id">ID: ${product.item_id || 'N/A'}</small>
             </td>
-            <td><span class="category-badge">${product.category_section}</span></td>
-            <td><span class="category-badge">${product.category_main}</span></td>
-            <td><span class="category-badge">${product.category_sub}</span></td>
-            <td><strong>₹${product.price.toFixed(2)}</strong></td>
+            <td><strong>₹${(product.buying_price ?? 0).toFixed(2)}</strong></td>
+            <td><strong>₹${(product.price ?? 0).toFixed(2)}</strong></td>
             <td>${product.stock}</td>
             <td>
                 <div class="action-buttons">

@@ -249,6 +249,45 @@
                         </div>
                     </div>
 
+                    <!-- Payment Tracking Section -->
+                    <div class="detail-section">
+                        <h3><i class="fas fa-wallet"></i> Payment Tracking</h3>
+                        <div class="payment-tracking">
+                            <div class="payment-track-item">
+                                <div class="payment-track-icon blue">
+                                    <i class="fas fa-file-invoice-dollar"></i>
+                                </div>
+                                <div class="payment-track-info">
+                                    <label>Due (Total Revenue)</label>
+                                    <span id="detailTotalDue" class="payment-value total">₹0</span>
+                                </div>
+                            </div>
+                            <div class="payment-track-item">
+                                <div class="payment-track-icon green">
+                                    <i class="fas fa-wallet"></i>
+                                </div>
+                                <div class="payment-track-info">
+                                    <label>Paid</label>
+                                    <div class="payment-editable">
+                                        <span id="detailTotalPaid" class="payment-value paid">₹0</span>
+                                        <button class="btn-edit-payment" onclick="editPaidAmount()" title="Edit paid amount">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="payment-track-item">
+                                <div class="payment-track-icon red">
+                                    <i class="fas fa-hourglass-half"></i>
+                                </div>
+                                <div class="payment-track-info">
+                                    <label>Balance (Remaining)</label>
+                                    <span id="detailBalance" class="payment-value balance">₹0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Orders Section -->
                     <div class="detail-section">
                         <h3><i class="fas fa-list-alt"></i> Order History</h3>

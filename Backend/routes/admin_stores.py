@@ -30,6 +30,10 @@ class StoreDetailResponse(BaseModel):
     revenue: dict
 
 
+class UpdatePaidAmountRequest(BaseModel):
+    paid_amount: float
+
+
 # Helper to serialize MongoDB documents
 def serialize_doc(doc):
     """Convert MongoDB document to JSON-serializable dict"""
@@ -454,4 +458,44 @@ async def get_revenue_summary(
         }
     except Exception as e:
         logger.error(f"Error fetching revenue summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{phone}/paid-amount")
+async def update_paid_amount(
+    phone: str,
+    request: UpdatePaidAmountRequest
+):
+    """
+    Update the paid amount for a store
+    """
+    try:
+        db = get_mongo_db()
+        users_collection = db['users']
+        
+        # Validate paid amount
+        if request.paid_amount < 0:
+            raise HTTPException(status_code=400, detail="Paid amount cannot be negative")
+        
+        # Update the user document
+        result = users_collection.update_one(
+            {"phone": phone},
+            {"$set": {"total_paid": request.paid_amount}}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Store not found")
+        
+        logger.info(f"Updated paid amount for store {phone}: ₹{request.paid_amount}")
+        
+        return {
+            "success": True,
+            "message": "Paid amount updated successfully",
+            "phone": phone,
+            "paid_amount": request.paid_amount
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating paid amount: {e}")
         raise HTTPException(status_code=500, detail=str(e))

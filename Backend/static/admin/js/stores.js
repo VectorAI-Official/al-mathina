@@ -360,6 +360,19 @@ function displayStoreDetail(data) {
     document.getElementById('detailDeliveredOrders').textContent = revenue.delivered_orders;
     document.getElementById('detailCancelledOrders').textContent = revenue.cancelled_orders;
     
+    // Payment tracking (calculated from store data)
+    const totalDue = revenue.total_revenue || 0;
+    const totalPaid = store.total_paid || 0;
+    const balance = totalDue - totalPaid;
+    
+    document.getElementById('detailTotalDue').textContent = `₹${formatCurrency(totalDue)}`;
+    document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(totalPaid)}`;
+    document.getElementById('detailBalance').textContent = `₹${formatCurrency(balance)}`;
+    
+    // Store payment values for editing
+    currentStoreDetail.totalDue = totalDue;
+    currentStoreDetail.totalPaid = totalPaid;
+    
     // Orders
     displayStoreOrders(orders);
 }
@@ -486,6 +499,76 @@ window.onclick = function(event) {
         closeRevenueModal();
     }
 };
+
+// Edit paid amount
+function editPaidAmount() {
+    if (!currentStoreDetail) return;
+    
+    const currentPaid = currentStoreDetail.totalPaid || 0;
+    const newPaid = prompt(`Enter new paid amount:\n\nCurrent: ₹${formatCurrency(currentPaid)}\nTotal Due: ₹${formatCurrency(currentStoreDetail.totalDue)}`, currentPaid);
+    
+    if (newPaid === null) return; // User cancelled
+    
+    const paidAmount = parseFloat(newPaid);
+    
+    if (isNaN(paidAmount) || paidAmount < 0) {
+        showToast('Please enter a valid positive number', 'error');
+        return;
+    }
+    
+    if (paidAmount > currentStoreDetail.totalDue) {
+        if (!confirm(`Paid amount (₹${formatCurrency(paidAmount)}) is greater than total due (₹${formatCurrency(currentStoreDetail.totalDue)}).\n\nContinue anyway?`)) {
+            return;
+        }
+    }
+    
+    updatePaidAmount(paidAmount);
+}
+
+// Update paid amount on backend and refresh display
+async function updatePaidAmount(paidAmount) {
+    if (!currentStoreDetail || !currentStoreDetail.store) return;
+    
+    try {
+        showLoading();
+        
+        const phone = currentStoreDetail.store.phone;
+        const response = await fetch(`/admin/api/stores/${phone}/paid-amount`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ paid_amount: paidAmount })
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to update paid amount');
+        }
+        
+        const data = await response.json();
+        
+        // Update local state
+        currentStoreDetail.totalPaid = paidAmount;
+        currentStoreDetail.store.total_paid = paidAmount;
+        
+        // Update display
+        const balance = currentStoreDetail.totalDue - paidAmount;
+        document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(paidAmount)}`;
+        document.getElementById('detailBalance').textContent = `₹${formatCurrency(balance)}`;
+        
+        showToast('Paid amount updated successfully', 'success');
+        
+        // Reload stores list to reflect changes
+        await loadStores(true);
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Error updating paid amount:', error);
+        showToast(error.message || 'Failed to update paid amount', 'error');
+        hideLoading();
+    }
+}
 
 // Loading state
 function showLoading() {

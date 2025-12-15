@@ -418,6 +418,48 @@ body {
     border-top: 1px solid #e0e0e0;
 }
 
+.store-card-payment {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid #dee2e6;
+    gap: 10px;
+}
+
+.payment-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    flex: 1;
+    justify-content: center;
+}
+
+.payment-stat i {
+    font-size: 14px;
+    color: #495057;
+}
+
+.payment-label {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.payment-value {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.payment-value.paid {
+    color: #28a745;
+}
+
+.payment-value.due {
+    color: #dc3545;
+}
+
 .store-stat {
     display: flex;
     align-items: center;
@@ -986,6 +1028,19 @@ body {
     
     .store-card-footer {
         padding: 12px 15px;
+    }
+    
+    .store-card-payment {
+        padding: 10px 15px;
+        flex-direction: row;
+    }
+    
+    .payment-stat {
+        font-size: 12px;
+    }
+    
+    .payment-value {
+        font-size: 13px;
     }
     
     .store-stat {

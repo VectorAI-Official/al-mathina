@@ -138,6 +138,7 @@ async def get_stores_list(
                 "_id": "$user_phone",
                 "order_count": {"$sum": 1},
                 "total_revenue": {"$sum": "$total_amount"},
+                "total_paid": {"$sum": {"$ifNull": ["$paid_amount", 0]}},
                 "latest_order": {"$max": "$created_at"}
             }}
         ]
@@ -149,6 +150,10 @@ async def get_stores_list(
             phone = user['phone']
             stats = order_stats.get(phone, {})
             
+            total_revenue = round(float(stats.get('total_revenue', 0)), 2)
+            total_paid = round(float(stats.get('total_paid', 0)), 2)
+            balance = round(total_revenue - total_paid, 2)
+            
             store_info = {
                 "_id": str(user['_id']),
                 "phone": phone,
@@ -159,7 +164,9 @@ async def get_stores_list(
                 "state": user.get('store_details', {}).get('state'),
                 "created_at": user.get('created_at').isoformat() if user.get('created_at') else None,
                 "order_count": stats.get('order_count', 0),
-                "total_revenue": round(float(stats.get('total_revenue', 0)), 2),
+                "total_revenue": total_revenue,
+                "total_paid": total_paid,
+                "balance": balance,
                 "latest_order": stats.get('latest_order').isoformat() if stats.get('latest_order') else None
             }
             stores.append(store_info)

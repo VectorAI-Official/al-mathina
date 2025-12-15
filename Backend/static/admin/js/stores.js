@@ -200,6 +200,18 @@ function displayStores(stores) {
                         <span>₹${formatCurrency(store.total_revenue)}</span>
                     </div>
                 </div>
+                <div class="store-card-payment">
+                    <div class="payment-stat">
+                        <i class="fas fa-wallet"></i>
+                        <span class="payment-label">Paid:</span>
+                        <span class="payment-value paid">₹${formatCurrency(store.total_paid || 0)}</span>
+                    </div>
+                    <div class="payment-stat">
+                        <i class="fas fa-hourglass-half"></i>
+                        <span class="payment-label">Due:</span>
+                        <span class="payment-value due">₹${formatCurrency(store.balance || 0)}</span>
+                    </div>
+                </div>
                 ${store.latest_order ? `
                     <div class="store-badge">
                         <i class="fas fa-clock"></i> Last order: ${formatDateRelative(store.latest_order)}

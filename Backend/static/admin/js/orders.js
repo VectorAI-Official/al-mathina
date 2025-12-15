@@ -735,14 +735,15 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
-        // Define page margins (matching print styles)
+        // Define page margins with BUFFER ZONES to prevent text splitting
         const topMargin = 0; // No top margin on first page
-        const bottomMargin = 15; // 15mm bottom margin on all pages (converted to PDF units)
-        const topMarginSubsequent = 20; // 20mm top margin on pages 2+
+        const bottomMargin = 20; // 20mm bottom margin (increased buffer)
+        const topMarginSubsequent = 25; // 25mm top margin on pages 2+ (increased buffer)
+        const safetyBuffer = 5; // 5mm extra safety buffer to avoid row splits
         
-        // Calculate usable heights
-        const firstPageUsableHeight = pdfHeight - bottomMargin; // First page
-        const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin; // Pages 2+
+        // Calculate usable heights (reduced to avoid splitting table rows)
+        const firstPageUsableHeight = pdfHeight - bottomMargin - safetyBuffer; // First page with buffer
+        const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffer
         
         // Calculate scaled image dimensions
         const imgWidth = pdfWidth;
@@ -1282,6 +1283,7 @@ function generateInvoiceHTML(order, opts = {}) {
       border-bottom: 1px solid #E0E0E0;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
+      min-height: ${shareMode ? '40px' : '45px'}; /* Minimum row height for consistent spacing */
     }
     
     .items-table tbody tr:hover {
@@ -1289,7 +1291,7 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .items-table tbody td {
-      padding: ${shareMode ? '10px 8px' : '12px 10px'};
+      padding: ${shareMode ? '12px 8px' : '14px 10px'}; /* Increased padding for better spacing */
       font-size: ${shareMode ? '11px' : '14px'};
       color: #212121;
       vertical-align: middle;

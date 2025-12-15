@@ -736,8 +736,8 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
         // Define page margins (matching print styles)
-        const bottomMargin = 40; // 40mm bottom margin on all pages
-        const topMarginSubsequent = 30; // 30mm top margin on pages 2+
+        const bottomMargin = 15; // 15mm bottom margin on all pages
+        const topMarginSubsequent = 20; // 20mm top margin on pages 2+
         const effectiveFirstPageHeight = pdfHeight - bottomMargin; // First page usable height
         const effectiveSubsequentPageHeight = pdfHeight - topMarginSubsequent - bottomMargin; // Subsequent pages usable height
         
@@ -1076,12 +1076,12 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     @page :first {
-      margin-bottom: 40mm; /* Bottom padding on first page */
+      margin-bottom: 15mm; /* Bottom padding on first page */
     }
     
     @page :not(:first) {
-      margin-top: 30mm; /* Top padding on subsequent pages to prevent item break */
-      margin-bottom: 40mm; /* Bottom padding on all pages */
+      margin-top: 20mm; /* Top padding on subsequent pages to prevent item break */
+      margin-bottom: 15mm; /* Bottom padding on all pages */
     }
     
     html {
@@ -1321,12 +1321,12 @@ function generateInvoiceHTML(order, opts = {}) {
       }
       
       @page :first {
-        margin-bottom: 40mm; /* Bottom padding on first page */
+        margin-bottom: 15mm; /* Bottom padding on first page */
       }
       
       @page :not(:first) {
-        margin-top: 30mm; /* Top padding on subsequent pages to prevent item break */
-        margin-bottom: 40mm; /* Bottom padding on all pages */
+        margin-top: 20mm; /* Top padding on subsequent pages to prevent item break */
+        margin-bottom: 15mm; /* Bottom padding on all pages */
       }
       
       body {
@@ -1370,7 +1370,7 @@ function generateInvoiceHTML(order, opts = {}) {
       }
       
       .total-section {
-        margin-bottom: 10mm; /* Reduced margin since using @page margins */
+        margin-bottom: 5mm; /* Reduced margin since using @page margins */
         page-break-before: avoid !important;
         break-before: avoid !important;
       }

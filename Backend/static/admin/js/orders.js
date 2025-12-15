@@ -735,6 +735,12 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
+        // Define page margins (matching print styles)
+        const bottomMargin = 40; // 40mm bottom margin on all pages
+        const topMarginSubsequent = 30; // 30mm top margin on pages 2+
+        const effectiveFirstPageHeight = pdfHeight - bottomMargin; // First page usable height
+        const effectiveSubsequentPageHeight = pdfHeight - topMarginSubsequent - bottomMargin; // Subsequent pages usable height
+        
         // Calculate image dimensions to fit PDF width
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -742,26 +748,33 @@ async function shareInvoiceWhatsApp(orderId) {
         // Convert canvas to high-quality image
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
         
-        // Add image to PDF with proper pagination
-        if (imgHeight <= pdfHeight) {
-            // Single page - fits perfectly
+        // Add image to PDF with proper pagination and margins
+        if (imgHeight <= effectiveFirstPageHeight) {
+            // Single page - fits perfectly with bottom margin
             pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
         } else {
-            // Multi-page - split content across pages
-            let position = 0;
-            let heightLeft = imgHeight;
+            // Multi-page - split content across pages with proper margins
+            let currentHeight = 0;
+            let pageNumber = 1;
             
-            // First page
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pdfHeight;
+            // First page (only bottom margin)
+            const firstPageContentHeight = effectiveFirstPageHeight;
+            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, '', 'FAST', 0);
+            currentHeight += firstPageContentHeight;
             
-            // Additional pages
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
+            // Additional pages (top and bottom margins)
+            while (currentHeight < imgHeight) {
                 pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pdfHeight;
+                pageNumber++;
+                
+                // Calculate position with top margin on subsequent pages
+                const yPosition = -(currentHeight - topMarginSubsequent);
+                pdf.addImage(imgData, 'JPEG', 0, yPosition, imgWidth, imgHeight, '', 'FAST', 0);
+                
+                currentHeight += effectiveSubsequentPageHeight;
             }
+            
+            console.log(`📄 Generated ${pageNumber} pages with proper margins`);
         }
         
         // Generate PDF file
@@ -1062,6 +1075,15 @@ function generateInvoiceHTML(order, opts = {}) {
       margin: 0;
     }
     
+    @page :first {
+      margin-bottom: 40mm; /* Bottom padding on first page */
+    }
+    
+    @page :not(:first) {
+      margin-top: 30mm; /* Top padding on subsequent pages to prevent item break */
+      margin-bottom: 40mm; /* Bottom padding on all pages */
+    }
+    
     html {
       width: ${shareMode ? pageWidth : 'auto'}px;
       ${shareMode ? 'overflow-x: hidden;' : ''}
@@ -1293,6 +1315,20 @@ function generateInvoiceHTML(order, opts = {}) {
     
     /* Print Styles */
     @media print {
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      
+      @page :first {
+        margin-bottom: 40mm; /* Bottom padding on first page */
+      }
+      
+      @page :not(:first) {
+        margin-top: 30mm; /* Top padding on subsequent pages to prevent item break */
+        margin-bottom: 40mm; /* Bottom padding on all pages */
+      }
+      
       body {
         width: 210mm;
         margin: 0;
@@ -1303,7 +1339,7 @@ function generateInvoiceHTML(order, opts = {}) {
         width: 100%;
         max-width: 100%;
         padding: 15mm;
-        padding-bottom: 40mm; /* Increased bottom spacing to prevent content break */
+        padding-bottom: 0; /* Remove container padding-bottom, using @page margin instead */
       }
       
       .items-table tbody tr:hover {
@@ -1334,13 +1370,13 @@ function generateInvoiceHTML(order, opts = {}) {
       }
       
       .total-section {
-        margin-bottom: 20mm; /* Add margin before footer */
+        margin-bottom: 10mm; /* Reduced margin since using @page margins */
         page-break-before: avoid !important;
         break-before: avoid !important;
       }
       
       .invoice-footer {
-        padding-bottom: 20mm; /* White space at bottom of invoice */
+        padding-bottom: 0; /* Remove padding, using @page margin instead */
         border-top: none; /* No border */
         page-break-before: avoid !important;
         break-before: avoid !important;

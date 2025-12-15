@@ -202,14 +202,19 @@ function displayStores(stores) {
                 </div>
                 <div class="store-card-payment">
                     <div class="payment-stat">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                        <span class="payment-label">Due:</span>
+                        <span class="payment-value total">₹${formatCurrency(store.total_revenue || 0)}</span>
+                    </div>
+                    <div class="payment-stat">
                         <i class="fas fa-wallet"></i>
                         <span class="payment-label">Paid:</span>
                         <span class="payment-value paid">₹${formatCurrency(store.total_paid || 0)}</span>
                     </div>
                     <div class="payment-stat">
                         <i class="fas fa-hourglass-half"></i>
-                        <span class="payment-label">Due:</span>
-                        <span class="payment-value due">₹${formatCurrency(store.balance || 0)}</span>
+                        <span class="payment-label">Balance:</span>
+                        <span class="payment-value balance">₹${formatCurrency(store.balance || 0)}</span>
                     </div>
                 </div>
                 ${store.latest_order ? `

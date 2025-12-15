@@ -452,11 +452,15 @@ body {
     font-size: 14px;
 }
 
+.payment-value.total {
+    color: #007bff;
+}
+
 .payment-value.paid {
     color: #28a745;
 }
 
-.payment-value.due {
+.payment-value.balance {
     color: #dc3545;
 }
 

@@ -736,45 +736,99 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
         // Define page margins (matching print styles)
-        const bottomMargin = 15; // 15mm bottom margin on all pages
+        const topMargin = 0; // No top margin on first page
+        const bottomMargin = 15; // 15mm bottom margin on all pages (converted to PDF units)
         const topMarginSubsequent = 20; // 20mm top margin on pages 2+
-        const effectiveFirstPageHeight = pdfHeight - bottomMargin; // First page usable height
-        const effectiveSubsequentPageHeight = pdfHeight - topMarginSubsequent - bottomMargin; // Subsequent pages usable height
         
-        // Calculate image dimensions to fit PDF width
+        // Calculate usable heights
+        const firstPageUsableHeight = pdfHeight - bottomMargin; // First page
+        const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin; // Pages 2+
+        
+        // Calculate scaled image dimensions
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
         
         // Convert canvas to high-quality image
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
         
-        // Add image to PDF with proper pagination and margins
-        if (imgHeight <= effectiveFirstPageHeight) {
-            // Single page - fits perfectly with bottom margin
-            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+        console.log(`📐 PDF Dimensions: ${pdfWidth}mm x ${pdfHeight}mm`);
+        console.log(`📐 Image Height: ${imgHeight}mm`);
+        console.log(`📐 First Page Usable: ${firstPageUsableHeight}mm`);
+        console.log(`📐 Subsequent Usable: ${subsequentPageUsableHeight}mm`);
+        
+        // Add image to PDF with intelligent pagination
+        if (imgHeight <= firstPageUsableHeight) {
+            // Single page - fits perfectly
+            pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight);
+            console.log('📄 Single page layout');
         } else {
-            // Multi-page - split content across pages with proper margins
-            let currentHeight = 0;
+            // Multi-page pagination with proper breaks
+            let remainingHeight = imgHeight;
+            let sourceY = 0; // Y position in source image (in mm)
             let pageNumber = 1;
             
-            // First page (only bottom margin)
-            const firstPageContentHeight = effectiveFirstPageHeight;
-            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, '', 'FAST', 0);
-            currentHeight += firstPageContentHeight;
+            // First page
+            const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
             
-            // Additional pages (top and bottom margins)
-            while (currentHeight < imgHeight) {
+            // Calculate source dimensions in canvas pixels for clipping
+            const canvasHeight = canvas.height;
+            const canvasWidth = canvas.width;
+            const pixelsPerMm = canvasHeight / imgHeight; // Conversion factor
+            
+            // First page: clip from top of canvas
+            const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
+            
+            // Create canvas for first page
+            const page1Canvas = document.createElement('canvas');
+            page1Canvas.width = canvasWidth;
+            page1Canvas.height = firstPageCanvasHeight;
+            const page1Ctx = page1Canvas.getContext('2d');
+            
+            page1Ctx.drawImage(
+                canvas,
+                0, 0, canvasWidth, firstPageCanvasHeight, // Source clip
+                0, 0, canvasWidth, firstPageCanvasHeight  // Destination
+            );
+            
+            const page1Data = page1Canvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(page1Data, 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
+            
+            sourceY += firstPageHeight;
+            remainingHeight -= firstPageHeight;
+            
+            console.log(`📄 Page 1: ${firstPageHeight}mm (source 0 → ${firstPageHeight}mm)`);
+            
+            // Subsequent pages
+            while (remainingHeight > 0) {
                 pdf.addPage();
                 pageNumber++;
                 
-                // Calculate position with top margin on subsequent pages
-                const yPosition = -(currentHeight - topMarginSubsequent);
-                pdf.addImage(imgData, 'JPEG', 0, yPosition, imgWidth, imgHeight, '', 'FAST', 0);
+                const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
+                const pageCanvasHeight = pageHeight * pixelsPerMm;
+                const sourceCanvasY = sourceY * pixelsPerMm;
                 
-                currentHeight += effectiveSubsequentPageHeight;
+                // Create canvas for this page
+                const pageCanvas = document.createElement('canvas');
+                pageCanvas.width = canvasWidth;
+                pageCanvas.height = pageCanvasHeight;
+                const pageCtx = pageCanvas.getContext('2d');
+                
+                pageCtx.drawImage(
+                    canvas,
+                    0, sourceCanvasY, canvasWidth, pageCanvasHeight, // Source clip
+                    0, 0, canvasWidth, pageCanvasHeight              // Destination
+                );
+                
+                const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
+                pdf.addImage(pageData, 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
+                
+                console.log(`📄 Page ${pageNumber}: ${pageHeight}mm (source ${sourceY}mm → ${sourceY + pageHeight}mm)`);
+                
+                sourceY += pageHeight;
+                remainingHeight -= pageHeight;
             }
             
-            console.log(`📄 Generated ${pageNumber} pages with proper margins`);
+            console.log(`✅ Generated ${pageNumber} pages with intelligent pagination`);
         }
         
         // Generate PDF file
@@ -1226,6 +1280,8 @@ function generateInvoiceHTML(order, opts = {}) {
     
     .items-table tbody tr {
       border-bottom: 1px solid #E0E0E0;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     
     .items-table tbody tr:hover {
@@ -1237,6 +1293,8 @@ function generateInvoiceHTML(order, opts = {}) {
       font-size: ${shareMode ? '11px' : '14px'};
       color: #212121;
       vertical-align: middle;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     
     .items-table tbody td:first-child {

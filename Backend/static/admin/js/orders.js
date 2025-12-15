@@ -735,15 +735,16 @@ async function shareInvoiceWhatsApp(orderId) {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
-        // Define page margins with BUFFER ZONES to prevent text splitting
+        // Define page margins - First page minimal, subsequent pages with safety buffers
         const topMargin = 0; // No top margin on first page
-        const bottomMargin = 20; // 20mm bottom margin (increased buffer)
+        const bottomMarginFirstPage = 10; // 10mm bottom margin on first page only (minimal)
+        const bottomMargin = 20; // 20mm bottom margin on subsequent pages (increased buffer)
         const topMarginSubsequent = 25; // 25mm top margin on pages 2+ (increased buffer)
-        const safetyBuffer = 5; // 5mm extra safety buffer to avoid row splits
+        const safetyBuffer = 5; // 5mm extra safety buffer on subsequent pages to avoid row splits
         
-        // Calculate usable heights (reduced to avoid splitting table rows)
-        const firstPageUsableHeight = pdfHeight - bottomMargin - safetyBuffer; // First page with buffer
-        const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffer
+        // Calculate usable heights - First page gets more space, subsequent pages more conservative
+        const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage; // First page with minimal bottom margin
+        const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffers
         
         // Calculate scaled image dimensions
         const imgWidth = pdfWidth;

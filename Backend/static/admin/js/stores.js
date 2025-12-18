@@ -204,17 +204,17 @@ function displayStores(stores) {
                     <div class="payment-stat">
                         <i class="fas fa-file-invoice-dollar"></i>
                         <span class="payment-label">Due:</span>
-                        <span class="payment-value total">₹${formatCurrency(store.total_revenue || 0)}</span>
+                        <span class="payment-value total">₹${formatCurrency(store.all_time_due || 0)}</span>
                     </div>
                     <div class="payment-stat">
                         <i class="fas fa-wallet"></i>
                         <span class="payment-label">Paid:</span>
-                        <span class="payment-value paid">₹${formatCurrency(store.total_paid || 0)}</span>
+                        <span class="payment-value paid">₹${formatCurrency(store.all_time_paid || 0)}</span>
                     </div>
                     <div class="payment-stat">
                         <i class="fas fa-hourglass-half"></i>
                         <span class="payment-label">Balance:</span>
-                        <span class="payment-value balance">₹${formatCurrency(store.balance || 0)}</span>
+                        <span class="payment-value balance">₹${formatCurrency(store.all_time_balance || 0)}</span>
                     </div>
                 </div>
                 ${store.latest_order ? `
@@ -360,18 +360,18 @@ function displayStoreDetail(data) {
     document.getElementById('detailDeliveredOrders').textContent = revenue.delivered_orders;
     document.getElementById('detailCancelledOrders').textContent = revenue.cancelled_orders;
     
-    // Payment tracking (calculated from store data)
-    const totalDue = revenue.total_revenue || 0;
-    const totalPaid = store.total_paid || 0;
-    const balance = totalDue - totalPaid;
+    // Payment tracking - ALL-TIME totals (independent of date filter)
+    const allTimeDue = store.all_time_due || 0;
+    const allTimePaid = store.all_time_paid || 0;
+    const allTimeBalance = store.all_time_balance || 0;
     
-    document.getElementById('detailTotalDue').textContent = `₹${formatCurrency(totalDue)}`;
-    document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(totalPaid)}`;
-    document.getElementById('detailBalance').textContent = `₹${formatCurrency(balance)}`;
+    document.getElementById('detailTotalDue').textContent = `₹${formatCurrency(allTimeDue)}`;
+    document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(allTimePaid)}`;
+    document.getElementById('detailBalance').textContent = `₹${formatCurrency(allTimeBalance)}`;
     
     // Store payment values for editing
-    currentStoreDetail.totalDue = totalDue;
-    currentStoreDetail.totalPaid = totalPaid;
+    currentStoreDetail.totalDue = allTimeDue;
+    currentStoreDetail.totalPaid = allTimePaid;
     
     // Orders
     displayStoreOrders(orders);

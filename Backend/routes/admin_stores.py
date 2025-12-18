@@ -123,7 +123,7 @@ async def get_stores_list(
         # Use aggregation pipeline for efficient order stats
         user_phones = [user['phone'] for user in users]
         
-        # Build order stats pipeline with date filter if applicable
+        # Build order stats pipeline with date filter if applicable (for order_count and filtered revenue)
         order_match = {"user_phone": {"$in": user_phones}}
         if start_date or end_date:
             date_query = {}
@@ -135,28 +135,43 @@ async def get_stores_list(
                 date_query["$lte"] = end_dt + timedelta(days=1)
             order_match["created_at"] = date_query
         
-        # Batch fetch order stats for all users at once
+        # Batch fetch order stats for all users at once (date-filtered)
         pipeline = [
             {"$match": order_match},
             {"$group": {
                 "_id": "$user_phone",
                 "order_count": {"$sum": 1},
                 "total_revenue": {"$sum": "$total_amount"},
-                "total_paid": {"$sum": {"$ifNull": ["$paid_amount", 0]}},
                 "latest_order": {"$max": "$created_at"}
             }}
         ]
         order_stats = {doc['_id']: doc for doc in orders_collection.aggregate(pipeline)}
+        
+        # Fetch ALL-TIME payment totals (independent of date filter) for Due/Paid/Balance
+        all_time_pipeline = [
+            {"$match": {"user_phone": {"$in": user_phones}}},
+            {"$group": {
+                "_id": "$user_phone",
+                "all_time_revenue": {"$sum": "$total_amount"},
+                "all_time_paid": {"$sum": {"$ifNull": ["$paid_amount", 0]}}
+            }}
+        ]
+        all_time_stats = {doc['_id']: doc for doc in orders_collection.aggregate(all_time_pipeline)}
         
         # Build response with pre-fetched stats
         stores = []
         for user in users:
             phone = user['phone']
             stats = order_stats.get(phone, {})
+            all_time = all_time_stats.get(phone, {})
             
+            # Date-filtered revenue (for display in revenue stat)
             total_revenue = round(float(stats.get('total_revenue', 0)), 2)
-            total_paid = round(float(stats.get('total_paid', 0)), 2)
-            balance = round(total_revenue - total_paid, 2)
+            
+            # ALL-TIME payment totals (independent of date filter)
+            all_time_revenue = round(float(all_time.get('all_time_revenue', 0)), 2)
+            all_time_paid = round(float(all_time.get('all_time_paid', 0)), 2)
+            all_time_balance = round(all_time_revenue - all_time_paid, 2)
             
             store_info = {
                 "_id": str(user['_id']),
@@ -168,9 +183,10 @@ async def get_stores_list(
                 "state": user.get('store_details', {}).get('state'),
                 "created_at": user.get('created_at').isoformat() if user.get('created_at') else None,
                 "order_count": stats.get('order_count', 0),
-                "total_revenue": total_revenue,
-                "total_paid": total_paid,
-                "balance": balance,
+                "total_revenue": total_revenue,  # Date-filtered
+                "all_time_due": all_time_revenue,  # All-time (independent of filter)
+                "all_time_paid": all_time_paid,  # All-time (independent of filter)
+                "all_time_balance": all_time_balance,  # All-time (independent of filter)
                 "latest_order": stats.get('latest_order').isoformat() if stats.get('latest_order') else None
             }
             stores.append(store_info)
@@ -339,7 +355,7 @@ async def get_store_detail(
                 date_query["$lte"] = end_dt + timedelta(days=1)
             orders_query["created_at"] = date_query
         
-        # Fetch orders
+        # Fetch orders (date-filtered)
         orders = list(orders_collection.find(orders_query).sort("created_at", -1))
         
         # Enrich orders with product images
@@ -354,22 +370,38 @@ async def get_store_detail(
             order_data = serialize_doc(order)
             enriched_orders.append(order_data)
         
-        # Calculate revenue statistics
+        # Calculate revenue statistics (date-filtered)
         total_orders = len(enriched_orders)
         total_revenue = sum(float(order.get('total_amount', 0)) for order in enriched_orders)
         
-        # Status breakdown
+        # Status breakdown (date-filtered)
         pending_orders = sum(1 for o in enriched_orders if o.get('status') == 'pending')
         confirmed_orders = sum(1 for o in enriched_orders if o.get('status') == 'confirmed')
         delivered_orders = sum(1 for o in enriched_orders if o.get('status') == 'delivered')
         cancelled_orders = sum(1 for o in enriched_orders if o.get('status') == 'cancelled')
         
-        # Calculate delivered revenue only
+        # Calculate delivered revenue only (date-filtered)
         delivered_revenue = sum(
             float(order.get('total_amount', 0)) 
             for order in enriched_orders 
             if order.get('status') == 'delivered'
         )
+        
+        # Fetch ALL-TIME payment totals (independent of date filter)
+        all_time_pipeline = [
+            {"$match": {"user_phone": phone}},
+            {"$group": {
+                "_id": None,
+                "all_time_revenue": {"$sum": "$total_amount"},
+                "all_time_paid": {"$sum": {"$ifNull": ["$paid_amount", 0]}}
+            }}
+        ]
+        all_time_result = list(orders_collection.aggregate(all_time_pipeline))
+        all_time = all_time_result[0] if all_time_result else {}
+        
+        all_time_due = round(float(all_time.get('all_time_revenue', 0)), 2)
+        all_time_paid = round(float(all_time.get('all_time_paid', 0)), 2)
+        all_time_balance = round(all_time_due - all_time_paid, 2)
         
         # Store details
         store_data = {
@@ -380,7 +412,11 @@ async def get_store_detail(
             "created_at": user.get('created_at').isoformat() if user.get('created_at') else None,
             "updated_at": user.get('updated_at').isoformat() if user.get('updated_at') else None,
             "store_details": user.get('store_details', {}),
-            "addresses": user.get('addresses', [])
+            "addresses": user.get('addresses', []),
+            # All-time payment totals (independent of date filter)
+            "all_time_due": all_time_due,
+            "all_time_paid": all_time_paid,
+            "all_time_balance": all_time_balance
         }
         
         revenue_stats = {

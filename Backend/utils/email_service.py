@@ -159,7 +159,7 @@ class EmailService:
                 items_html += f"""
                 <tr>
                     <td>{idx}</td>
-                    <td style="word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; max-width: 0; font-family: Arial, 'Noto Sans Tamil', sans-serif;">{display_name}</td>
+                    <td style="word-wrap: break-word; font-family: Arial, 'Noto Sans Tamil', sans-serif;">{display_name}</td>
                     <td style="text-align: center;">{quantity}</td>
                     <td style="text-align: right;">₹{price:,.2f}</td>
                     <td style="text-align: right;">₹{total:,.2f}</td>
@@ -226,10 +226,7 @@ class EmailService:
                         font-size: 13px; 
                         word-wrap: break-word; 
                         overflow-wrap: break-word;
-                        word-break: break-word;
                         min-width: 0;
-                        max-width: 0;
-                        vertical-align: top;
                     }}
                     @media screen and (max-width: 640px) {{
                         .table th, .table td {{ 

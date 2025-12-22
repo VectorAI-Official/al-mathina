@@ -442,6 +442,7 @@ function displayProducts(products, append = false) {
                 <small class="item-id">ID: ${product.item_id || 'N/A'}</small>
             </td>
             <td><strong>₹${(product.buying_price ?? 0).toFixed(2)}</strong></td>
+            <td><small>${product.buying_date ? new Date(product.buying_date).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}) : 'N/A'}</small></td>
             <td><strong>₹${(product.price ?? 0).toFixed(2)}</strong></td>
             <td>${product.stock}</td>
             <td>
@@ -595,6 +596,13 @@ async function openCreateModal() {
         itemIdInput.value = 'prod_' + Date.now();
     }
     
+    // Set default buying date to today
+    const buyingDateInput = document.getElementById('productBuyingDate');
+    if (buyingDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        buyingDateInput.value = today;
+    }
+    
     // Reset category dropdowns
     const sectionSelect = document.getElementById('productSection');
     const mainCategorySelect = document.getElementById('productMainCategory');
@@ -640,6 +648,13 @@ async function openAddProductFromMobile(section, mainCategory, subCategory) {
     } catch (error) {
         console.error('Error generating item ID:', error);
         itemIdInput.value = 'prod_' + Date.now();
+    }
+    
+    // Set default buying date to today
+    const buyingDateInput = document.getElementById('productBuyingDate');
+    if (buyingDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        buyingDateInput.value = today;
     }
     
     // Hide all "add new" inputs (section input removed)
@@ -911,6 +926,7 @@ async function handleProductSubmit(e) {
             weight: document.getElementById('productWeight').value,
             price: parseFloat(document.getElementById('productPrice').value), // Selling price
             buying_price: parseFloat(document.getElementById('productBuyingPrice').value), // Cost price (required)
+            buying_date: document.getElementById('productBuyingDate').value, // Purchase date (required)
             stock: parseInt(document.getElementById('productStock').value),
             description: document.getElementById('productDescription').value,
             active: document.getElementById('productActive').checked

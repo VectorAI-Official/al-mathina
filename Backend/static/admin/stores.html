@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Revenue Management - AL-Madhina Admin</title>
-    <link rel="stylesheet" href="/static/admin/css/stores.css?v=1.9">
+    <link rel="stylesheet" href="/static/admin/css/stores.css?v=2.1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts - Noto Sans Tamil for proper Tamil rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,10 +26,34 @@
         <div class="stores-header">
             <div class="header-content">
                 <h1><i class="fas fa-store"></i> Revenue Management</h1>
-                <button class="btn btn-primary back-to-dashboard-btn" onclick="window.location.href='/admin/dashboard'">
-                    <i class="fas fa-arrow-left"></i> Back to Dashboard
-                </button>
+                <div class="header-actions">
+                    <button class="btn btn-secondary navigate-btn" onclick="window.location.href='/admin/orders'" title="Go to Orders Management">
+                        <i class="fas fa-shopping-cart"></i> Orders
+                    </button>
+                    <button class="btn btn-primary back-to-dashboard-btn" onclick="window.location.href='/admin/dashboard'">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
             </div>
+        </div>
+
+        <!-- Quick Date Filters -->
+        <div class="quick-date-filters">
+            <button class="quick-filter-btn active" data-filter="all" onclick="applyQuickDateFilter('all')">
+                <i class="fas fa-infinity"></i> All Time
+            </button>
+            <button class="quick-filter-btn" data-filter="daily" onclick="applyQuickDateFilter('daily')">
+                <i class="fas fa-calendar-day"></i> Daily
+            </button>
+            <button class="quick-filter-btn" data-filter="monthly" onclick="applyQuickDateFilter('monthly')">
+                <i class="fas fa-calendar-week"></i> Monthly
+            </button>
+            <button class="quick-filter-btn" data-filter="yearly" onclick="applyQuickDateFilter('yearly')">
+                <i class="fas fa-calendar-alt"></i> Yearly
+            </button>
+            <button class="quick-filter-btn" data-filter="summary" onclick="showMonthlySummary()">
+                <i class="fas fa-chart-line"></i> Monthly Summary
+            </button>
         </div>
 
         <!-- Store Statistics -->
@@ -251,7 +275,12 @@
 
                     <!-- Payment Tracking Section -->
                     <div class="detail-section">
-                        <h3><i class="fas fa-wallet"></i> Payment Tracking</h3>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                            <h3 style="margin:0; display:flex; align-items:center; gap:8px;"><i class="fas fa-wallet"></i> Payment Tracking</h3>
+                            <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:6px;" onclick="showPaymentHistory()">
+                                <i class="fas fa-history"></i> Payment History
+                            </button>
+                        </div>
                         <div class="payment-tracking">
                             <div class="payment-track-item">
                                 <div class="payment-track-icon blue">
@@ -295,6 +324,31 @@
                             <!-- Order cards will be inserted here -->
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment History Modal -->
+        <div id="paymentHistoryModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width:600px; width:90%;">
+                <div class="modal-header">
+                    <h2><i class="fas fa-history"></i> Payment History</h2>
+                    <button class="modal-close" onclick="closePaymentHistory()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body" style="max-height:60vh; overflow:auto;">
+                    <table class="products-table" style="margin:0;">
+                        <thead>
+                            <tr>
+                                <th style="width:40%;">Paid Amt</th>
+                                <th style="width:60%;">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentHistoryTableBody">
+                            <tr><td colspan="2" style="text-align:center; padding:16px;">No history yet</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -458,6 +512,58 @@
         </div>
     </div>
 
-    <script src="/static/admin/js/stores.js?v=1.6"></script>
+    <script src="/static/admin/js/stores.js?v=1.7"></script>
+    <!-- Monthly Summary Modal -->
+    <div id="monthlySummaryModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content monthly-summary-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-chart-bar"></i> Monthly Summary - <span id="summaryMonthYear"></span></h2>
+                <button class="close-btn" onclick="closeMonthlySummary()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="summaryLoading" class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i> Loading daily breakdown...
+                </div>
+                <div id="summaryContent" style="display: none;">
+                    <div class="summary-stats">
+                        <div class="summary-stat-card">
+                            <div class="stat-label">Total Days</div>
+                            <div class="stat-value" id="summaryTotalDays">-</div>
+                        </div>
+                        <div class="summary-stat-card">
+                            <div class="stat-label">Total Orders</div>
+                            <div class="stat-value" id="summaryTotalOrders">-</div>
+                        </div>
+                        <div class="summary-stat-card">
+                            <div class="stat-label">Total Revenue</div>
+                            <div class="stat-value" id="summaryTotalRevenue">-</div>
+                        </div>
+                        <div class="summary-stat-card">
+                            <div class="stat-label">Avg per Day</div>
+                            <div class="stat-value" id="summaryAvgRevenue">-</div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="summary-table">
+                            <thead>
+                                <tr>
+                                    <th>Day</th>
+                                    <th>Date</th>
+                                    <th>Orders</th>
+                                    <th>Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summaryTableBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

@@ -181,6 +181,7 @@ async def add_product(
     weight: str = Form(...),
     price: float = Form(...),
     buying_price: float = Form(...),
+    buying_date: str = Form(...),
     stock: int = Form(...),
     description: str = Form(""),
     active: bool = Form(True)
@@ -213,6 +214,7 @@ async def add_product(
             "weight": weight,
             "price": price,
             "buying_price": buying_price,
+            "buying_date": buying_date,
             "stock": stock,
             "active": active,
             "description": description,
@@ -247,6 +249,7 @@ async def update_product(
     weight: Optional[str] = Form(None),
     price: Optional[float] = Form(None),
     buying_price: Optional[float] = Form(None),
+    buying_date: Optional[str] = Form(None),
     stock: Optional[int] = Form(None),
     description: Optional[str] = Form(None),
     active: Optional[bool] = Form(None)
@@ -276,6 +279,8 @@ async def update_product(
             update_fields["price"] = price
         if buying_price is not None:
             update_fields["buying_price"] = buying_price
+        if buying_date is not None:
+            update_fields["buying_date"] = buying_date
         if stock is not None:
             update_fields["stock"] = stock
         if description is not None:

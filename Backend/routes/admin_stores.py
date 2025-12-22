@@ -68,16 +68,19 @@ async def get_stores_list(
     """
     Get stores with pagination for lazy loading
     Returns limited results with has_more flag
+    
+    IMPORTANT: Date filters apply ONLY to order stats, NOT to which stores are shown.
+    All stores are always displayed, but their order counts/revenue reflect the date filter.
     """
     try:
         db = get_mongo_db()
         users_collection = db['users']
         orders_collection = db['orders']
         
-        # Build query filter for users
+        # Build query filter for users (NEVER filter stores by date - show ALL stores)
         user_query = {}
         
-        # Search filter
+        # Search filter (only filter that affects which stores are shown)
         if search:
             user_query["$or"] = [
                 {"store_details.store_name": {"$regex": search, "$options": "i"}},
@@ -85,38 +88,7 @@ async def get_stores_list(
                 {"name": {"$regex": search, "$options": "i"}}
             ]
         
-        # Date filter - filter by order date, not user registration date
-        user_phones_with_orders = None
-        if start_date or end_date:
-            date_query = {}
-            if start_date:
-                date_query["$gte"] = datetime.fromisoformat(start_date)
-            if end_date:
-                from datetime import timedelta
-                end_dt = datetime.fromisoformat(end_date)
-                date_query["$lte"] = end_dt + timedelta(days=1)
-            
-            # Find all users who placed orders in the date range
-            orders_in_range = orders_collection.find(
-                {"created_at": date_query},
-                {"user_phone": 1}
-            ).distinct("user_phone")
-            
-            user_phones_with_orders = set(orders_in_range)
-            
-            # Add to user query to filter only users with orders in date range
-            if user_phones_with_orders:
-                user_query["phone"] = {"$in": list(user_phones_with_orders)}
-            else:
-                # No orders in date range, return empty
-                return {
-                    "success": True,
-                    "stores": [],
-                    "total": 0,
-                    "has_more": False
-                }
-        
-        # Fetch all matching users
+        # Fetch all matching users (not filtered by order dates)
         total_count = users_collection.count_documents(user_query)
         users = list(users_collection.find(user_query).sort("created_at", -1).skip(skip).limit(limit))
         
@@ -146,14 +118,13 @@ async def get_stores_list(
             }}
         ]
         order_stats = {doc['_id']: doc for doc in orders_collection.aggregate(pipeline)}
-        
-        # Fetch ALL-TIME payment totals (independent of date filter) for Due/Paid/Balance
+
+        # Fetch ALL-TIME revenue totals (independent of date filter) for Due calculations
         all_time_pipeline = [
             {"$match": {"user_phone": {"$in": user_phones}}},
             {"$group": {
                 "_id": "$user_phone",
-                "all_time_revenue": {"$sum": "$total_amount"},
-                "all_time_paid": {"$sum": {"$ifNull": ["$paid_amount", 0]}}
+                "all_time_revenue": {"$sum": "$total_amount"}
             }}
         ]
         all_time_stats = {doc['_id']: doc for doc in orders_collection.aggregate(all_time_pipeline)}
@@ -168,9 +139,9 @@ async def get_stores_list(
             # Date-filtered revenue (for display in revenue stat)
             total_revenue = round(float(stats.get('total_revenue', 0)), 2)
             
-            # ALL-TIME payment totals (independent of date filter)
+            # ALL-TIME totals (independent of date filter)
             all_time_revenue = round(float(all_time.get('all_time_revenue', 0)), 2)
-            all_time_paid = round(float(all_time.get('all_time_paid', 0)), 2)
+            all_time_paid = round(float(user.get('total_paid', 0)), 2)
             all_time_balance = round(all_time_revenue - all_time_paid, 2)
             
             store_info = {
@@ -212,16 +183,19 @@ async def get_stores_statistics(
     """
     Get statistics for ALL stores matching the filters
     Used independently from pagination to show accurate totals
+    
+    IMPORTANT: Date filters apply ONLY to orders/revenue, NOT to store count.
+    Store count always shows ALL stores (regardless of when they ordered).
     """
     try:
         db = get_mongo_db()
         users_collection = db['users']
         orders_collection = db['orders']
         
-        # Build same query filter as /list endpoint
+        # Build user query (for store count) - NEVER filter by date here
         user_query = {}
         
-        # Search filter
+        # Search filter (only applies to store count if search is active)
         if search:
             user_query["$or"] = [
                 {"store_details.store_name": {"$regex": search, "$options": "i"}},
@@ -229,39 +203,10 @@ async def get_stores_statistics(
                 {"name": {"$regex": search, "$options": "i"}}
             ]
         
-        # Date filter - filter by order date, not user registration date
-        if start_date or end_date:
-            date_query = {}
-            if start_date:
-                date_query["$gte"] = datetime.fromisoformat(start_date)
-            if end_date:
-                from datetime import timedelta
-                end_dt = datetime.fromisoformat(end_date)
-                date_query["$lte"] = end_dt + timedelta(days=1)
-            
-            # Find all users who placed orders in the date range
-            orders_in_range = orders_collection.find(
-                {"created_at": date_query},
-                {"user_phone": 1}
-            ).distinct("user_phone")
-            
-            user_phones_with_orders = set(orders_in_range)
-            
-            # Add to user query to filter only users with orders in date range
-            if user_phones_with_orders:
-                user_query["phone"] = {"$in": list(user_phones_with_orders)}
-            else:
-                # No orders in date range, return zero stats
-                return {
-                    "success": True,
-                    "total_stores": 0,
-                    "total_orders": 0,
-                    "total_revenue": 0.0,
-                    "avg_per_store": 0.0
-                }
-        
-        # Get total count and all matching phone numbers
+        # Get total store count (ALWAYS all stores, never filtered by date)
         total_stores = users_collection.count_documents(user_query)
+        
+        # Get all user phones for order filtering
         user_phones = [user['phone'] for user in users_collection.find(user_query, {"phone": 1})]
         
         # Build order match query with date filter if applicable
@@ -387,21 +332,31 @@ async def get_store_detail(
             if order.get('status') == 'delivered'
         )
         
-        # Fetch ALL-TIME payment totals (independent of date filter)
+        # Fetch ALL-TIME totals (independent of date filter)
         all_time_pipeline = [
             {"$match": {"user_phone": phone}},
             {"$group": {
                 "_id": None,
-                "all_time_revenue": {"$sum": "$total_amount"},
-                "all_time_paid": {"$sum": {"$ifNull": ["$paid_amount", 0]}}
+                "all_time_revenue": {"$sum": "$total_amount"}
             }}
         ]
         all_time_result = list(orders_collection.aggregate(all_time_pipeline))
         all_time = all_time_result[0] if all_time_result else {}
         
         all_time_due = round(float(all_time.get('all_time_revenue', 0)), 2)
-        all_time_paid = round(float(all_time.get('all_time_paid', 0)), 2)
+        all_time_paid = round(float(user.get('total_paid', 0)), 2)
         all_time_balance = round(all_time_due - all_time_paid, 2)
+
+        # Payment history (all-time, independent of filters)
+        payment_history = []
+        for entry in user.get('payment_history', []):
+            amount = float(entry.get('amount', 0)) if isinstance(entry, dict) else 0
+            ts = entry.get('timestamp') if isinstance(entry, dict) else None
+            if isinstance(ts, datetime):
+                ts = ts.isoformat()
+            elif isinstance(ts, str):
+                ts = ts
+            payment_history.append({"amount": amount, "timestamp": ts})
         
         # Store details
         store_data = {
@@ -416,7 +371,8 @@ async def get_store_detail(
             # All-time payment totals (independent of date filter)
             "all_time_due": all_time_due,
             "all_time_paid": all_time_paid,
-            "all_time_balance": all_time_balance
+            "all_time_balance": all_time_balance,
+            "payment_history": payment_history
         }
         
         revenue_stats = {
@@ -513,10 +469,19 @@ async def update_paid_amount(
         if request.paid_amount < 0:
             raise HTTPException(status_code=400, detail="Paid amount cannot be negative")
         
-        # Update the user document
+        # Build payment history entry
+        history_entry = {
+            "amount": request.paid_amount,
+            "timestamp": datetime.utcnow()
+        }
+
+        # Update the user document and append history
         result = users_collection.update_one(
             {"phone": phone},
-            {"$set": {"total_paid": request.paid_amount}}
+            {
+                "$set": {"total_paid": request.paid_amount},
+                "$push": {"payment_history": history_entry}
+            }
         )
         
         if result.matched_count == 0:
@@ -528,7 +493,8 @@ async def update_paid_amount(
             "success": True,
             "message": "Paid amount updated successfully",
             "phone": phone,
-            "paid_amount": request.paid_amount
+            "paid_amount": request.paid_amount,
+            "history_entry": serialize_doc(history_entry)
         }
     except HTTPException:
         raise

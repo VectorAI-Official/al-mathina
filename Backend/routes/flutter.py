@@ -319,25 +319,48 @@ async def get_products(
     section: str = Query(None, description="Section name"),
     main_category: str = Query(None, description="Main category name"),
     subcategory: str = Query(None, description="Subcategory name"),
+    user_phone: str = Query(None, description="User phone number for admin check"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Products per page")
 ):
     """
     Get products with optional filters and pagination.
+    NOW SUPPORTS ADMIN USERS: If user_phone belongs to an admin, buying_price is included in response.
     
     Args:
     - section: Section name (optional)
     - main_category: Main category name (optional)
     - subcategory: Subcategory name (optional)
+    - user_phone: User phone number to check admin status (optional)
     - page: Page number (default: 1)
     - limit: Products per page (default: 20, max: 100)
     
     Returns:
-    - Paginated list of products
+    - Paginated list of products (with buying_price if admin user)
     """
     try:
         db = get_mongo_db()
         products_collection = db["products"]
+        
+        # Check if user is admin
+        is_admin = False
+        if user_phone:
+            try:
+                from database.supabase_client import get_supabase_client
+                supabase = get_supabase_client()
+                
+                # Try with the phone as-is first
+                user_response = supabase.table('users').select('is_admin').eq('phone', user_phone).execute()
+                
+                # If not found and phone doesn't have +91, try adding it
+                if (not user_response.data or len(user_response.data) == 0) and not user_phone.startswith('+'):
+                    user_response = supabase.table('users').select('is_admin').eq('phone', f'+91{user_phone}').execute()
+                
+                if user_response.data and len(user_response.data) > 0:
+                    is_admin = user_response.data[0].get('is_admin', False)
+                    logger.info(f"User {user_phone} admin status: {is_admin}")
+            except Exception as e:
+                logger.warning(f"Failed to check admin status for {user_phone}: {e}")
         
         # Build query with optional filters
         query = {"active": True}
@@ -362,7 +385,7 @@ async def get_products(
         products = []
         for prod in products_cursor:
             raw_image = prod.get("image_url", prod.get("image", ""))
-            products.append({
+            product_data = {
                 "item_id": prod.get("item_id"),
                 "section": prod.get("category_section"),  # Fix: use category_section from DB
                 "main_category": prod.get("category_main"),  # Fix: use category_main from DB
@@ -376,10 +399,17 @@ async def get_products(
                 "in_stock": prod.get("stock", 0) > 0,
                 "is_best_seller": prod.get("is_best_seller", False),
                 "description": prod.get("description", "")
-            })
+            }
+            
+            # Add buying_price ONLY for admin users
+            if is_admin:
+                product_data["buying_price"] = float(prod.get("buying_price", 0.0))
+            
+            products.append(product_data)
         
         response = {
             "products": products,
+            "is_admin": is_admin,  # Include admin status in response
             "pagination": {
                 "current_page": page,
                 "total_pages": total_pages,
@@ -398,7 +428,7 @@ async def get_products(
         if subcategory:
             response["subcategory"] = subcategory
         
-        logger.info(f"Retrieved {len(products)} products (filters: section={section}, main_category={main_category}, subcategory={subcategory}, page={page})")
+        logger.info(f"Retrieved {len(products)} products (admin={is_admin}, filters: section={section}, main_category={main_category}, subcategory={subcategory}, page={page})")
         
         return response
         

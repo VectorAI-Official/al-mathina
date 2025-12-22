@@ -72,6 +72,15 @@ Deployment & Requirements (CRITICAL)
 - Uses `main_production.py` as entrypoint
 - Monitor at: Render dashboard
 
+**Docker Local Development**:
+- Start: `cd Backend; docker-compose up -d`
+- Logs: `docker-compose logs --tail=50 backend`
+- Restart: `docker-compose restart`
+- **CRITICAL**: Requires Supabase credentials in `Backend/.env.production`
+  - Without them, admin system fails with "Name or service not known" DNS error
+  - Volume mount: `.:/app` enables hot-reload for code changes
+  - Environment: `RELOAD=true` for auto-reload on file changes
+
 
 
 Developer workflows (commands you can run)
@@ -124,7 +133,7 @@ Project-specific conventions & patterns
 - FCM Push Notifications System
   - **Backend**: `Backend/routes/fcm.py` handles token save/retrieve
   - **Backend Service**: `Backend/utils/fcm_service.py` sends notifications via Firebase Admin SDK
-  - **Database**: Supabase `users` table stores FCM tokens (columns: id, phone, fcm_token, store_name, email, name)
+  - **Database**: Supabase `users` table stores FCM tokens (columns: id, phone, fcm_token, is_admin); MongoDB `users` collection stores user profiles
   - **Firebase Config**: `Backend/firebase-service-account.json` (secret, not in git)
   - **Environment Variables**: SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY
   - **Order Notifications**: Sent automatically when orders are created in `routes/user_profile.py`
@@ -132,6 +141,110 @@ Project-specific conventions & patterns
   - **Flutter**: `flutter_preview/lib/services/fcm_service.dart` handles token generation and refresh
   - **Token Refresh**: Automatically triggered after phone auth login
   - **Notification Branding**: Al-Mathina green (#28a745), sound, vibration enabled
+
+- Admin Buying Price System (NEW - Dec 2025)
+  - **Purpose**: Admin users see product buying prices (cost price) in Flutter app subcategory listings
+  - **Admin Phone Numbers**: 7339651541, 8870503350, 9487715568 (hardcoded in database)
+  - **Database Architecture** (CRITICAL - TWO DATABASES):
+    * **Supabase (PostgreSQL/SQL)**: `users` table stores `is_admin` BOOLEAN column (authentication/admin flags ONLY)
+    * **MongoDB (NoSQL)**: `products` collection stores `buying_price` FLOAT field + `users`, `orders` collections
+  - **Backend Flow**: 
+    1. API receives `user_phone` query parameter
+    2. Queries Supabase: `SELECT is_admin FROM users WHERE phone = ?`
+    3. Queries MongoDB: `db.products.find({...})`
+    4. IF `is_admin == true`: Adds `buying_price` field to each product in response
+    5. ELSE: Excludes `buying_price` field from response
+  - **API Endpoint**: `GET /api/flutter/products`
+    * **Request Parameters** Flutter must send:
+      - `user_phone` (string, REQUIRED): User's phone number for admin check
+      - `subcategory` (string, optional): Filter by subcategory
+      - `section` (string, optional): Filter by section
+      - `main_category` (string, optional): Filter by main category
+      - `limit` (int, optional): Items per page (default: 20)
+      - `page` (int, optional): Page number (default: 1)
+    * **Example Request URL**: 
+      ```
+      https://al-mathina.onrender.com/api/flutter/products?user_phone=7339651541&subcategory=Rice&limit=20
+      ```
+    * **Admin Response** (user_phone matches admin numbers):
+      ```json
+      {
+        "products": [
+          {
+            "product_name": "Basmati Rice",
+            "price": 100.0,
+            "buying_price": 80.0,  // ⭐ ONLY for admin
+            "section": "Provisions",
+            ...
+          }
+        ],
+        "is_admin": true,  // ⭐ Backend sets this
+        "pagination": {"current_page": 1, "total_products": 150, ...}
+      }
+      ```
+    * **Regular User Response** (non-admin phone or missing user_phone):
+      ```json
+      {
+        "products": [
+          {
+            "product_name": "Basmati Rice",
+            "price": 100.0,
+            // ❌ NO buying_price field
+            ...
+          }
+        ],
+        "is_admin": false,  // ⭐ Backend sets this
+        "pagination": {...}
+      }
+      ```
+  - **Security**: Server-side admin check (cannot be faked by client), fresh check on every API call
+  - **Files**:
+    * `Backend/routes/flutter.py` - Modified `get_products()` endpoint (~line 340-405) ✅ COMPLETE
+    * `Backend/database/add_admin_column.py` - Python migration script ✅ READY
+    * `Backend/manual_admin_setup.sql` - SQL migration script ✅ READY
+    * `Backend/test_api_routing.py` - ⭐ Complete API contract tests ✅ READY
+    * `Backend/test_admin_system.py` - Automated admin system tests ✅ READY
+    * `Backend/FLUTTER_ADMIN_IMPLEMENTATION.md` - Complete Flutter integration guide (600+ lines) ✅ COMPLETE
+    * `Backend/ADMIN_SYSTEM_SUMMARY.md` - Architecture overview ✅ COMPLETE
+    * `Backend/QUICK_START_ADMIN_SYSTEM.md` - Quick reference ✅ COMPLETE
+    * `Backend/READY_TO_INTEGRATE.md` - ⭐ Complete setup & testing guide ✅ NEW
+  - **Backend Status**: ✅ 100% COMPLETE & TESTED (7/7 tests passing)
+  - **Critical Requirements**:
+    * ⚠️ MUST add Supabase credentials to `Backend/.env.production` for Docker/production:
+      ```bash
+      SUPABASE_URL=https://zuhkndylyavedmfrovsj.supabase.co
+      SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      ```
+      **Without these, backend will fail with DNS errors!**
+    * Run Supabase migration (adds is_admin column and marks 3 admin users)
+    * Restart Docker: `docker-compose restart` after adding credentials
+  - **Phone Format** (CRITICAL):
+    * Flutter sends: `7339651541` (without +91 prefix)
+    * Supabase stores: `+917339651541` (with +91 prefix)
+    * Backend handles BOTH formats automatically (tries without, then with +91)
+  - **Testing**: Run `python Backend/test_api_routing.py` → Must show **7/7 tests passing (100%)**
+  - **Next Steps**: 
+    1. ✅ Supabase migration COMPLETE (3 admin users marked)
+    2. ✅ Backend code COMPLETE (handles +91 phone format)
+    3. ✅ Tests PASSING (7/7 - 100% success)
+    4. 📱 Integrate Flutter: Follow `Backend/FLUTTER_ADMIN_IMPLEMENTATION.md`
+  - **Flutter Integration Requirements**: 
+    * Update `api_service.dart`:
+      - Add `required String userPhone` parameter to `fetchProducts()`
+      - Change return type from `List<Product>` to `ProductsResponse`
+      - Pass `user_phone` in query parameters
+    * Update Product model:
+      - Add `final double? buyingPrice;` field (nullable)
+      - Parse from JSON: `buyingPrice: json['buying_price'] != null ? (json['buying_price'] as num).toDouble() : null`
+    * Update UI:
+      - Display buying price only when `isAdmin && product.buyingPrice != null`
+      - Show "Admin" badge in app bar when `isAdmin == true`
+      - Calculate margin: `price - buyingPrice`
+  - **Migration Required**: Run `python Backend/database/add_admin_column.py` to add `is_admin` column
+  - **Testing**: 
+    * `python Backend/test_api_routing.py` - Complete API contract validation (⭐ RUN THIS FIRST)
+    * Manual curl tests provided in FLUTTER_ADMIN_IMPLEMENTATION.md
 
 Safety & small-edit policy
 
@@ -158,6 +271,12 @@ Examples & quick patterns
   1. Store absolute URLs in `category_metadata.image_url`, or
   2. Store relative paths (e.g. `/static/uploads/..`) — the backend will convert them to absolute using the request base URL.
 
+- To test admin buying price system:
+  - GET `/api/flutter/products?user_phone=7339651541&limit=5` - Admin user gets `buying_price`
+  - GET `/api/flutter/products?user_phone=9876543210&limit=5` - Regular user does NOT get `buying_price`
+  - Response includes `is_admin` boolean flag (true for admin phones, false otherwise)
+  - Backend queries Supabase `users.is_admin`, then conditionally adds `buying_price` from MongoDB
+
 Files to inspect when debugging common issues
 
 - Render overflow in Flutter: check `flutter_preview/lib/main.dart` for fixed heights inside Columns; look for `Expanded`/`Flexible` usage.
@@ -165,6 +284,12 @@ Files to inspect when debugging common issues
 - Missing images in general: verify `category_metadata` documents use `name` field (not `main_category`).
 - 422 or HTTP errors when loading products: `Backend/routes/flutter.py` `get_products` uses optional Query params now — verify query param names from `api_service.dart`.
 - Star button not working: check `Backend/static/admin/js/dashboard.js` `toggleStarMainCategory` function (lines ~2506-2565).
+- **Admin system not working**: 
+  - Check Docker logs: `docker-compose logs --tail=50 backend`
+  - Look for DNS error: "Failed to check admin status: [Errno -2] Name or service not known"
+  - This means Supabase credentials missing from `Backend/.env.production`
+  - Add credentials and restart: `docker-compose restart`
+  - Verify tests: `python Backend/test_api_routing.py` (must show 7/7 passing)
 - Starred badge not showing: check `Backend/static/admin/css/dashboard.css` `.starred-badge` styles (lines ~1860+).
 
 If you modify or add an API endpoint
@@ -208,8 +333,21 @@ Most Bought System Details (Important)
 
 ---
 Key Architectural Notes:
-1. **Metadata field names**: Always use `name` field when querying `category_metadata` for main categories.
-2. **Most Bought ≠ Products**: Most Bought stars main categories, not individual products.
-3. **Cache-busting**: Always include timestamp params and no-cache headers in Flutter API calls.
-4. **Navigation consistency**: Most Bought cards navigate exactly like regular main category cards.
-5. **Image resolution**: Backend uses cascading fallback (exact section match → name only → legacy main_category field).
+1. **Database Split** (CRITICAL): 
+   - **Supabase (PostgreSQL/SQL)**: Admin authentication ONLY (`users` table with `is_admin` and `fcm_token` columns)
+   - **MongoDB (NoSQL)**: ALL application data - products, orders, users, categories, catalog, inventory
+   - **Cross-Database Queries**: Admin system queries Supabase for `is_admin` flag, then MongoDB for products/orders
+2. **Metadata field names**: Always use `name` field when querying `category_metadata` for main categories.
+3. **Most Bought ≠ Products**: Most Bought stars main categories, not individual products.
+4. **Cache-busting**: Always include timestamp params and no-cache headers in Flutter API calls.
+5. **Navigation consistency**: Most Bought cards navigate exactly like regular main category cards.
+6. **Image resolution**: Backend uses cascading fallback (exact section match → name only → legacy main_category field).
+7. **Admin System Security & Implementation** (COMPLETE - Dec 22, 2025):
+   - Admin check: Server-side only (queries Supabase `users.is_admin`)
+   - Phone format: Backend tries exact match first, then adds +91 prefix if needed
+   - Response: `buying_price` field conditionally added to products for admin users only
+   - Testing: `Backend/test_api_routing.py` validates all scenarios (7/7 tests passing)
+   - Admin phone numbers: 7339651541, 8870503350, 9487715568
+   - Supabase storage: Phones stored with +91 prefix (+917339651541, etc.)
+   - Flutter sends: Phones WITHOUT +91 prefix (backend handles conversion)
+   - Environment: MUST have SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY in .env.production

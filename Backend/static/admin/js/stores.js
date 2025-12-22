@@ -26,6 +26,9 @@ let selectedDateFilter = {
     endDate: null
 };
 
+// Quick filter state
+let currentQuickFilter = 'all'; // 'all', 'daily', 'monthly', 'yearly'
+
 // Header scroll behavior state
 let lastScrollTop = 0;
 let scrollTimeout;
@@ -36,6 +39,94 @@ document.addEventListener('DOMContentLoaded', () => {
     setupScrollListener();
     setupHeaderScrollBehavior();
 });
+
+// Apply quick date filter (Daily, Monthly, Yearly)
+function applyQuickDateFilter(filterType) {
+    console.log('📅 Quick Date Filter Applied:', filterType);
+    
+    // Update active button state
+    document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-filter="${filterType}"]`).classList.add('active');
+    
+    // Store current filter
+    currentQuickFilter = filterType;
+    
+    const now = new Date();
+    let startDate = null;
+    let endDate = null;
+    
+    if (filterType === 'all') {
+        // All time - no date filters
+        currentFilters.start_date = '';
+        currentFilters.end_date = '';
+        selectedDateFilter.type = 'all';
+        
+        // Reset date filter dropdown
+        document.getElementById('dateFilter').value = 'all';
+        document.getElementById('dateDisplayGroup').style.display = 'none';
+        
+    } else if (filterType === 'daily') {
+        // Today only
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        
+    } else if (filterType === 'monthly') {
+        // Current month
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        
+    } else if (filterType === 'yearly') {
+        // Current year
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+    }
+    
+    if (startDate && endDate) {
+        // Format dates for API (YYYY-MM-DD)
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
+        currentFilters.start_date = formatDate(startDate);
+        currentFilters.end_date = formatDate(endDate);
+        
+        // Update selected date filter state
+        selectedDateFilter.type = 'range';
+        selectedDateFilter.startDate = startDate;
+        selectedDateFilter.endDate = endDate;
+        
+        // Update date filter dropdown to show range
+        document.getElementById('dateFilter').value = 'range';
+        
+        // Show date display
+        const dateDisplay = document.getElementById('dateDisplay');
+        const dateDisplayGroup = document.getElementById('dateDisplayGroup');
+        
+        if (filterType === 'daily') {
+            dateDisplay.textContent = `Today: ${startDate.toLocaleDateString('en-IN')}`;
+        } else if (filterType === 'monthly') {
+            dateDisplay.textContent = `This Month: ${startDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`;
+        } else if (filterType === 'yearly') {
+            dateDisplay.textContent = `This Year: ${startDate.getFullYear()}`;
+        }
+        
+        dateDisplayGroup.style.display = 'block';
+    }
+    
+    console.log('📅 Date Range Set:', { 
+        start: currentFilters.start_date, 
+        end: currentFilters.end_date,
+        type: filterType
+    });
+    
+    // Reload stores with new date filter
+    loadStores(true);
+}
 
 // Setup header hide/show on scroll
 function setupHeaderScrollBehavior() {
@@ -373,6 +464,9 @@ function displayStoreDetail(data) {
     currentStoreDetail.totalDue = allTimeDue;
     currentStoreDetail.totalPaid = allTimePaid;
     
+    // Render payment history in modal
+    renderPaymentHistory();
+    
     // Orders
     displayStoreOrders(orders);
 }
@@ -487,16 +581,53 @@ function closeRevenueModal() {
     document.getElementById('revenueModal').style.display = 'none';
 }
 
+// Payment history modal
+function showPaymentHistory() {
+    renderPaymentHistory();
+    document.getElementById('paymentHistoryModal').style.display = 'flex';
+}
+
+function closePaymentHistory() {
+    document.getElementById('paymentHistoryModal').style.display = 'none';
+}
+
+function renderPaymentHistory() {
+    const tbody = document.getElementById('paymentHistoryTableBody');
+    if (!tbody) return;
+    const history = currentStoreDetail?.store?.payment_history || [];
+
+    if (!history.length) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:16px;">No history yet</td></tr>';
+        return;
+    }
+
+    const sorted = [...history].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    tbody.innerHTML = sorted.map(entry => {
+        const amount = formatCurrency(entry.amount || 0);
+        const date = entry.timestamp ? formatDateTime(entry.timestamp) : 'N/A';
+        return `
+            <tr>
+                <td>₹${amount}</td>
+                <td>${date}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
 // Close modals on outside click
 window.onclick = function(event) {
     const storeModal = document.getElementById('storeDetailModal');
     const revenueModal = document.getElementById('revenueModal');
+    const paymentHistoryModal = document.getElementById('paymentHistoryModal');
     
     if (event.target === storeModal) {
         closeStoreDetail();
     }
     if (event.target === revenueModal) {
         closeRevenueModal();
+    }
+    if (event.target === paymentHistoryModal) {
+        closePaymentHistory();
     }
 };
 
@@ -531,8 +662,19 @@ async function updatePaidAmount(paidAmount) {
     
     try {
         showLoading();
-        
+
         const phone = currentStoreDetail.store.phone;
+
+        console.group('%c💰 Payment Update - Request', 'color:#0ea5e9; font-weight:bold;');
+        console.log('Path: /admin/api/stores/{phone}/paid-amount');
+        console.log('Payload:', { phone, paidAmount });
+        console.log('Current totals:', {
+            totalDue: currentStoreDetail.totalDue,
+            totalPaid: currentStoreDetail.totalPaid,
+            balance: currentStoreDetail.totalDue - currentStoreDetail.totalPaid
+        });
+        console.groupEnd();
+
         const response = await fetch(`/admin/api/stores/${phone}/paid-amount`, {
             method: 'PUT',
             headers: {
@@ -547,15 +689,33 @@ async function updatePaidAmount(paidAmount) {
         }
         
         const data = await response.json();
-        
+        console.group('%c💾 Payment Update - Response', 'color:#22c55e; font-weight:bold;');
+        console.log('Status: ok');
+        console.log('Response body:', data);
+        console.groupEnd();
+
         // Update local state
         currentStoreDetail.totalPaid = paidAmount;
         currentStoreDetail.store.total_paid = paidAmount;
-        
+        currentStoreDetail.store.all_time_paid = paidAmount;
+
+        // Append payment history entry if returned
+        if (!currentStoreDetail.store.payment_history) {
+            currentStoreDetail.store.payment_history = [];
+        }
+        if (data.history_entry) {
+            currentStoreDetail.store.payment_history.push({
+                amount: data.history_entry.amount,
+                timestamp: data.history_entry.timestamp
+            });
+        }
+
         // Update display
         const balance = currentStoreDetail.totalDue - paidAmount;
+        currentStoreDetail.store.all_time_balance = balance;
         document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(paidAmount)}`;
         document.getElementById('detailBalance').textContent = `₹${formatCurrency(balance)}`;
+        renderPaymentHistory();
         
         showToast('Paid amount updated successfully', 'success');
         
@@ -992,6 +1152,14 @@ function handleDateFilterChange() {
     const dateFilter = document.getElementById('dateFilter');
     const selectedValue = dateFilter.value;
     
+    // Reset quick filter buttons when using manual date selection
+    if (selectedValue !== 'all') {
+        document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        currentQuickFilter = null;
+    }
+    
     if (selectedValue === 'single') {
         const singleDateModal = document.getElementById('singleDateModal');
         const datePicker = document.getElementById('singleDatePicker');
@@ -1189,6 +1357,16 @@ function clearDateFilter() {
     // Clear filters for API call
     currentFilters.start_date = '';
     currentFilters.end_date = '';
+    
+    // Reset quick filter buttons to 'All Time'
+    document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const allTimeBtn = document.querySelector('[data-filter=\"all\"]');
+    if (allTimeBtn) {
+        allTimeBtn.classList.add('active');
+    }
+    currentQuickFilter = 'all';
     
     filterStores();
 }
@@ -1762,3 +1940,223 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// ============ MONTHLY SUMMARY FEATURE ============
+
+/**
+ * Show Monthly Summary modal with daily breakdown
+ */
+async function showMonthlySummary() {
+    const modal = document.getElementById('monthlySummaryModal');
+    const loadingDiv = document.getElementById('summaryLoading');
+    const contentDiv = document.getElementById('summaryContent');
+    const monthYearSpan = document.getElementById('summaryMonthYear');
+    
+    // Show modal with loading state
+    modal.style.display = 'flex';
+    loadingDiv.style.display = 'block';
+    contentDiv.style.display = 'none';
+    
+    // Get current month and year
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const currentDay = now.getDate();
+    
+    // Format month name
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    monthYearSpan.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+    
+    // Show progress message
+    const BATCH_SIZE = 7;
+    const totalBatches = Math.ceil(currentDay / BATCH_SIZE);
+    loadingDiv.innerHTML = `
+        <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 15px; color: #1B5E20;"></i>
+        <p style="font-weight: 600; font-size: 16px;">Loading daily breakdown...</p>
+        <p style="font-size: 14px; color: #666; margin-top: 8px;">Fetching data for ${currentDay} days (${totalBatches} parallel batches)</p>
+    `;
+    
+    try {
+        // Fetch daily breakdown for current month
+        const startTime = Date.now();
+        const dailyData = await fetchDailyBreakdown(currentYear, currentMonth, currentDay);
+        const loadTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        
+        console.log(`⚡ Monthly summary loaded in ${loadTime}s`);
+        
+        // Display the summary
+        displayMonthlySummary(dailyData, currentDay);
+        
+        // Hide loading, show content
+        loadingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error loading monthly summary:', error);
+        loadingDiv.innerHTML = `
+            <div style="color: #d32f2f;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <p>Failed to load monthly summary</p>
+                <p style="font-size: 14px; margin-top: 10px;">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Fetch daily breakdown data for the current month using optimized batched parallel requests
+ */
+async function fetchDailyBreakdown(year, month, currentDay) {
+    console.log('📊 Fetching daily breakdown for', year, month, currentDay);
+    
+    // Initialize daily stats array
+    const dailyStats = [];
+    for (let day = 1; day <= currentDay; day++) {
+        dailyStats.push({
+            day: day,
+            date: new Date(year, month, day),
+            orders: 0,
+            revenue: 0
+        });
+    }
+    
+    try {
+        // Fetch statistics in batches of 7 days for optimal performance
+        const BATCH_SIZE = 7;
+        const batches = [];
+        
+        for (let startDay = 1; startDay <= currentDay; startDay += BATCH_SIZE) {
+            const endDay = Math.min(startDay + BATCH_SIZE - 1, currentDay);
+            batches.push({ startDay, endDay });
+        }
+        
+        console.log(`📦 Fetching ${batches.length} batches (${BATCH_SIZE} days each) in parallel`);
+        
+        // Execute all batches in parallel for maximum speed
+        const batchPromises = batches.map(async ({ startDay, endDay }) => {
+            const batchResults = [];
+            
+            // Fetch each day in the batch sequentially (to avoid overwhelming the server)
+            for (let day = startDay; day <= endDay; day++) {
+                const date = new Date(year, month, day);
+                const dateStr = formatDateForAPI(date);
+                
+                try {
+                    const response = await fetch(
+                        `/admin/api/stores/statistics?start_date=${dateStr}&end_date=${dateStr}&t=${Date.now()}`,
+                        { signal: AbortSignal.timeout(5000) } // 5 second timeout per request
+                    );
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        // API returns: { success: true, statistics: { total_orders, total_revenue, ... } }
+                        const stats = data.statistics || {};
+                        console.log(`📅 Day ${day} (${dateStr}): ${stats.total_orders || 0} orders, ₹${stats.total_revenue || 0}`);
+                        batchResults.push({
+                            day: day,
+                            orders: stats.total_orders || 0,
+                            revenue: stats.total_revenue || 0
+                        });
+                    } else {
+                        console.error(`❌ Failed to fetch day ${day}: HTTP ${response.status}`);
+                        batchResults.push({ day: day, orders: 0, revenue: 0 });
+                    }
+                } catch (error) {
+                    console.error(`❌ Failed to fetch day ${day} (${formatDateForAPI(new Date(year, month, day))}):`, error.message);
+                    batchResults.push({ day: day, orders: 0, revenue: 0 });
+                }
+            }
+            
+            return batchResults;
+        });
+        
+        // Wait for all batches to complete
+        const allBatchResults = await Promise.all(batchPromises);
+        
+        // Flatten and merge results
+        const dayResults = allBatchResults.flat();
+        
+        // Update daily stats with fetched data
+        dayResults.forEach(result => {
+            const dayIndex = result.day - 1;
+            if (dayIndex >= 0 && dayIndex < dailyStats.length) {
+                dailyStats[dayIndex].orders = result.orders;
+                dailyStats[dayIndex].revenue = result.revenue;
+            }
+        });
+        
+        console.log('✅ Daily stats fetched successfully:', dailyStats.length, 'days');
+        return dailyStats;
+        
+    } catch (error) {
+        console.error('❌ Error fetching daily breakdown:', error);
+        return dailyStats; // Return empty stats on error
+    }
+}
+
+/**
+ * Format date for API (YYYY-MM-DD)
+ */
+function formatDateForAPI(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Format date for display (DD MMM)
+ */
+function formatDateForDisplay(date) {
+    const day = date.getDate();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${day} ${monthNames[date.getMonth()]}`;
+}
+
+/**
+ * Display monthly summary in the modal
+ */
+function displayMonthlySummary(dailyData, currentDay) {
+    // Calculate totals
+    const totalOrders = dailyData.reduce((sum, day) => sum + day.orders, 0);
+    const totalRevenue = dailyData.reduce((sum, day) => sum + day.revenue, 0);
+    const avgRevenue = currentDay > 0 ? totalRevenue / currentDay : 0;
+    
+    // Update summary stats cards
+    document.getElementById('summaryTotalDays').textContent = currentDay;
+    document.getElementById('summaryTotalOrders').textContent = totalOrders.toLocaleString();
+    document.getElementById('summaryTotalRevenue').textContent = `₹${totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('summaryAvgRevenue').textContent = `₹${avgRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    
+    // Populate table (reverse order - most recent first)
+    const tbody = document.getElementById('summaryTableBody');
+    tbody.innerHTML = dailyData.reverse().map(dayData => `
+        <tr>
+            <td>Day ${dayData.day}</td>
+            <td>${formatDateForDisplay(dayData.date)}</td>
+            <td>${dayData.orders.toLocaleString()}</td>
+            <td>₹${dayData.revenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+        </tr>
+    `).join('');
+}
+
+/**
+ * Close Monthly Summary modal
+ */
+function closeMonthlySummary() {
+    const modal = document.getElementById('monthlySummaryModal');
+    modal.style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('monthlySummaryModal');
+    if (event.target === modal) {
+        closeMonthlySummary();
+    }
+});
+
+// ============ END MONTHLY SUMMARY FEATURE ============
+

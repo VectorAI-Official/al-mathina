@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Order Management - AL-Madhina Admin</title>
-    <link rel="stylesheet" href="/static/admin/css/orders.css?v=2.8">
+    <link rel="stylesheet" href="/static/admin/css/orders.css?v=2.9">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -19,9 +19,14 @@
         <div class="orders-header">
             <div class="header-content">
                 <h1 style="color: white !important;"><i class="fas fa-shopping-cart"></i> Order Management</h1>
-                <button class="btn btn-primary back-to-dashboard-btn" onclick="window.location.href='/admin/dashboard'" style="background: white !important; color: #1B5E20 !important; padding: 14px 28px !important;">
-                    <i class="fas fa-arrow-left"></i> Back to Dashboard
-                </button>
+                <div class="header-actions">
+                    <button class="btn btn-secondary navigate-btn" onclick="window.location.href='/admin/revenue'" style="background: rgba(255,255,255,0.2) !important; color: white !important; padding: 14px 28px !important; margin-right: 12px;" title="Go to Revenue Management">
+                        <i class="fas fa-rupee-sign"></i> Revenue
+                    </button>
+                    <button class="btn btn-primary back-to-dashboard-btn" onclick="window.location.href='/admin/dashboard'" style="background: white !important; color: #1B5E20 !important; padding: 14px 28px !important;">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
             </div>
         </div>
 

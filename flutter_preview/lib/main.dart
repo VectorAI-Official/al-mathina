@@ -4818,7 +4818,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                         crossAxisCount: 2,
                                         crossAxisSpacing: 10,
                                         mainAxisSpacing: 10,
-                                        childAspectRatio: _isAdmin ? 0.40 : 0.45,  // ⭐ Smaller ratio (taller cards) for admin
+                                        childAspectRatio: _isAdmin ? 0.40 : 0.45,  // ⭐ Smaller ratio (taller cards) for admin to fit cost/profit
                                       ),
                                       itemCount: _displayedProductsCount + (_isLoadingMoreProducts ? 2 : 0),
                                       itemBuilder: (context, index) {
@@ -4988,7 +4988,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
             children: [
               // Image (top) - Full fit without cropping sides - Clickable to show details
               Expanded(
-                flex: 3,
+                flex: isAdmin ? 2 : 3,  // ⭐ Reduce image space for admin to make room for cost/profit
                 child: GestureDetector(
                   onTap: () {
                     // Open full product page when image is clicked
@@ -5071,34 +5071,31 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
 
               // Content - Use Flexible with tight fit to prevent overflow
               Flexible(
-                flex: 2,
+                flex: isAdmin ? 3 : 2,  // ⭐ More space for admin content (cost/profit display)
                 fit: FlexFit.tight,
                 child: Container(
                   color: Colors.white, // White background for content
-                  padding: EdgeInsets.zero, // No padding - stick to card edges
+                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding * 0.5),  // ⭐ Reduced vertical padding
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.start,
                     mainAxisSize: MainAxisSize.max,
                     children: [
                       // Product name - constrained to exactly 2 lines with ellipsis
-                      Expanded(
-                        flex: 3,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            product.getLocalizedName(provider.currentLanguage),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: fontSize, 
-                              fontWeight: FontWeight.w600, 
-                              color: Colors.black87, 
-                              height: 1.2, // Slightly increased line height for better readability
-                            ),
+                      Flexible(
+                        child: Text(
+                          product.getLocalizedName(provider.currentLanguage),
+                          maxLines: isAdmin ? 3 : 2,  // ⭐ Allow 3 lines for admin, 2 for regular
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: fontSize, 
+                            fontWeight: FontWeight.w600, 
+                            color: Colors.black87, 
+                            height: 1.2,
                           ),
                         ),
                       ),
+                      SizedBox(height: padding * 0.3),  // ⭐ Reduced spacing
                       // Weight
                       Text(
                         product.weight,
@@ -5106,35 +5103,89 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      SizedBox(height: padding * 0.3),  // ⭐ Reduced spacing
                       // Price
                       Text(
                         '₹${product.price.toStringAsFixed(2)}',
                         style: TextStyle(fontSize: priceFontSize, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
-                      // ⭐ NEW - Admin buying price and margin
-                      if (isAdmin && product.buyingPrice != null) ...[
-                        SizedBox(height: padding * 1),  // ⭐ Add spacing before buying price
-                        Text(
-                          'Buying: ₹${product.buyingPrice!.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: weightFontSize,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
+                      // ⭐ ADMIN BUYING PRICE & MARGIN
+                      if (isAdmin) ...[
+                        if (product.buyingPrice != null && product.buyingPrice! > 0) ...[
+                          SizedBox(height: padding * 0.5),  // ⭐ Reduced spacing
+                          // Buying price with icon
+                          Row(
+                            children: [
+                              Icon(Icons.shopping_cart_outlined, size: weightFontSize, color: Colors.orange[700]),
+                              SizedBox(width: padding * 0.5),
+                              Text(
+                                'Cost: ₹${product.buyingPrice!.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: weightFontSize,
+                                  color: Colors.orange[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: padding * 0.7),  // ⭐ Add spacing between buying and margin
-                        Text(
-                          'Margin: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: weightFontSize,
-                            color: Colors.blue[700],
-                            fontWeight: FontWeight.w600,
+                          SizedBox(height: padding * 0.4),  // ⭐ Reduced spacing
+                          // Margin with icon and colored background
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: padding * 0.8, vertical: padding * 0.4),
+                            decoration: BoxDecoration(
+                              color: Colors.green[50],
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.green[200]!, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.trending_up, size: weightFontSize, color: Colors.green[700]),
+                                SizedBox(width: padding * 0.5),
+                                Text(
+                                  'Profit: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: weightFontSize,
+                                    color: Colors.green[700],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        ] else ...[
+                          // Show message for products without buying price
+                          SizedBox(height: padding * 0.8),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: padding * 0.8, vertical: padding * 0.4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey[300]!, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.info_outline, size: weightFontSize, color: Colors.grey[600]),
+                                SizedBox(width: padding * 0.5),
+                                Text(
+                                  'Cost price not set',
+                                  style: TextStyle(
+                                    fontSize: weightFontSize * 0.9,
+                                    color: Colors.grey[600],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ],
                   ),

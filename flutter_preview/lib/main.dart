@@ -3182,21 +3182,22 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 // Show "Add to cart" button when qty is 0
                 if (qty == 0) {
                   return SizedBox(
-                    width: 90,
+                    width: 100,
+                    height: 28,
                     child: ElevatedButton.icon(
                       onPressed: product.inStock
                           ? () {
                               provider.addToCart(product);
                             }
                           : null,
-                      icon: const Icon(Icons.shopping_bag_outlined, size: 14),
-                      label: const Text('Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      icon: const Icon(Icons.shopping_bag_outlined, size: 13),
+                      label: const Text('Add', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
                         elevation: 0,
-                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6),
                         ),

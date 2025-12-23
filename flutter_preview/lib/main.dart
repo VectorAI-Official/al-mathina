@@ -3090,88 +3090,83 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                     
                     // ⭐ ADMIN BUYING PRICE & PROFIT (Tamil text)
                     if (_isAdmin) ...[
-                      Builder(
-                        builder: (context) {
-                          print('✅ [CARD] _isAdmin is TRUE - showing admin section');
-                          print('✅ [CARD] buyingPrice check: ${product.buyingPrice}');
-                          print('✅ [CARD] buyingPrice != null: ${product.buyingPrice != null}');
-                          print('✅ [CARD] buyingPrice > 0: ${product.buyingPrice != null && product.buyingPrice! > 0}');
-                          return const SizedBox.shrink();
-                        },
-                      ),
                       if (product.buyingPrice != null && product.buyingPrice! > 0) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         // Buying price with icon (Tamil: விலை)
                         Row(
                           children: [
-                            Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.orange[700]),
-                            const SizedBox(width: 4),
-                            Text(
-                              'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.orange[700],
-                                fontWeight: FontWeight.w600,
+                            Icon(Icons.shopping_cart_outlined, size: 11, color: Colors.orange[700]),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.orange[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         // Profit with icon (Tamil: இலாபம்)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.green[50],
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.green[200]!, width: 1),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.trending_up, size: 12, color: Colors.green[700]),
-                              const SizedBox(width: 4),
-                              Text(
-                                'இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.green[700],
-                                  fontWeight: FontWeight.bold,
+                        Row(
+                          children: [
+                            Icon(Icons.trending_up, size: 11, color: Colors.green[700]),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green[50],
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.green[200]!, width: 1),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                child: Text(
+                                  'இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.green[700],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ] else ...[
                         // Show message for products without buying price
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.grey[300]!, width: 1),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.info_outline, size: 11, color: Colors.grey[600]),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Cost price not set',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[600],
-                                  fontStyle: FontStyle.italic,
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 10, color: Colors.grey[600]),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.grey[300]!, width: 1),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                child: Text(
+                                  'Cost not set',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey[600],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ],
                     ],

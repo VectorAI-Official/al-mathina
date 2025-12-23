@@ -33,10 +33,10 @@ Set-Location -LiteralPath 'C:\Users\faisa\AndroidStudioProjects\AlMathina\flutte
 cd backend; docker-compose restart
 
 # Terminal 2: Run Flutter on physical device (103223138K111296)
-Set-Location -LiteralPath 'D:\AlMathina\flutter_preview'; flutter run -d 103223138K111296
+flutter run -d 103223138K111296
 
 # Terminal 3: Build APK
-Set-Location -LiteralPath 'D:\AlMathina\flutter_preview'; flutter clean && flutter pub get; flutter build apk --release 2>&1 | tee apk_build.log    
+flutter clean ; flutter pub get; flutter build apk --release 2>&1 | tee apk_build.log    
 
 
 

@@ -38,7 +38,20 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStores(true);
     setupScrollListener();
     setupHeaderScrollBehavior();
+    updateMonthSummaryButtonText();
 });
+
+// Update month summary button with current month name
+function updateMonthSummaryButtonText() {
+    const now = new Date();
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const currentMonth = monthNames[now.getMonth()];
+    const monthSummaryText = document.getElementById('monthSummaryText');
+    if (monthSummaryText) {
+        monthSummaryText.textContent = currentMonth + ' Summary';
+    }
+}
 
 // Apply quick date filter (Daily, Monthly, Yearly)
 function applyQuickDateFilter(filterType) {

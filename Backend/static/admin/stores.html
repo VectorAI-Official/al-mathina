@@ -38,12 +38,12 @@
         </div>
 
         <!-- Summary Filter Button -->
-        <div class="summary-controls" style="display: flex; gap: 10px; align-items: center;">
+        <div class="summary-controls">
             <button class="btn btn-primary summary-btn" onclick="showSummaryMenu()" title="Click to select summary type">
                 <i class="fas fa-chart-bar"></i> Summary
             </button>
-            <button class="btn btn-secondary" onclick="showMonthlySummary()" title="View monthly summary">
-                <i class="fas fa-list"></i> Monthly Summary
+            <button class="btn btn-secondary" id="monthSummaryBtn" onclick="showMonthlySummary()" title="View monthly summary">
+                <i class="fas fa-list"></i> <span id="monthSummaryText">December Summary</span>
             </button>
         </div>
 

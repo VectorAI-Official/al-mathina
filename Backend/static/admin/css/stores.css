@@ -1851,7 +1851,7 @@ body {
     display: flex;
     gap: 12px;
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     margin-bottom: 25px;
 }
 
@@ -1863,6 +1863,41 @@ body {
     align-items: center;
     justify-content: center;
     white-space: nowrap;
+    flex: 1;
+    min-width: 150px;
+}
+
+@media (max-width: 768px) {
+    .summary-controls {
+        gap: 10px;
+    }
+    
+    .summary-controls .btn {
+        flex: 0 1 calc(50% - 5px);
+        font-size: 13px;
+        padding: 10px 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .summary-controls {
+        gap: 8px;
+    }
+    
+    .summary-controls .btn {
+        flex: 1;
+        font-size: 12px;
+        padding: 8px 6px;
+        height: 44px;
+    }
+    
+    .summary-controls .btn i {
+        font-size: 14px;
+    }
+    
+    #monthSummaryText {
+        display: none;
+    }
 }
 
 /* Summary modals (scoped to avoid shrinking other modals like Store Details) */

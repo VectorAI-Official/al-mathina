@@ -1481,6 +1481,29 @@ body {
     border-color: #388E3C;
 }
 
+/* Date Selector Button */
+.date-selector-btn {
+    padding: 8px 6px;
+    border: 1px solid #ddd;
+    background-color: #f9f9f9;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    min-width: 40px;
+    text-align: center;
+}
+
+.date-selector-btn:hover {
+    border-color: #2196F3;
+    background-color: #f0f7ff;
+    transform: translateY(-2px);
+}
+
+.date-selector-btn:active {
+    transform: translateY(0);
+}
+
 /* Loading Spinner */
 .spinner {
     width: 40px;
@@ -1785,4 +1808,570 @@ body {
         padding: 8px 10px;
         font-size: 11px;
     }
+}
+
+/* ============ SUMMARY SELECTOR STYLES (DESKTOP & MOBILE) ============ */
+
+/* Summary Button */
+.summary-btn {
+    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    height: 48px;
+    white-space: nowrap;
+}
+
+.summary-btn:hover {
+    background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
+    box-shadow: 0 6px 16px rgba(33, 150, 243, 0.4);
+    transform: translateY(-2px);
+}
+
+.summary-btn:active {
+    transform: translateY(0);
+}
+
+.summary-btn i {
+    font-size: 16px;
+}
+
+/* Summary controls row */
+.summary-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: nowrap;
+    margin-bottom: 25px;
+}
+
+.summary-controls .btn {
+    width: auto !important;
+    min-width: unset;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+/* Summary modals (scoped to avoid shrinking other modals like Store Details) */
+#summaryTypeModal,
+#dailyDateModal,
+#weeklyModal,
+#monthlyModal,
+#yearlyModal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+}
+
+#summaryTypeModal.show,
+#dailyDateModal.show,
+#weeklyModal.show,
+#monthlyModal.show,
+#yearlyModal.show {
+    display: flex;
+}
+
+#summaryTypeModal .modal-content,
+#dailyDateModal .modal-content,
+#weeklyModal .modal-content,
+#monthlyModal .modal-content,
+#yearlyModal .modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+#summaryTypeModal .modal-header,
+#dailyDateModal .modal-header,
+#weeklyModal .modal-header,
+#monthlyModal .modal-header,
+#yearlyModal .modal-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    font-size: 18px;
+    color: #333;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-header .modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.modal-header .modal-close:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+/* Summary Type Selection Modal */
+#summaryTypeModal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 25px 20px;
+}
+
+#summaryTypeModal .modal-header h2 {
+    color: #1976D2;
+    font-size: 20px;
+}
+
+.summary-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f7 100%);
+    border: 2px solid #e0e7ff;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.summary-option-btn:hover {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-color: #2196F3;
+    color: #1976D2;
+    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.2);
+    transform: translateX(4px);
+}
+
+.summary-option-btn:active {
+    transform: translateX(2px);
+}
+
+.summary-option-btn i {
+    font-size: 20px;
+    width: 28px;
+    text-align: center;
+    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Date Selector Buttons Grid */
+#dailyDatesGrid,
+#weeklyWeeksContainer,
+#monthlyMonthsGrid,
+#yearlyYearsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 8px;
+}
+
+.date-selector-btn,
+.week-selector-btn,
+.month-selector-btn,
+.year-selector-btn {
+    padding: 10px;
+    background: #f8f9fa;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    transition: all 0.2s ease;
+    text-align: center;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.date-selector-btn:hover,
+.month-selector-btn:hover,
+.year-selector-btn:hover {
+    background: #e3f2fd;
+    border-color: #2196F3;
+    color: #1976D2;
+}
+
+.week-selector-btn {
+    grid-column: span 1;
+    padding: 12px;
+    min-height: 60px;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.week-selector-btn:hover {
+    background: #e3f2fd;
+    border-color: #2196F3;
+}
+
+/* Monthly Months Grid */
+#monthlyMonthsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+}
+
+/* Yearly Years Grid */
+#yearlyYearsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+}
+
+.year-selector-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f5f5f5;
+    text-decoration: line-through;
+}
+
+/* ============ MOBILE RESPONSIVE SUMMARY STYLES ============ */
+
+@media (max-width: 768px) {
+    .summary-btn {
+        padding: 10px 16px;
+        font-size: 14px;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .summary-btn i {
+        font-size: 14px;
+    }
+
+    .modal-content {
+        width: 95%;
+        max-width: 90%;
+        border-radius: 16px;
+    }
+
+    .modal-header {
+        padding: 16px 16px;
+    }
+
+    .modal-header h2 {
+        font-size: 16px;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+
+    .summary-option-btn {
+        padding: 12px 14px;
+        font-size: 14px;
+        gap: 10px;
+    }
+
+    .summary-option-btn i {
+        font-size: 16px;
+        width: 20px;
+    }
+
+    #dailyDatesGrid,
+    #weeklyWeeksContainer,
+    #monthlyMonthsGrid,
+    #yearlyYearsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 6px;
+    }
+
+    .date-selector-btn,
+    .month-selector-btn,
+    .year-selector-btn {
+        padding: 8px;
+        font-size: 13px;
+        min-height: 44px;
+    }
+
+    .week-selector-btn {
+        padding: 10px;
+        min-height: 56px;
+        grid-column: span 1;
+    }
+
+    #monthlyMonthsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+    }
+
+    #yearlyYearsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .summary-btn {
+        padding: 10px 12px;
+        font-size: 13px;
+        gap: 6px;
+        margin-bottom: 18px;
+    }
+
+    .summary-btn i {
+        font-size: 13px;
+    }
+
+    .modal-content {
+        width: 98%;
+        max-width: 98%;
+        border-radius: 14px;
+    }
+
+    .modal-header {
+        padding: 14px 14px;
+    }
+
+    .modal-header h2 {
+        font-size: 14px;
+    }
+
+    .modal-header .modal-close {
+        width: 28px;
+        height: 28px;
+        font-size: 20px;
+    }
+
+    .modal-body {
+        padding: 12px;
+    }
+
+    #summaryTypeModal .modal-body {
+        gap: 10px;
+        padding: 15px 12px;
+    }
+
+    .summary-option-btn {
+        padding: 12px 12px;
+        font-size: 13px;
+        gap: 10px;
+        border-radius: 8px;
+    }
+
+    .summary-option-btn i {
+        font-size: 16px;
+        width: 20px;
+    }
+
+    #dailyDatesGrid,
+    #weeklyWeeksContainer,
+    #monthlyMonthsGrid,
+    #yearlyYearsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+        gap: 5px;
+    }
+
+    .date-selector-btn,
+    .month-selector-btn,
+    .year-selector-btn {
+        padding: 6px;
+        font-size: 12px;
+        min-height: 40px;
+    }
+
+    .week-selector-btn {
+        padding: 8px;
+        min-height: 50px;
+        grid-column: span 1;
+        font-size: 11px;
+    }
+
+    .week-selector-btn div:first-child {
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    .week-selector-btn div:last-child {
+        font-size: 10px;
+        color: #666;
+    }
+
+    #monthlyMonthsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    }
+
+    #yearlyYearsGrid {
+        grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    }
+}
+/* Export Preview Table Styling */
+.export-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.export-preview-table thead {
+    background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.export-preview-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.export-preview-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 14px;
+    color: #374151;
+}
+
+.export-preview-table tbody tr {
+    transition: all 0.2s ease;
+    background-color: white;
+}
+
+.export-preview-table tbody tr:hover {
+    background-color: #f0fdf4;
+    box-shadow: inset 0 0 0 1px #dcfce7;
+}
+
+.export-preview-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.export-preview-table td:first-child {
+    font-weight: 500;
+    color: #1B5E20;
+}
+
+.export-preview-table td:nth-child(2),
+.export-preview-table td:nth-child(3) {
+    text-align: right;
+    font-weight: 600;
+    color: #059669;
+}
+
+.export-preview-table tbody tr:hover td:first-child {
+    color: #065F46;
+}
+
+.export-preview-table tbody tr:hover td:nth-child(2),
+.export-preview-table tbody tr:hover td:nth-child(3) {
+    color: #047857;
+}
+
+/* Payment History Table Styling */
+.payment-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.payment-history-table thead {
+    background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.payment-history-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.payment-history-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 14px;
+    color: #374151;
+}
+
+.payment-history-table tbody tr {
+    transition: all 0.2s ease;
+    background-color: white;
+}
+
+.payment-history-table tbody tr:hover {
+    background-color: #f0f9ff;
+    box-shadow: inset 0 0 0 1px #cffafe;
+}
+
+.payment-history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.payment-history-table td:first-child {
+    font-weight: 600;
+    color: #10b981;
+}
+
+.payment-history-table td:last-child {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.payment-history-table tbody tr:hover td:first-child {
+    color: #059669;
 }

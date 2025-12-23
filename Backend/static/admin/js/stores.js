@@ -128,6 +128,296 @@ function applyQuickDateFilter(filterType) {
     loadStores(true);
 }
 
+// ============ SUMMARY SELECTOR FUNCTIONS ============
+
+function showSummaryMenu() {
+    document.getElementById('summaryTypeModal').style.display = 'flex';
+}
+
+function closeSummaryTypeModal() {
+    document.getElementById('summaryTypeModal').style.display = 'none';
+}
+
+// Daily Date Picker - Show dates with today highlighted
+function showDailyDatePicker() {
+    closeSummaryTypeModal();
+    const modal = document.getElementById('dailyDateModal');
+    const grid = document.getElementById('dailyDatesGrid');
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const currentDay = today.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    
+    grid.innerHTML = '';
+    
+    // Show dates from 1 to today (not future dates)
+    const lastDayToShow = Math.min(currentDay, daysInMonth);
+    
+    for (let day = 1; day <= lastDayToShow; day++) {
+        const date = new Date(now.getFullYear(), now.getMonth(), day);
+        const btn = document.createElement('button');
+        btn.className = 'date-selector-btn';
+        btn.textContent = day;
+        
+        // Highlight today's date
+        if (day === currentDay) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+        }
+        
+        btn.onclick = () => {
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            applyDailyFilter(dateStr);
+            closeDailyDateModal();
+        };
+        grid.appendChild(btn);
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeDailyDateModal() {
+    document.getElementById('dailyDateModal').style.display = 'none';
+}
+
+function applyDailyFilter(dateStr) {
+    currentFilters.start_date = dateStr;
+    currentFilters.end_date = dateStr;
+    currentQuickFilter = 'daily';
+    
+    // Update date display
+    const dateObj = new Date(dateStr);
+    const dateDisplay = dateObj.toLocaleDateString('en-IN', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    loadStores(true);
+    showToast(`📅 Showing data for ${dateDisplay}`);
+}
+
+// Weekly Selector - Show weeks with current week highlighted
+function showWeeklySelector() {
+    closeSummaryTypeModal();
+    const modal = document.getElementById('weeklyModal');
+    const container = document.getElementById('weeklyWeeksContainer');
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const currentDay = now.getDate();
+    
+    // Calculate current week
+    const currentWeekNum = Math.ceil(currentDay / 7);
+    
+    const weeks = [];
+    let weekStart = 1;
+    
+    while (weekStart <= daysInMonth) {
+        const weekEnd = Math.min(weekStart + 6, daysInMonth);
+        weeks.push({ start: weekStart, end: weekEnd });
+        weekStart += 7;
+    }
+    
+    container.innerHTML = '';
+    
+    weeks.forEach((week, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'week-selector-btn';
+        
+        // Highlight current week
+        if (index + 1 === currentWeekNum) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+        }
+        
+        btn.innerHTML = `
+            <div style="font-weight: 600;">Week ${index + 1}</div>
+            <div style="font-size: 12px; ${index + 1 === currentWeekNum ? 'color: white;' : 'color: #666;'}">
+                ${week.start} - ${week.end} ${new Intl.DateTimeFormat('en-US', {month: 'short'}).format(now)}
+            </div>
+        `;
+        btn.onclick = () => {
+            const startStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(week.start).padStart(2, '0')}`;
+            const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(week.end).padStart(2, '0')}`;
+            applyWeeklyFilter(startStr, endStr, index + 1);
+            closeWeeklyModal();
+        };
+        container.appendChild(btn);
+    });
+    
+    modal.style.display = 'flex';
+}
+
+function closeWeeklyModal() {
+    document.getElementById('weeklyModal').style.display = 'none';
+}
+
+function applyWeeklyFilter(startDate, endDate, weekNum) {
+    currentFilters.start_date = startDate;
+    currentFilters.end_date = endDate;
+    currentQuickFilter = 'weekly';
+    
+    // Update date display
+    const dateObj = new Date(startDate);
+    const monthName = dateObj.toLocaleDateString('en-US', {month: 'short'});
+    const startDay = new Date(startDate).getDate();
+    const endDay = new Date(endDate).getDate();
+    const dateDisplay = `Week ${weekNum}: ${startDay} - ${endDay} ${monthName}`;
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    loadStores(true);
+    showToast(`📅 Showing data for Week ${weekNum}`);
+}
+
+// Monthly Selector - Show months with current month highlighted
+function showMonthlySelector() {
+    closeSummaryTypeModal();
+    const modal = document.getElementById('monthlyModal');
+    const grid = document.getElementById('monthlyMonthsGrid');
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    grid.innerHTML = '';
+    
+    monthNames.forEach((monthName, monthIndex) => {
+        const btn = document.createElement('button');
+        btn.className = 'month-selector-btn';
+        
+        // Highlight current month
+        if (monthIndex === now.getMonth()) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+        }
+        
+        btn.textContent = monthName.substring(0, 3);
+        btn.onclick = () => {
+            const startStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+            const endStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${daysInMonth}`;
+            applyMonthlyFilter(startStr, endStr, monthName);
+            closeMonthlyModal();
+        };
+        grid.appendChild(btn);
+    });
+    
+    modal.style.display = 'flex';
+}
+
+function closeMonthlyModal() {
+    document.getElementById('monthlyModal').style.display = 'none';
+}
+
+function applyMonthlyFilter(startDate, endDate, monthName) {
+    currentFilters.start_date = startDate;
+    currentFilters.end_date = endDate;
+    currentQuickFilter = 'monthly';
+    
+    // Update date display
+    const year = new Date(startDate).getFullYear();
+    const dateDisplay = `This Month: ${monthName}`;
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    loadStores(true);
+    showToast(`📅 Showing data for ${monthName}`);
+}
+
+// Yearly Selector - Let user choose year
+function showYearlySelector() {
+    closeSummaryTypeModal();
+    const modal = document.getElementById('yearlyModal');
+    const grid = document.getElementById('yearlyYearsGrid');
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const startYear = 2020;
+    
+    grid.innerHTML = '';
+    
+    for (let year = currentYear; year >= startYear; year--) {
+        const btn = document.createElement('button');
+        btn.className = 'year-selector-btn';
+        if (year === currentYear) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+        }
+        if (year > currentYear) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        }
+        btn.textContent = year;
+        btn.onclick = () => {
+            if (year <= currentYear) {
+                applyYearlyFilter(year);
+                closeYearlyModal();
+            }
+        };
+        grid.appendChild(btn);
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeYearlyModal() {
+    document.getElementById('yearlyModal').style.display = 'none';
+}
+
+function applyYearlyFilter(year) {
+    const startStr = `${year}-01-01`;
+    const endStr = `${year}-12-31`;
+    currentFilters.start_date = startStr;
+    currentFilters.end_date = endStr;
+    currentQuickFilter = 'yearly';
+    
+    // Update date display
+    const dateDisplay = `This Year: ${year}`;
+    document.getElementById('dateDisplay').textContent = dateDisplay;
+    document.getElementById('dateDisplayGroup').style.display = 'block';
+    
+    loadStores(true);
+    showToast(`📅 Showing data for ${year}`);
+}
+
+// All Time Filter
+function applyAllTimeFilter() {
+    closeSummaryTypeModal();
+    currentFilters.start_date = '';
+    currentFilters.end_date = '';
+    currentQuickFilter = 'all';
+    loadStores(true);
+    showToast('📅 Showing all time data');
+}
+
+// Helper function to show toast (if not exists)
+function showToast(message) {
+    console.log(message);
+    // Optional: Add actual toast notification
+}
+
+// Close modals when clicking outside
+window.addEventListener('click', (e) => {
+    // Summary modals
+    if (e.target.id === 'summaryTypeModal') closeSummaryTypeModal();
+    if (e.target.id === 'dailyDateModal') closeDailyDateModal();
+    if (e.target.id === 'weeklyModal') closeWeeklyModal();
+    if (e.target.id === 'monthlyModal') closeMonthlyModal();
+    if (e.target.id === 'yearlyModal') closeYearlyModal();
+});
+
 // Setup header hide/show on scroll
 function setupHeaderScrollBehavior() {
     const header = document.querySelector('.stores-header');
@@ -457,7 +747,6 @@ function displayStoreDetail(data) {
     const allTimeBalance = store.all_time_balance || 0;
     
     document.getElementById('detailTotalDue').textContent = `₹${formatCurrency(allTimeDue)}`;
-    document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(allTimePaid)}`;
     document.getElementById('detailBalance').textContent = `₹${formatCurrency(allTimeBalance)}`;
     
     // Store payment values for editing
@@ -597,14 +886,19 @@ function renderPaymentHistory() {
     const history = currentStoreDetail?.store?.payment_history || [];
 
     if (!history.length) {
-        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:16px;">No history yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:20px; color:#9ca3af;"><i class="fas fa-inbox"></i> No payment history yet</td></tr>';
         return;
     }
 
     const sorted = [...history].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
     tbody.innerHTML = sorted.map(entry => {
         const amount = formatCurrency(entry.amount || 0);
-        const date = entry.timestamp ? formatDateTime(entry.timestamp) : 'N/A';
+        // Format date without time
+        const date = entry.timestamp ? new Date(entry.timestamp).toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit'
+        }) : 'N/A';
         return `
             <tr>
                 <td>₹${amount}</td>
@@ -635,39 +929,42 @@ window.onclick = function(event) {
 function editPaidAmount() {
     if (!currentStoreDetail) return;
     
-    const currentPaid = currentStoreDetail.totalPaid || 0;
-    const newPaid = prompt(`Enter new paid amount:\n\nCurrent: ₹${formatCurrency(currentPaid)}\nTotal Due: ₹${formatCurrency(currentStoreDetail.totalDue)}`, currentPaid);
+    const currentBalance = currentStoreDetail.totalDue - currentStoreDetail.totalPaid;
+    const paymentAmount = prompt(`Enter payment amount to add:\n\nBalance: ₹${formatCurrency(currentBalance)}\nTotal Due: ₹${formatCurrency(currentStoreDetail.totalDue)}`, '');
     
-    if (newPaid === null) return; // User cancelled
+    if (paymentAmount === null) return; // User cancelled
     
-    const paidAmount = parseFloat(newPaid);
+    const amount = parseFloat(paymentAmount);
     
-    if (isNaN(paidAmount) || paidAmount < 0) {
+    if (isNaN(amount) || amount <= 0) {
         showToast('Please enter a valid positive number', 'error');
         return;
     }
     
-    if (paidAmount > currentStoreDetail.totalDue) {
-        if (!confirm(`Paid amount (₹${formatCurrency(paidAmount)}) is greater than total due (₹${formatCurrency(currentStoreDetail.totalDue)}).\n\nContinue anyway?`)) {
+    const newTotalPaid = (currentStoreDetail.totalPaid || 0) + amount;
+    
+    if (newTotalPaid > currentStoreDetail.totalDue) {
+        if (!confirm(`Payment (₹${formatCurrency(amount)}) will exceed total due.\n\nNew total paid will be: ₹${formatCurrency(newTotalPaid)}\nTotal due: ₹${formatCurrency(currentStoreDetail.totalDue)}\n\nContinue anyway?`)) {
             return;
         }
     }
     
-    updatePaidAmount(paidAmount);
+    appendPayment(amount);
 }
 
-// Update paid amount on backend and refresh display
-async function updatePaidAmount(paidAmount) {
+// Append payment to history and update totals
+async function appendPayment(paymentAmount) {
     if (!currentStoreDetail || !currentStoreDetail.store) return;
     
     try {
         showLoading();
 
         const phone = currentStoreDetail.store.phone;
+        const timestamp = new Date().toISOString();
 
-        console.group('%c💰 Payment Update - Request', 'color:#0ea5e9; font-weight:bold;');
-        console.log('Path: /admin/api/stores/{phone}/paid-amount');
-        console.log('Payload:', { phone, paidAmount });
+        console.group('%c💰 Payment Append - Request', 'color:#0ea5e9; font-weight:bold;');
+        console.log('Path: /admin/api/stores/{phone}/payment-history');
+        console.log('Payload:', { phone, paymentAmount, timestamp });
         console.log('Current totals:', {
             totalDue: currentStoreDetail.totalDue,
             totalPaid: currentStoreDetail.totalPaid,
@@ -675,57 +972,55 @@ async function updatePaidAmount(paidAmount) {
         });
         console.groupEnd();
 
-        const response = await fetch(`/admin/api/stores/${phone}/paid-amount`, {
-            method: 'PUT',
+        const response = await fetch(`/admin/api/stores/${phone}/payment-history`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ paid_amount: paidAmount })
+            body: JSON.stringify({ amount: paymentAmount, timestamp: timestamp })
         });
         
         if (!response.ok) {
             const data = await response.json();
-            throw new Error(data.detail || 'Failed to update paid amount');
+            throw new Error(data.detail || 'Failed to add payment');
         }
         
         const data = await response.json();
-        console.group('%c💾 Payment Update - Response', 'color:#22c55e; font-weight:bold;');
+        console.group('%c💾 Payment Append - Response', 'color:#22c55e; font-weight:bold;');
         console.log('Status: ok');
         console.log('Response body:', data);
         console.groupEnd();
 
-        // Update local state
-        currentStoreDetail.totalPaid = paidAmount;
-        currentStoreDetail.store.total_paid = paidAmount;
-        currentStoreDetail.store.all_time_paid = paidAmount;
+        // Update local state - calculate new totals
+        const newTotalPaid = (currentStoreDetail.totalPaid || 0) + paymentAmount;
+        currentStoreDetail.totalPaid = newTotalPaid;
+        currentStoreDetail.store.total_paid = newTotalPaid;
+        currentStoreDetail.store.all_time_paid = newTotalPaid;
 
-        // Append payment history entry if returned
+        // Append to payment history
         if (!currentStoreDetail.store.payment_history) {
             currentStoreDetail.store.payment_history = [];
         }
-        if (data.history_entry) {
-            currentStoreDetail.store.payment_history.push({
-                amount: data.history_entry.amount,
-                timestamp: data.history_entry.timestamp
-            });
-        }
+        currentStoreDetail.store.payment_history.push({
+            amount: paymentAmount,
+            timestamp: timestamp
+        });
 
         // Update display
-        const balance = currentStoreDetail.totalDue - paidAmount;
+        const balance = currentStoreDetail.totalDue - newTotalPaid;
         currentStoreDetail.store.all_time_balance = balance;
-        document.getElementById('detailTotalPaid').textContent = `₹${formatCurrency(paidAmount)}`;
         document.getElementById('detailBalance').textContent = `₹${formatCurrency(balance)}`;
         renderPaymentHistory();
         
-        showToast('Paid amount updated successfully', 'success');
+        showToast(`Payment of ₹${formatCurrency(paymentAmount)} added successfully`, 'success');
         
         // Reload stores list to reflect changes
         await loadStores(true);
         
         hideLoading();
     } catch (error) {
-        console.error('Error updating paid amount:', error);
-        showToast(error.message || 'Failed to update paid amount', 'error');
+        console.error('Error adding payment:', error);
+        showToast(error.message || 'Failed to add payment', 'error');
         hideLoading();
     }
 }
@@ -1092,16 +1387,48 @@ async function loadExportData(startDate = null, endDate = null) {
 function renderExportPreview() {
     const tbody = document.getElementById('exportPreviewBody');
     if (!exportFilteredList.length) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">No stores found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#9ca3af;"><i class="fas fa-inbox"></i> No stores found</td></tr>';
         return;
     }
     tbody.innerHTML = exportFilteredList.map(store => `
         <tr>
-            <td>${store.store_name || 'Unnamed Store'}</td>
+            <td><i class="fas fa-store" style="margin-right:8px; color:#1B5E20;"></i>${store.store_name || 'Unnamed Store'}</td>
             <td>${store.order_count || 0}</td>
             <td>₹${formatCurrency(store.total_revenue || 0)}</td>
         </tr>
     `).join('');
+}
+
+/**
+ * Sort export preview by orders - Most (descending)
+ */
+function sortExportByOrdersMost() {
+    if (!exportFilteredList || exportFilteredList.length === 0) return;
+    
+    exportFilteredList.sort((a, b) => {
+        const ordersA = a.order_count || 0;
+        const ordersB = b.order_count || 0;
+        return ordersB - ordersA; // Descending: most first
+    });
+    
+    renderExportPreview();
+    showToast('📊 Sorted by most orders');
+}
+
+/**
+ * Sort export preview by orders - Least (ascending)
+ */
+function sortExportByOrdersLeast() {
+    if (!exportFilteredList || exportFilteredList.length === 0) return;
+    
+    exportFilteredList.sort((a, b) => {
+        const ordersA = a.order_count || 0;
+        const ordersB = b.order_count || 0;
+        return ordersA - ordersB; // Ascending: least first
+    });
+    
+    renderExportPreview();
+    showToast('📊 Sorted by least orders');
 }
 
 function renderExportSearchResults(searchResults) {
@@ -1139,11 +1466,11 @@ function renderExportSearchResults(searchResults) {
 }
 
 async function downloadExportPDF() {
-    if (!exportSelectedList.length) {
+    if (!exportFilteredList || !exportFilteredList.length) {
         showToast('Add at least one store to export', 'error');
         return;
     }
-    await exportToPDF(exportSelectedList);
+    await exportToPDF(exportFilteredList);
     closeExportModal();
 }
 
@@ -1529,17 +1856,21 @@ async function exportToPDF() {
         doc.setFontSize(10);
         doc.setTextColor(0);
         
-        // Table header
-        doc.setFillColor(40, 167, 69);
-        doc.rect(14, yPos, 200, 8, 'F');
+        // Table header with better alignment
+        doc.setFillColor(27, 94, 32); // Dark green
+        doc.rect(14, yPos, 200, 10, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.text('Store Name', 16, yPos + 5);
-        doc.text('Orders', 120, yPos + 5);
-        doc.text('Revenue', 160, yPos + 5);
-        yPos += 8;
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('Store Name', 16, yPos + 6.5);
+        doc.text('Orders', 130, yPos + 6.5, { align: 'right' });
+        doc.text('Revenue', 190, yPos + 6.5, { align: 'right' });
+        yPos += 12;
         
         // Add stores one by one
         doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
         let rowColor = true;
         
         for (let i = 0; i < allStoresForExport.length; i++) {
@@ -1553,20 +1884,24 @@ async function exportToPDF() {
                 yPos = 20;
                 
                 // Re-add header on new page
-                doc.setFillColor(40, 167, 69);
-                doc.rect(14, yPos, 200, 8, 'F');
+                doc.setFillColor(27, 94, 32);
+                doc.rect(14, yPos, 200, 10, 'F');
                 doc.setTextColor(255, 255, 255);
-                doc.text('Store Name', 16, yPos + 5);
-                doc.text('Orders', 120, yPos + 5);
-                doc.text('Revenue', 160, yPos + 5);
-                yPos += 8;
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'bold');
+                doc.text('Store Name', 16, yPos + 6.5);
+                doc.text('Orders', 130, yPos + 6.5, { align: 'right' });
+                doc.text('Revenue', 190, yPos + 6.5, { align: 'right' });
+                yPos += 12;
                 doc.setTextColor(0);
+                doc.setFont(undefined, 'normal');
+                doc.setFontSize(10);
                 rowColor = true;
             }
             
             // Alternate row background
             if (rowColor) {
-                doc.setFillColor(245, 245, 245);
+                doc.setFillColor(240, 253, 244); // Light green
                 doc.rect(14, yPos, 200, 10, 'F');
             }
             rowColor = !rowColor;
@@ -1574,14 +1909,16 @@ async function exportToPDF() {
             // Add store name (as image if Tamil, as text if English)
             if (hasTamil) {
                 const imgData = await renderTextAsImage(storeName, 10);
-                doc.addImage(imgData, 'PNG', 16, yPos + 2, 80, 6);
+                doc.addImage(imgData, 'PNG', 16, yPos + 2, 100, 6);
             } else {
-                doc.text(storeName, 16, yPos + 6);
+                doc.text(storeName, 16, yPos + 6.5);
             }
             
-            // Add orders and revenue
-            doc.text(store.order_count.toString(), 120, yPos + 6);
-            doc.text(`Rs.${formatCurrency(store.total_revenue)}`, 160, yPos + 6);
+            // Add orders and revenue (right-aligned)
+            const orders = (store.order_count || 0).toString();
+            const revenue = `Rs.${formatCurrency(store.total_revenue || 0)}`;
+            doc.text(orders, 130, yPos + 6.5, { align: 'right' });
+            doc.text(revenue, 190, yPos + 6.5, { align: 'right' });
             
             yPos += 10;
         }
@@ -1969,7 +2306,8 @@ async function showMonthlySummary() {
     monthYearSpan.textContent = `${monthNames[currentMonth]} ${currentYear}`;
     
     // Show progress message
-    const BATCH_SIZE = 7;
+    const TARGET_BATCHES = 10;
+    const BATCH_SIZE = Math.max(1, Math.ceil(currentDay / TARGET_BATCHES)); // aim for ~10 parallel batches
     const totalBatches = Math.ceil(currentDay / BATCH_SIZE);
     loadingDiv.innerHTML = `
         <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 15px; color: #1B5E20;"></i>
@@ -2022,8 +2360,9 @@ async function fetchDailyBreakdown(year, month, currentDay) {
     }
     
     try {
-        // Fetch statistics in batches of 7 days for optimal performance
-        const BATCH_SIZE = 7;
+        // Fetch statistics in batches sized to target ~10 parallel batches for faster completion
+        const TARGET_BATCHES = 10;
+        const BATCH_SIZE = Math.max(1, Math.ceil(currentDay / TARGET_BATCHES));
         const batches = [];
         
         for (let startDay = 1; startDay <= currentDay; startDay += BATCH_SIZE) {
@@ -2160,3 +2499,316 @@ window.addEventListener('click', function(event) {
 
 // ============ END MONTHLY SUMMARY FEATURE ============
 
+// ============ EXPORT SUMMARY FEATURE ============
+
+// Export summary state
+let exportSummaryFilters = {
+    start_date: '',
+    end_date: ''
+};
+
+/**
+ * Show Export Summary Type menu
+ */
+function showExportSummaryMenu() {
+    const modal = document.getElementById('exportSummaryTypeModal');
+    modal.style.display = 'flex';
+}
+
+function closeExportSummaryTypeModal() {
+    document.getElementById('exportSummaryTypeModal').style.display = 'none';
+}
+
+/**
+ * Show Export Daily Date Picker
+ */
+function showExportDailyDatePicker() {
+    closeExportSummaryTypeModal();
+    const modal = document.getElementById('exportDailyDateModal');
+    const grid = document.getElementById('exportDailyDatesGrid');
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const currentDay = today.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    
+    grid.innerHTML = '';
+    
+    const lastDayToShow = Math.min(currentDay, daysInMonth);
+    
+    for (let day = 1; day <= lastDayToShow; day++) {
+        const date = new Date(now.getFullYear(), now.getMonth(), day);
+        const btn = document.createElement('button');
+        btn.className = 'date-selector-btn';
+        btn.textContent = day;
+        
+        if (day === currentDay) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+        }
+        
+        btn.onclick = () => {
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            applyExportDailyFilter(dateStr);
+            closeExportDailyDateModal();
+        };
+        grid.appendChild(btn);
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeExportDailyDateModal() {
+    document.getElementById('exportDailyDateModal').style.display = 'none';
+}
+
+function applyExportDailyFilter(dateStr) {
+    exportSummaryFilters.start_date = dateStr;
+    exportSummaryFilters.end_date = dateStr;
+    
+    const dateObj = new Date(dateStr);
+    const dateDisplay = dateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    
+    // Update the main export date filter dropdown to reflect the change
+    document.getElementById('exportDateFilter').value = 'single';
+    document.getElementById('exportDateDisplayGroup').style.display = 'block';
+    document.getElementById('exportDateDisplay').textContent = dateDisplay;
+    
+    // Load export data with this date filter
+    loadExportData(dateStr, dateStr);
+}
+
+/**
+ * Show Export Weekly Selector
+ */
+function showExportWeeklySelector() {
+    closeExportSummaryTypeModal();
+    const modal = document.getElementById('exportWeeklyModal');
+    const container = document.getElementById('exportWeeklyWeeksContainer');
+    
+    const now = new Date();
+    const currentDay = now.getDate();
+    const currentWeekNum = Math.ceil(currentDay / 7);
+    
+    container.innerHTML = '';
+    
+    const weeks = [];
+    for (let startDay = 1; startDay <= currentDay; startDay += 7) {
+        const endDay = Math.min(startDay + 6, currentDay);
+        weeks.push({ num: Math.ceil(startDay / 7), startDay, endDay });
+    }
+    
+    weeks.forEach(week => {
+        const btn = document.createElement('button');
+        btn.className = 'week-selector-btn';
+        btn.style.padding = '12px';
+        btn.style.border = '1px solid #ddd';
+        btn.style.borderRadius = '8px';
+        btn.style.background = '#f9f9f9';
+        btn.style.cursor = 'pointer';
+        btn.style.transition = 'all 0.3s';
+        btn.style.minHeight = '60px';
+        btn.innerHTML = `<div style="font-weight: 600; margin-bottom: 4px;">Week ${week.num}</div><div style="font-size: 13px; color: #666;">${week.startDay} - ${week.endDay}</div>`;
+        
+        if (week.num === currentWeekNum) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+            btn.style.borderColor = '#2196F3';
+        }
+        
+        btn.onclick = () => {
+            const date = new Date(now.getFullYear(), now.getMonth(), week.startDay);
+            const startStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(week.startDay).padStart(2, '0')}`;
+            const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(week.endDay).padStart(2, '0')}`;
+            applyExportWeeklyFilter(startStr, endStr);
+            closeExportWeeklyModal();
+        };
+        
+        container.appendChild(btn);
+    });
+    
+    modal.style.display = 'flex';
+}
+
+function closeExportWeeklyModal() {
+    document.getElementById('exportWeeklyModal').style.display = 'none';
+}
+
+function applyExportWeeklyFilter(startStr, endStr) {
+    exportSummaryFilters.start_date = startStr;
+    exportSummaryFilters.end_date = endStr;
+    
+    const startDate = new Date(startStr);
+    const endDate = new Date(endStr);
+    const startDay = startDate.getDate();
+    const endDay = endDate.getDate();
+    const monthName = startDate.toLocaleDateString('en-IN', { month: 'short' });
+    const weekDisplay = `Week: ${startDay} - ${endDay} ${monthName}`;
+    
+    // Update the main export date filter dropdown to reflect the change
+    document.getElementById('exportDateFilter').value = 'range';
+    document.getElementById('exportDateDisplayGroup').style.display = 'block';
+    document.getElementById('exportDateDisplay').textContent = weekDisplay;
+    
+    // Load export data with this date filter
+    loadExportData(startStr, endStr);
+}
+
+/**
+ * Show Export Monthly Selector
+ */
+function showExportMonthlySelector() {
+    closeExportSummaryTypeModal();
+    const modal = document.getElementById('exportMonthlyModal');
+    const grid = document.getElementById('exportMonthlyMonthsGrid');
+    
+    const now = new Date();
+    const currentMonthIndex = now.getMonth();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    grid.innerHTML = '';
+    
+    for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+        const btn = document.createElement('button');
+        btn.className = 'month-selector-btn';
+        btn.style.padding = '10px';
+        btn.style.border = '1px solid #ddd';
+        btn.style.borderRadius = '8px';
+        btn.style.background = '#f9f9f9';
+        btn.style.cursor = 'pointer';
+        btn.textContent = monthNames[monthIndex];
+        
+        if (monthIndex === currentMonthIndex) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+            btn.style.borderColor = '#2196F3';
+        }
+        
+        btn.onclick = () => {
+            const startStr = `${now.getFullYear()}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const lastDay = new Date(now.getFullYear(), monthIndex + 1, 0).getDate();
+            const endStr = `${now.getFullYear()}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+            applyExportMonthlyFilter(startStr, endStr, monthNames[monthIndex]);
+            closeExportMonthlyModal();
+        };
+        
+        grid.appendChild(btn);
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeExportMonthlyModal() {
+    document.getElementById('exportMonthlyModal').style.display = 'none';
+}
+
+function applyExportMonthlyFilter(startStr, endStr, monthName) {
+    exportSummaryFilters.start_date = startStr;
+    exportSummaryFilters.end_date = endStr;
+    
+    // Update the main export date filter dropdown to reflect the change
+    document.getElementById('exportDateFilter').value = 'range';
+    document.getElementById('exportDateDisplayGroup').style.display = 'block';
+    document.getElementById('exportDateDisplay').textContent = monthName;
+    
+    // Load export data with this date filter
+    loadExportData(startStr, endStr);
+}
+
+/**
+ * Show Export Yearly Selector
+ */
+function showExportYearlySelector() {
+    closeExportSummaryTypeModal();
+    const modal = document.getElementById('exportYearlyModal');
+    const grid = document.getElementById('exportYearlyYearsGrid');
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    
+    grid.innerHTML = '';
+    
+    for (let year = 2020; year <= currentYear; year++) {
+        const btn = document.createElement('button');
+        btn.className = 'year-selector-btn';
+        btn.style.padding = '10px';
+        btn.style.border = '1px solid #ddd';
+        btn.style.borderRadius = '8px';
+        btn.style.background = '#f9f9f9';
+        btn.style.cursor = 'pointer';
+        btn.textContent = year;
+        
+        if (year === currentYear) {
+            btn.style.backgroundColor = '#2196F3';
+            btn.style.color = 'white';
+            btn.style.fontWeight = '700';
+            btn.style.borderColor = '#2196F3';
+        }
+        
+        btn.onclick = () => {
+            const startStr = `${year}-01-01`;
+            const endStr = `${year}-12-31`;
+            applyExportYearlyFilter(startStr, endStr, year);
+            closeExportYearlyModal();
+        };
+        
+        grid.appendChild(btn);
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeExportYearlyModal() {
+    document.getElementById('exportYearlyModal').style.display = 'none';
+}
+
+function applyExportYearlyFilter(startStr, endStr, year) {
+    exportSummaryFilters.start_date = startStr;
+    exportSummaryFilters.end_date = endStr;
+    
+    const yearDisplay = `Year ${year}`;
+    
+    // Update the main export date filter dropdown to reflect the change
+    document.getElementById('exportDateFilter').value = 'range';
+    document.getElementById('exportDateDisplayGroup').style.display = 'block';
+    document.getElementById('exportDateDisplay').textContent = yearDisplay;
+    
+    // Load export data with this date filter
+    loadExportData(startStr, endStr);
+}
+
+/**
+ * Clear Export Summary Filter (All Time)
+ */
+function clearExportSummaryFilter() {
+    closeExportSummaryTypeModal();
+    exportSummaryFilters.start_date = '';
+    exportSummaryFilters.end_date = '';
+    
+    // Reset the main export date filter
+    document.getElementById('exportDateFilter').value = 'all';
+    document.getElementById('exportDateDisplayGroup').style.display = 'none';
+    document.getElementById('exportDateDisplay').textContent = '';
+    
+    // Load all export data without date filter
+    loadExportData();
+}
+
+/**
+ * Load export preview with date filter applied
+ */
+function loadExportPreviewWithDateFilter() {
+    const startDate = exportSummaryFilters.start_date;
+    const endDate = exportSummaryFilters.end_date;
+    
+    if (startDate && endDate) {
+        loadExportData(startDate, endDate);
+    } else {
+        loadExportData();
+    }
+}
+
+// ============ END EXPORT SUMMARY FEATURE ============

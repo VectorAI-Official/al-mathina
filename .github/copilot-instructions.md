@@ -351,3 +351,24 @@ Key Architectural Notes:
    - Supabase storage: Phones stored with +91 prefix (+917339651541, etc.)
    - Flutter sends: Phones WITHOUT +91 prefix (backend handles conversion)
    - Environment: MUST have SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY in .env.production
+
+8. **Summary Selector UI** (NEW - Jan 2025):
+   - **Purpose**: Consolidate 5 date/period filter buttons into single cascading modal selector
+   - **Location**: Revenue Management page (`Backend/static/admin/stores.html`)
+   - **Implementation**: 1 Summary button + 5 modal dialogs (All Time, Daily, Weekly, Monthly, Yearly)
+   - **Files**:
+     * `Backend/static/admin/stores.html` - Button + modal structures
+     * `Backend/static/admin/js/stores.js` - 12+ functions for modal lifecycle
+     * `Backend/static/admin/css/stores.css` - Mobile-responsive styling
+   - **Key Functions**:
+     * `showSummaryMenu()` - Main selection menu
+     * `showDailyDatePicker()` - Select date from current month
+     * `showWeeklySelector()` - Select week from current month (NEW option)
+     * `showMonthlySelector()` - Select month from current year
+     * `showYearlySelector()` - Select year (2020-current, next year disabled)
+     * `applyAllTimeFilter()` - Show all data
+   - **Modal Flow**: Click Summary → Main Menu → Select Option → Detailed Selector → Apply Filter
+   - **Mobile-First**: Responsive design for phones (375px), tablets (768px), desktop
+   - **Date Format**: Uses `YYYY-MM-DD` for API compatibility
+   - **No Backend Changes**: Works with existing stores API and `currentFilters` object
+   - **Documentation**: See `Backend/SUMMARY_SELECTOR_IMPLEMENTATION.md` and `Backend/SUMMARY_SELECTOR_QUICK_REFERENCE.md`

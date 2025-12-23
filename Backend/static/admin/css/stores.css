@@ -1056,7 +1056,8 @@ body {
 @media (max-width: 768px) {
     /* Remove padding and margin for edge-to-edge on mobile */
     .stores-page {
-        padding: 140px 15px 15px 15px;
+        /* Extra top padding so content stays below fixed header */
+        padding: 200px 15px 15px 15px;
     }
     
     .stores-header {
@@ -1428,7 +1429,8 @@ body {
 @media (max-width: 480px) {
     /* Extra small devices */
     .stores-page {
-        padding: 130px 10px 10px 10px;
+        /* Extra top padding so summary buttons clear the header */
+        padding: 200px 10px 10px 10px;
     }
     
     .stores-header {
@@ -1853,6 +1855,7 @@ body {
     align-items: center;
     flex-wrap: wrap;
     margin-bottom: 25px;
+    margin-top: 20px;
 }
 
 .summary-controls .btn {
@@ -1870,6 +1873,7 @@ body {
 @media (max-width: 768px) {
     .summary-controls {
         gap: 10px;
+        margin-top: 15px;
     }
     
     .summary-controls .btn {
@@ -1882,6 +1886,7 @@ body {
 @media (max-width: 480px) {
     .summary-controls {
         gap: 8px;
+        margin-top: 10px;
     }
     
     .summary-controls .btn {

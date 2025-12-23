@@ -722,8 +722,13 @@ class ApiService {
     int page = 1,
     int limit = 50,
     bool useRegex = false,
+    String? userPhone,
   }) async {
     try {
+      print('\n🔍 ========== SEARCH API CALL ==========');
+      print('🔍 Query: $query');
+      print('🔍 User Phone: ${userPhone ?? "NOT PROVIDED"}');
+      
       final queryParams = {
         'q': query,
         'page': page.toString(),
@@ -731,7 +736,18 @@ class ApiService {
         'regex': useRegex.toString(),
         't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
+      
+      // Add user_phone if provided (for admin buying price display)
+      if (userPhone != null && userPhone.isNotEmpty) {
+        queryParams['user_phone'] = userPhone;
+        print('✅ User phone added to query params');
+      } else {
+        print('❌ User phone NOT added (null or empty)');
+      }
+      
       final uri = Uri.parse('$API_BASE/search').replace(queryParameters: queryParams);
+      print('🌐 Request URL: $uri');
+      
       final response = await http.get(
         uri,
         headers: {
@@ -740,14 +756,35 @@ class ApiService {
           'Expires': '0',
         },
       );
+      
+      print('📡 Response Status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print('📦 Response Data Keys: ${data.keys.toList()}');
+        print('🔐 is_admin from backend: ${data['is_admin']}');
+        print('📊 Results count: ${(data['results'] as List).length}');
+        
+        final productsList = (data['results'] as List)
+            .map((item) => Product.fromJson(item))
+            .toList();
+            
+        if (productsList.isNotEmpty) {
+          final firstProduct = productsList.first;
+          print('🔍 First Product: ${firstProduct.productName}');
+          print('💰 First Product buying_price: ${firstProduct.buyingPrice}');
+          print('💵 First Product price: ${firstProduct.price}');
+        }
+        
+        final isAdmin = data['is_admin'] ?? false;
+        print('✅ Final isAdmin value: $isAdmin');
+        print('🔍 ========== END SEARCH API ==========\n');
+        
         return {
-          'results': (data['results'] as List)
-              .map((item) => Product.fromJson(item))
-              .toList(),
+          'results': productsList,
           'pagination': PaginationInfo.fromJson(data['pagination']),
           'query': data['query'],
+          'isAdmin': isAdmin,  // Parse admin status
         };
       } else {
         throw Exception('Search failed: ${response.statusCode}');

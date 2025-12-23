@@ -2855,6 +2855,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isRegexSearch = false;
+  bool _isAdmin = false;  // Track admin status
 
   @override
   void initState() {
@@ -2871,15 +2872,48 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   Future<void> _search() async {
     try {
+      print('\n🔍 ========== SEARCH SCREEN ==========');
+      // Get user phone for admin check
+      final prefs = await SharedPreferences.getInstance();
+      final userPhone = prefs.getString('userPhone');
+      
+      print('🔍 [SEARCH] User phone from prefs: ${userPhone ?? "NULL"}');
+      print('🔍 [SEARCH] Query: ${widget.query}');
+      print('🔍 [SEARCH] Regex mode: $_isRegexSearch');
+      
       final result = await ApiService.searchProducts(
         query: widget.query,
         useRegex: _isRegexSearch,
+        userPhone: userPhone,
       );
+      
+      print('\n🎯 [SEARCH] API Response Received:');
+      print('🔍 [SEARCH] isAdmin from API: ${result['isAdmin']}');
+      print('🔍 [SEARCH] Results count: ${(result['results'] as List<Product>).length}');
+      
+      final products = result['results'] as List<Product>;
+      if (products.isNotEmpty) {
+        print('🔍 [SEARCH] First product name: ${products.first.productName}');
+        print('🔍 [SEARCH] First product buyingPrice: ${products.first.buyingPrice}');
+        print('🔍 [SEARCH] First product price: ${products.first.price}');
+      }
+      
       setState(() {
-        _results = result['results'] as List<Product>;
+        _results = products;
+        _isAdmin = result['isAdmin'] ?? false;
         _isLoading = false;
       });
-    } catch (e) {
+      
+      print('\n✅ [SEARCH] State Updated:');
+      print('🔍 [SEARCH] _isAdmin: $_isAdmin');
+      print('🔍 [SEARCH] _results count: ${_results.length}');
+      if (_results.isNotEmpty) {
+        print('🔍 [SEARCH] First result buyingPrice: ${_results.first.buyingPrice}');
+      }
+      print('🔍 ========== END SEARCH SCREEN ==========\n');
+    } catch (e, stackTrace) {
+      print('❌ [SEARCH] Error: $e');
+      print('❌ [SEARCH] Stack trace: $stackTrace');
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -2932,6 +2966,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   Widget _buildProductCard(Product product, AppProvider provider) {
+    print('\n🃏 [CARD] Building card for: ${product.productName}');
+    print('🃏 [CARD] _isAdmin state: $_isAdmin');
+    print('🃏 [CARD] Product buyingPrice: ${product.buyingPrice}');
+    print('🃏 [CARD] Product price: ${product.price}');
+    
     final String productId = product.itemId ?? 
         '${product.productName}_${product.weight}'.replaceAll(' ', '_').toLowerCase();
     final bool isFavorited = provider.isFavorite(productId);
@@ -2944,152 +2983,243 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18.0),
-        child: Row(
-          children: [
-            // Product Image (Left) - Fixed size like Cart page
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
-                );
-              },
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: product.imageUrl.isNotEmpty
-                        ? Image.network(
-                            ApiService.getImageUrl(product.imageUrl),
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stack) => Container(
+      child: IntrinsicHeight(  // ⭐ Allow card to expand based on content
+        child: Padding(
+          padding: const EdgeInsets.all(18.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,  // ⭐ Stretch to fill height
+            children: [
+              // Product Image (Left) - Fixed size like Cart page
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
+                  );
+                },
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: product.imageUrl.isNotEmpty
+                          ? Image.network(
+                              ApiService.getImageUrl(product.imageUrl),
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stack) => Container(
+                                width: 80,
+                                height: 80,
+                                color: Colors.grey[200],
+                                child: Icon(Icons.inventory_2, color: Colors.grey[400]),
+                              ),
+                            )
+                          : Container(
                               width: 80,
                               height: 80,
                               color: Colors.grey[200],
                               child: Icon(Icons.inventory_2, color: Colors.grey[400]),
                             ),
-                          )
-                        : Container(
-                            width: 80,
-                            height: 80,
-                            color: Colors.grey[200],
-                            child: Icon(Icons.inventory_2, color: Colors.grey[400]),
+                    ),
+                    // Heart Icon (top right of image)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final phone = prefs.getString('userPhone');
+                          if (phone != null && phone.isNotEmpty) {
+                            await provider.toggleFavorite(phone, productId);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                  ),
-                  // Heart Icon (top right of image)
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: GestureDetector(
-                      onTap: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        final phone = prefs.getString('userPhone');
-                        if (phone != null && phone.isNotEmpty) {
-                          await provider.toggleFavorite(phone, productId);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
+                          child: Icon(
+                            isFavorited ? Icons.favorite : Icons.favorite_border,
+                            color: isFavorited ? Colors.red : Colors.grey[600],
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Product Info (Middle) - Expanded
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      product.getLocalizedName(provider.currentLanguage),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.weight,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '₹${product.price.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: kPrimaryColor,
+                      ),
+                    ),
+                    
+                    // ⭐ ADMIN BUYING PRICE & PROFIT (Tamil text)
+                    if (_isAdmin) ...[
+                      Builder(
+                        builder: (context) {
+                          print('✅ [CARD] _isAdmin is TRUE - showing admin section');
+                          print('✅ [CARD] buyingPrice check: ${product.buyingPrice}');
+                          print('✅ [CARD] buyingPrice != null: ${product.buyingPrice != null}');
+                          print('✅ [CARD] buyingPrice > 0: ${product.buyingPrice != null && product.buyingPrice! > 0}');
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                      if (product.buyingPrice != null && product.buyingPrice! > 0) ...[
+                        const SizedBox(height: 6),
+                        // Buying price with icon (Tamil: விலை)
+                        Row(
+                          children: [
+                            Icon(Icons.shopping_cart_outlined, size: 12, color: Colors.orange[700]),
+                            const SizedBox(width: 4),
+                            Text(
+                              'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                        child: Icon(
-                          isFavorited ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorited ? Colors.red : Colors.grey[600],
-                          size: 14,
+                        const SizedBox(height: 4),
+                        // Profit with icon (Tamil: இலாபம்)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.green[50],
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.green[200]!, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.trending_up, size: 12, color: Colors.green[700]),
+                              const SizedBox(width: 4),
+                              Text(
+                                'இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // Show message for products without buying price
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.grey[300]!, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.info_outline, size: 11, color: Colors.grey[600]),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Cost price not set',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+              // Bottom Control Section (Right) - Add to cart or +/- controls
+              Builder(builder: (context) {
+                final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
+                final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
+                final int qty = cartItem?.quantity ?? 0;
+
+                // Show "Add to cart" button when qty is 0
+                if (qty == 0) {
+                  return SizedBox(
+                    width: 100,
+                    child: ElevatedButton.icon(
+                      onPressed: product.inStock
+                          ? () {
+                              provider.addToCart(product);
+                            }
+                          : null,
+                      icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                      label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF50),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            // Product Info (Middle) - Expanded
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    product.getLocalizedName(provider.currentLanguage),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    product.weight,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '₹${product.price.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: kPrimaryColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Bottom Control Section (Right) - Add to cart or +/- controls
-            Builder(builder: (context) {
-              final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
-              final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
-              final int qty = cartItem?.quantity ?? 0;
-
-              // Show "Add to cart" button when qty is 0
-              if (qty == 0) {
-                return SizedBox(
-                  width: 100,
-                  child: ElevatedButton.icon(
-                    onPressed: product.inStock
-                        ? () {
-                            provider.addToCart(product);
-                          }
-                        : null,
-                    icon: const Icon(Icons.shopping_bag_outlined, size: 16),
-                    label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF50),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                );
-              }
-              // Show quantity controls when qty > 0 (matching Cart page style)
-              return Column(
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        color: kPrimaryColor,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
+                  );
+                }
+                // Show quantity controls when qty > 0 (matching Cart page style)
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,  // ⭐ Center vertically
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          color: kPrimaryColor,
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: () {
                           provider.updateCartQuantity(cartItem!, qty - 1);
@@ -3149,7 +3279,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 ],
               );
             }),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -5113,13 +5244,13 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                       if (isAdmin) ...[
                         if (product.buyingPrice != null && product.buyingPrice! > 0) ...[
                           SizedBox(height: padding * 0.5),  // ⭐ Reduced spacing
-                          // Buying price with icon
+                          // Buying price with icon (Tamil: விலை)
                           Row(
                             children: [
                               Icon(Icons.shopping_cart_outlined, size: weightFontSize, color: Colors.orange[700]),
                               SizedBox(width: padding * 0.5),
                               Text(
-                                'Cost: ₹${product.buyingPrice!.toStringAsFixed(2)}',
+                                'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)}',
                                 style: TextStyle(
                                   fontSize: weightFontSize,
                                   color: Colors.orange[700],
@@ -5131,7 +5262,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                             ],
                           ),
                           SizedBox(height: padding * 0.4),  // ⭐ Reduced spacing
-                          // Margin with icon and colored background
+                          // Margin with icon and colored background (Tamil: இலாபம்)
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: padding * 0.8, vertical: padding * 0.4),
                             decoration: BoxDecoration(
@@ -5145,7 +5276,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                 Icon(Icons.trending_up, size: weightFontSize, color: Colors.green[700]),
                                 SizedBox(width: padding * 0.5),
                                 Text(
-                                  'Profit: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                                  'இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
                                   style: TextStyle(
                                     fontSize: weightFontSize,
                                     color: Colors.green[700],

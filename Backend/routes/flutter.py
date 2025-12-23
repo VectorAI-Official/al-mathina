@@ -498,7 +498,8 @@ async def search_products(
     q: str = Query(..., min_length=1, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Results per page"),
-    regex: bool = Query(False, description="Enable regex search mode")
+    regex: bool = Query(False, description="Enable regex search mode"),
+    user_phone: Optional[str] = Query(None, description="User's phone number for admin check")
 ):
     """
     Search products globally across all categories.
@@ -508,13 +509,34 @@ async def search_products(
     - page: Page number (default: 1)
     - limit: Results per page (default: 20, max: 100)
     - regex: Enable regex pattern matching (default: False)
+    - user_phone: User's phone number (optional, for admin buying price display)
     
     Returns:
-    - Paginated search results
+    - Paginated search results with admin buying price if applicable
     """
     try:
         db = get_mongo_db()
         products_collection = db["products"]
+        
+        # Check if user is admin
+        is_admin = False
+        if user_phone:
+            try:
+                from database.supabase_client import get_supabase_client
+                supabase = get_supabase_client()
+                
+                # Try with the phone as-is first
+                user_response = supabase.table('users').select('is_admin').eq('phone', user_phone).execute()
+                
+                # If not found and phone doesn't have +91, try adding it
+                if (not user_response.data or len(user_response.data) == 0) and not user_phone.startswith('+'):
+                    user_response = supabase.table('users').select('is_admin').eq('phone', f'+91{user_phone}').execute()
+                
+                if user_response.data and len(user_response.data) > 0:
+                    is_admin = user_response.data[0].get('is_admin', False)
+                    logger.info(f"Search - User {user_phone} admin status: {is_admin}")
+            except Exception as e:
+                logger.warning(f"Failed to check admin status for {user_phone}: {e}")
         
         # Build search query with optional regex mode
         # If regex=true, use the query as a regex pattern directly
@@ -562,7 +584,7 @@ async def search_products(
         results = []
         for prod in products_cursor:
             raw_image = prod.get("image_url", prod.get("image", ""))
-            results.append({
+            product_data = {
                 "item_id": prod.get("item_id"),
                 "product_name": prod.get("product_name"),
                 "product_name_ta": prod.get("product_name_ta", ""),
@@ -575,11 +597,18 @@ async def search_products(
                 "subcategory": prod.get("category_sub"),
                 "in_stock": prod.get("stock", 0) > 0,
                 "is_best_seller": prod.get("is_best_seller", False)
-            })
+            }
+            
+            # Add buying_price ONLY for admin users
+            if is_admin:
+                product_data["buying_price"] = float(prod.get("buying_price", 0.0))
+            
+            results.append(product_data)
         
         response = {
             "query": q,
             "results": results,
+            "is_admin": is_admin,  # Include admin status in response
             "pagination": {
                 "current_page": page,
                 "total_pages": total_pages,
@@ -590,7 +619,7 @@ async def search_products(
             }
         }
         
-        logger.info(f"Search for '{q}' returned {len(results)} results (page {page})")
+        logger.info(f"Search for '{q}' returned {len(results)} results (page {page}, admin={is_admin})")
         
         return response
         

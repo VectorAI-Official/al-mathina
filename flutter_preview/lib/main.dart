@@ -2065,7 +2065,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
     });
 
     try {
-      final result = await ApiService.getProducts(
+      final result = await ApiService.getProductsLegacy(  // ⭐ Use legacy method
         section: widget.section,
         mainCategory: widget.mainCategory,
         subcategory: subcategory,
@@ -4243,7 +4243,7 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
         // Best seller functionality removed - Most Bought now uses main categories
         setState(() => _products = []);
       } else {
-        final result = await ApiService.getProducts(
+        final result = await ApiService.getProductsLegacy(  // ⭐ Use legacy method
           section: widget.section,
           mainCategory: widget.mainCategory,
           subcategory: null,
@@ -4458,6 +4458,10 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   String? _error;
   String? _lastLanguage;
   
+  // ⭐ NEW - Admin system
+  bool _isAdmin = false;
+  String? _userPhone;
+  
   // Lazy loading for products
   int _displayedProductsCount = 0;
   final int _productsPerBatch = 20;
@@ -4467,8 +4471,25 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserPhone();  // ⭐ NEW - Load user phone for admin check
     _loadSubcategories();
     _scrollController.addListener(_onScroll);
+  }
+  
+  // ⭐ NEW - Load user phone from SharedPreferences
+  Future<void> _loadUserPhone() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final phone = prefs.getString('userPhone');
+      if (mounted) {
+        setState(() {
+          _userPhone = phone;
+        });
+        print('📱 [ADMIN] User phone loaded: ${phone ?? "NOT LOGGED IN"}');
+      }
+    } catch (e) {
+      print('❌ [ADMIN] Error loading user phone: $e');
+    }
   }
   
   @override
@@ -4562,20 +4583,28 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
       final provider = Provider.of<AppProvider>(context, listen: false);
       print('DEBUG: Loading products for subcategory: name="${subcategory.name}" id="${subcategory.subcategoryId}"');
       print('DEBUG: API params: section="${widget.section}" mainCategory="${widget.mainCategory}" subcategoryId="${subcategory.subcategoryId}" subcategory="${subcategory.name}"');
+      print('👤 [ADMIN] Calling API with user_phone: ${_userPhone ?? "NOT PROVIDED"}');
       
+      // ⭐ NEW - Use ProductsResponse with userPhone
       final result = await ApiService.getProducts(
         section: widget.section,
         mainCategory: widget.mainCategory,
         subcategoryId: subcategory.subcategoryId,
         subcategory: subcategory.name,  // Fallback to name if ID is not available
+        userPhone: _userPhone,  // ⭐ NEW - Pass user phone for admin check
         lang: provider.currentLanguage,
       );
       
-      print('DEBUG: Received ${(result['products'] as List<Product>).length} products');
+      print('DEBUG: Received ${result.products.length} products');
+      print('✅ [ADMIN] Is Admin: ${result.isAdmin}');
+      if (result.isAdmin && result.products.isNotEmpty) {
+        print('💰 [ADMIN] Buying prices available: ${result.products.where((p) => p.buyingPrice != null).length}/${result.products.length}');
+      }
       
       setState(() {
-        _products = result['products'] as List<Product>;
-        _displayedProductsCount = _productsPerBatch.clamp(0, (result['products'] as List<Product>).length);
+        _products = result.products;  // ⭐ CHANGED - Use result.products
+        _isAdmin = result.isAdmin;    // ⭐ NEW - Store admin status
+        _displayedProductsCount = _productsPerBatch.clamp(0, result.products.length);
         _isLoadingProducts = false;
       });
     } catch (e) {
@@ -4600,6 +4629,42 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: kPrimaryColor),
         elevation: 0,
+        // ⭐ NEW - Show admin badge
+        actions: [
+          if (_isAdmin)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade700,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.admin_panel_settings, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'Admin',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
       body: Stack(
         children: [
@@ -4749,11 +4814,11 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                       controller: _scrollController,
                                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 2,
                                         crossAxisSpacing: 10,
                                         mainAxisSpacing: 10,
-                                        childAspectRatio: 0.45,
+                                        childAspectRatio: _isAdmin ? 0.40 : 0.45,  // ⭐ Smaller ratio (taller cards) for admin
                                       ),
                                       itemCount: _displayedProductsCount + (_isLoadingMoreProducts ? 2 : 0),
                                       itemBuilder: (context, index) {
@@ -4762,7 +4827,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                           return _buildSkeletonCard();
                                         }
                                         final product = _products[index];
-                                        return _buildProductCard(product, provider);
+                                        return _buildProductCard(product, provider, _isAdmin);  // ⭐ Pass isAdmin
                                       },
                                     ),
                         ),
@@ -4896,7 +4961,7 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
     );
   }
 
-  Widget _buildProductCard(Product product, AppProvider provider) {
+  Widget _buildProductCard(Product product, AppProvider provider, bool isAdmin) {  // ⭐ Add isAdmin parameter
     final String productId = product.itemId ?? 
         '${product.productName}_${product.weight}'.replaceAll(' ', '_').toLowerCase();
     final bool isFavorited = provider.isFavorite(productId);
@@ -5046,6 +5111,31 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                         '₹${product.price.toStringAsFixed(2)}',
                         style: TextStyle(fontSize: priceFontSize, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
+                      // ⭐ NEW - Admin buying price and margin
+                      if (isAdmin && product.buyingPrice != null) ...[
+                        SizedBox(height: padding * 1),  // ⭐ Add spacing before buying price
+                        Text(
+                          'Buying: ₹${product.buyingPrice!.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: weightFontSize,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: padding * 0.7),  // ⭐ Add spacing between buying and margin
+                        Text(
+                          'Margin: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: weightFontSize,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -245,6 +245,7 @@ class Product {
   final String? productNameTa;
   final String weight;
   final double price;
+  final double? buyingPrice;  // ⭐ NEW - Admin buying price (nullable)
   final String imageUrl;
   final int stock;
   final bool inStock;
@@ -267,6 +268,7 @@ class Product {
     this.productNameTa,
     required this.weight,
     required this.price,
+    this.buyingPrice,  // ⭐ NEW - Optional admin field
     required this.imageUrl,
     required this.stock,
     required this.inStock,
@@ -290,6 +292,9 @@ class Product {
       productNameTa: json['product_name_ta'],
       weight: json['weight'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      buyingPrice: json['buying_price'] != null   // ⭐ NEW - Parse buying price
+          ? (json['buying_price'] as num).toDouble()
+          : null,
       imageUrl: json['image_url'] ?? '',
       stock: json['stock'] ?? 0,
       inStock: json['in_stock'] ?? false,
@@ -335,6 +340,38 @@ class PaginationInfo {
       totalItems: json['total_items'] ?? json['total_products'] ?? 0, // Handle both field names
       hasNext: json['has_next'] ?? false,
       hasPrev: json['has_prev'] ?? false,
+    );
+  }
+}
+
+// ⭐ NEW - Admin-aware products response
+class ProductsResponse {
+  final List<Product> products;
+  final bool isAdmin;
+  final PaginationInfo pagination;
+  final String? section;
+  final String? mainCategory;
+  final String? subcategory;
+
+  ProductsResponse({
+    required this.products,
+    required this.isAdmin,
+    required this.pagination,
+    this.section,
+    this.mainCategory,
+    this.subcategory,
+  });
+
+  factory ProductsResponse.fromJson(Map<String, dynamic> json) {
+    return ProductsResponse(
+      products: (json['products'] as List)
+          .map((p) => Product.fromJson(p))
+          .toList(),
+      isAdmin: json['is_admin'] ?? false,
+      pagination: PaginationInfo.fromJson(json['pagination'] ?? {}),
+      section: json['section'],
+      mainCategory: json['main_category'],
+      subcategory: json['subcategory'],
     );
   }
 }
@@ -548,13 +585,15 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getProducts({
+  // ⭐ NEW - Admin-aware getProducts with userPhone parameter
+  static Future<ProductsResponse> getProducts({
     String? section,
     String? mainCategory,
     String? subcategory,
     String? sectionId,  // New: ID-based filtering
     String? mainCategoryId,  // New: ID-based filtering
     String? subcategoryId,  // New: ID-based filtering
+    String? userPhone,  // ⭐ NEW - Required for admin check
     int page = 1,
     int limit = 50,
     String lang = 'en',
@@ -566,6 +605,11 @@ class ApiService {
         'lang': lang,
         't': DateTime.now().millisecondsSinceEpoch.toString(),
       };
+      
+      // ⭐ NEW - Add user_phone for admin check
+      if (userPhone != null && userPhone.isNotEmpty) {
+        queryParams['user_phone'] = userPhone;
+      }
       
       // Prefer ID-based queries over name-based queries
       if (sectionId != null) {
@@ -587,28 +631,67 @@ class ApiService {
       }
 
       final uri = Uri.parse('$API_BASE/products').replace(queryParameters: queryParams);
+      print('🔍 [ADMIN] Fetching products: $uri');
+      
       final response = await http.get(
         uri,
         headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
         },
       );
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return {
-          'products': (data['products'] as List)
-              .map((item) => Product.fromJson(item))
-              .toList(),
-          'pagination': PaginationInfo.fromJson(data['pagination']),
-        };
+        final productsResponse = ProductsResponse.fromJson(data);
+        
+        print('✅ [ADMIN] Products loaded: ${productsResponse.products.length}');
+        print('👤 [ADMIN] Is Admin: ${productsResponse.isAdmin}');
+        if (productsResponse.isAdmin && productsResponse.products.isNotEmpty) {
+          final firstProduct = productsResponse.products.first;
+          print('💰 [ADMIN] Sample buying price: ${firstProduct.buyingPrice}');
+        }
+        
+        return productsResponse;
       } else {
         throw Exception('Failed to load products: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ [ADMIN] Error loading products: $e');
       throw Exception('Error loading products: $e');
     }
+  }
+
+  // Legacy method for backward compatibility - returns Map
+  static Future<Map<String, dynamic>> getProductsLegacy({
+    String? section,
+    String? mainCategory,
+    String? subcategory,
+    String? sectionId,
+    String? mainCategoryId,
+    String? subcategoryId,
+    int page = 1,
+    int limit = 50,
+    String lang = 'en',
+  }) async {
+    final response = await getProducts(
+      section: section,
+      mainCategory: mainCategory,
+      subcategory: subcategory,
+      sectionId: sectionId,
+      mainCategoryId: mainCategoryId,
+      subcategoryId: subcategoryId,
+      page: page,
+      limit: limit,
+      lang: lang,
+    );
+    return {
+      'products': response.products,
+      'pagination': response.pagination,
+    };
   }
 
   static Future<Product> getProductDetails(String itemId) async {

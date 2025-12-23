@@ -753,6 +753,15 @@ function editProduct(productId) {
     document.getElementById('productPrice').value = product.price;
     // Fallback to selling price if buying price not yet stored
     document.getElementById('productBuyingPrice').value = product.buying_price ?? product.price ?? '';
+    
+    // Set buying date from database
+    const buyingDateInput = document.getElementById('productBuyingDate');
+    if (buyingDateInput && product.buying_date) {
+        // Convert date to YYYY-MM-DD format if it's stored as ISO string or Date object
+        const dateValue = new Date(product.buying_date).toISOString().split('T')[0];
+        buyingDateInput.value = dateValue;
+    }
+    
     document.getElementById('productStock').value = product.stock;
     document.getElementById('productDescription').value = product.description || '';
     document.getElementById('productActive').checked = product.active;

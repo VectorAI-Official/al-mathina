@@ -42,18 +42,27 @@ class FCMService:
             # Load service account credentials
             # You need to download this from Firebase Console:
             # Project Settings > Service Accounts > Generate New Private Key
-            service_account_path = os.getenv(
-                'FIREBASE_SERVICE_ACCOUNT_PATH',
-                'firebase-service-account.json'
-            )
+            # Resolve multiple candidate paths to avoid CWD issues in Docker/Render
+            default_env_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH')
+            module_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.abspath(os.path.join(module_dir, os.pardir))
+            candidates = [
+                default_env_path,
+                os.path.join(os.getcwd(), 'firebase-service-account.json'),
+                os.path.join(project_root, 'firebase-service-account.json'),
+                '/app/firebase-service-account.json',  # Docker/Render canonical path
+            ]
+            service_account_path = next((p for p in candidates if p and os.path.exists(p)), None)
             
-            logger.info(f"🔍 FCM: Looking for credentials at: {service_account_path}")
             logger.info(f"🔍 FCM: Current working directory: {os.getcwd()}")
-            logger.info(f"🔍 FCM: File exists: {os.path.exists(service_account_path)}")
+            logger.info(f"🔍 FCM: Module directory: {module_dir}")
+            logger.info(f"🔍 FCM: Candidate credential paths: {candidates}")
+            logger.info(f"🔍 FCM: Selected credential path: {service_account_path}")
             
-            if not os.path.exists(service_account_path):
-                logger.error(f"❌ FCM: Firebase service account file not found: {service_account_path}")
-                logger.error("❌ FCM: Push notifications will NOT work. Download from Firebase Console.")
+            if not service_account_path:
+                logger.error("❌ FCM: Firebase service account file not found in any known location")
+                logger.error("❌ FCM: Set FIREBASE_SERVICE_ACCOUNT_PATH or place firebase-service-account.json next to utils/fcm_service.py")
+                logger.error("❌ FCM: Push notifications will NOT work until the key is mounted")
                 return
             
             logger.info("📄 FCM: Loading service account credentials...")
@@ -103,8 +112,10 @@ class FCMService:
             # Check if Firebase is initialized
             if not firebase_admin._apps:
                 logger.error("❌ FCM: Firebase not initialized. Cannot send notification.")
-                logger.error("❌ FCM: Did firebase-service-account.json load correctly?")
-                return False
+                logger.error("❌ FCM: Did firebase-service-account.json load correctly and is the path reachable in container?")
+                self._initialize_firebase()  # Retry initialization once
+                if not firebase_admin._apps:
+                    return False
             
             logger.info("✅ FCM: Firebase is initialized, preparing message...")
             

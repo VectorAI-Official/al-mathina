@@ -259,7 +259,7 @@ class FCMService {
       }
 
       // Use same base URL as ApiService
-      const String baseUrl = 'https://al-mathina.onrender.com'; // Production
+      const String baseUrl = 'https://al-mathina-upcraft.onrender.com'; // Production
       // For local testing: 'http://127.0.0.1:8000' or 'http://10.0.2.2:8000' (Android emulator)
       
       final url = '$baseUrl/api/user/fcm-token';

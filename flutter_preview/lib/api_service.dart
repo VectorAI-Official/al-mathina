@@ -6,7 +6,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 
 // Production backend URL on Render (with Cloudflare CDN)
-const String BASE_URL = "https://al-mathina.onrender.com";
+const String BASE_URL = "https://al-mathina-upcraft.onrender.com";
 const String API_BASE = "$BASE_URL/api/flutter";
 
 // Fallback: Direct Cloudflare origin (in case main domain fails)
@@ -89,7 +89,7 @@ Future<http.Response> _makeRequest(Uri uri, {Map<String, String>? headers, int r
       fallbackUri, 
       headers: {
         ...?headers,
-        'Host': 'al-mathina.onrender.com', // Keep original host header
+        'Host': 'al-mathina-upcraft.onrender.com', // Keep original host header
       }
     ).timeout(const Duration(seconds: 15));
     return response;

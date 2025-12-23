@@ -1388,7 +1388,8 @@ async function loadExportData(startDate = null, endDate = null) {
         exportStoreList = data.stores || [];
         exportSelectedList = [...exportStoreList];
         exportFilteredList = [...exportSelectedList];
-        renderExportPreview();
+        // Sort by most orders by default
+        sortExportByOrdersMost();
     } catch (err) {
         console.error('Export load failed', err);
         document.getElementById('exportPreviewBody').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#d32f2f;">Failed to load stores</td></tr>';

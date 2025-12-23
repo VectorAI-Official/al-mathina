@@ -2348,6 +2348,113 @@ body {
     color: #059669;
 }
 
+/* Mobile responsive export preview */
+@media (max-width: 768px) {
+    #exportModal .modal-content {
+        width: 95% !important;
+        max-height: 95vh !important;
+        max-width: none !important;
+        margin: 10px auto !important;
+    }
+    
+    #exportModal .modal-body {
+        padding: 12px !important;
+        overflow-x: hidden;
+    }
+    
+    /* Stack summary controls vertically */
+    .summary-controls {
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        margin-bottom: 16px !important;
+    }
+    
+    .summary-controls .btn,
+    .summary-controls .summary-btn {
+        width: 100% !important;
+        flex: none !important;
+        font-size: 13px !important;
+        padding: 10px 12px !important;
+        min-width: unset !important;
+    }
+    
+    /* Responsive date filter - stack vertically */
+    #exportModal .modal-body > div:nth-child(2) {
+        flex-direction: column !important;
+        gap: 12px !important;
+        margin-bottom: 12px !important;
+    }
+    
+    #exportModal .modal-body > div:nth-child(2) > div {
+        width: 100% !important;
+        min-width: unset !important;
+        flex: none !important;
+    }
+    
+    /* Responsive search bar */
+    #exportModal .modal-body > div:nth-child(3) {
+        flex-direction: column !important;
+    }
+    
+    #exportModal .modal-body > div:nth-child(3) > div {
+        width: 100% !important;
+    }
+    
+    /* Table wrapper - allow horizontal scroll */
+    #exportModal .modal-body > div:last-of-type {
+        max-height: 400px !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+    }
+    
+    .export-preview-table {
+        font-size: 12px;
+        min-width: 100%;
+    }
+    
+    .export-preview-table th {
+        padding: 10px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+    
+    .export-preview-table td {
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+    
+    /* Responsive modal actions */
+    #exportModal .modal-actions {
+        flex-direction: column !important;
+        gap: 10px !important;
+        padding: 12px !important;
+    }
+    
+    #exportModal .modal-actions > div:first-child {
+        width: 100%;
+        text-align: center;
+        font-size: 12px;
+        order: -1;
+    }
+    
+    #exportModal .modal-actions > div:last-child {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    #exportModal .modal-actions .btn-primary,
+    #exportModal .modal-actions .btn-secondary {
+        width: 100% !important;
+        padding: 10px 12px !important;
+        font-size: 12px !important;
+    }
+}
+
 .export-preview-table tbody tr:hover td:first-child {
     color: #065F46;
 }

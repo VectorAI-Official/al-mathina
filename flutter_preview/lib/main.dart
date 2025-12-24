@@ -3183,23 +3183,21 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 if (qty == 0) {
                   return SizedBox(
                     width: 100,
-                    height: 22,
                     child: ElevatedButton.icon(
                       onPressed: product.inStock
                           ? () {
                               provider.addToCart(product);
                             }
                           : null,
-                      icon: const Icon(Icons.shopping_bag_outlined, size: 11),
-                      label: const Text('Add', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600)),
+                      icon: const Icon(Icons.shopping_bag_outlined, size: 16),
+                      label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                         elevation: 0,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                     ),

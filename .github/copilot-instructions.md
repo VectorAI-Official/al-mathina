@@ -130,6 +130,63 @@ Project-specific conventions & patterns
   - HTTP headers: `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`, `Expires: 0`
   - This prevents stale data from being displayed after admin changes.
 
+- **Pagination & Lazy Loading** (CRITICAL - Jan 2025)
+  - **Backend**: ALL list endpoints (`/api/flutter/products`, `/api/flutter/search`) support pagination
+    * Parameters: `page` (1-indexed), `limit` (default: 20, max: 100)
+    * Response includes `pagination` object: `{current_page, total_pages, total_items, has_next, has_prev}`
+  - **Flutter Implementation** (SubcategoryProductsScreen as reference):
+    * ✅ **CORRECT**: Fetch pages from API as user scrolls (true pagination)
+      ```dart
+      int _currentPage = 1;
+      bool _hasMorePages = false;
+      bool _hasTriggeredLoad = false;  // Debouncing flag
+      double _lastScrollPosition = 0;   // Track scroll position
+      List<Product> _products = [];     // Accumulates products from all pages
+      
+      _onScroll() {
+        // Skip if position hasn't changed much (performance)
+        if ((currentPosition - _lastScrollPosition).abs() < 50) return;
+        _lastScrollPosition = currentPosition;
+        
+        // Load at 80% with debouncing
+        if (scrollPercentage > 0.8 && !_isLoadingMore && _hasMorePages && !_hasTriggeredLoad) {
+          _hasTriggeredLoad = true;
+          _loadMoreProducts();  // Fetches NEXT page from API
+        } else if (scrollPercentage < 0.7) {
+          _hasTriggeredLoad = false;  // Reset when scrolling back up
+        }
+      }
+      
+      _loadMoreProducts() async {
+        final result = await ApiService.getProducts(page: _currentPage + 1, limit: 20);
+        _products.addAll(result.products);  // APPEND new products
+        _currentPage++;
+        _hasMorePages = result.pagination.hasNext;
+        _hasTriggeredLoad = false;  // Reset trigger
+      }
+      ```
+    * ❌ **WRONG**: Display batches of already-fetched products (fake pagination)
+      ```dart
+      // DON'T DO THIS - fetches all at once, displays in batches
+      final result = await ApiService.getProducts(limit: 50);  // Gets 50 products
+      _displayedCount = 20;  // Only shows 20
+      // Later: _displayedCount += 20  // Shows more from SAME 50 products
+      ```
+  - **Why This Matters**: 
+    * ❌ Old approach: Subcategory shows "56 products" but only 50 fetched → user sees inconsistency
+    * ✅ New approach: Subcategory shows "56 products", fetches 20 at a time until all 56 loaded
+  - **Key Rules**:
+    1. ALWAYS use `result.pagination.hasNext` to check if more pages exist
+    2. ALWAYS append products to list (`_products.addAll()`), never replace
+    3. ALWAYS track `_currentPage` and increment when loading more
+    4. ALWAYS clear products list (`_products = []`) when changing filters/subcategories
+    5. Use 80% scroll threshold (not 70%) to avoid aggressive loading
+    6. **Performance**: Add debouncing with `_hasTriggeredLoad` flag to prevent multiple simultaneous API calls
+    7. **Performance**: Skip scroll events if position changed < 50px
+    8. **Performance**: Use `cacheExtent: 500` in GridView for smoother scrolling
+    9. **Performance**: Enable `addAutomaticKeepAlives: true` and `addRepaintBoundaries: true`
+  - **Testing**: Check that product count in sidebar matches total fetched products after scrolling to bottom
+
 - FCM Push Notifications System
   - **Backend**: `Backend/routes/fcm.py` handles token save/retrieve
   - **Backend Service**: `Backend/utils/fcm_service.py` sends notifications via Firebase Admin SDK

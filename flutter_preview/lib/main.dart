@@ -4588,11 +4588,16 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   bool _isAdmin = false;
   String? _userPhone;
   
-  // Lazy loading for products
-  int _displayedProductsCount = 0;
-  final int _productsPerBatch = 20;
+  // ⭐ FIXED - True pagination (not fake batching)
+  int _currentPage = 1;
+  bool _hasMorePages = false;
   bool _isLoadingMoreProducts = false;
+  final int _productsPerPage = 20;
   final ScrollController _scrollController = ScrollController();
+  
+  // ⭐ Performance optimization - Debouncing
+  double _lastScrollPosition = 0;
+  bool _hasTriggeredLoad = false;
 
   @override
   void initState() {
@@ -4625,28 +4630,78 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
   }
   
   void _onScroll() {
-    final scrollPercentage = _scrollController.position.pixels / _scrollController.position.maxScrollExtent;
-    if (scrollPercentage > 0.7 && !_isLoadingMoreProducts && _displayedProductsCount < _products.length) {
+    // ⭐ Performance optimization - Skip if position hasn't changed much
+    final currentPosition = _scrollController.position.pixels;
+    if ((currentPosition - _lastScrollPosition).abs() < 50) return;
+    _lastScrollPosition = currentPosition;
+    
+    // Check if we've reached the trigger point
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    if (maxScroll <= 0) return;
+    
+    final scrollPercentage = currentPosition / maxScroll;
+    
+    // Only load more if:
+    // 1. At 80% scroll position
+    // 2. Not already loading
+    // 3. There are more pages
+    // 4. Haven't triggered at this scroll level yet
+    if (scrollPercentage > 0.8 && !_isLoadingMoreProducts && _hasMorePages && !_hasTriggeredLoad) {
+      _hasTriggeredLoad = true;  // Prevent multiple triggers
       _loadMoreProducts();
+    } else if (scrollPercentage < 0.7) {
+      // Reset trigger when scrolling back up
+      _hasTriggeredLoad = false;
     }
   }
   
-  void _loadMoreProducts() {
-    if (_isLoadingMoreProducts || _displayedProductsCount >= _products.length) return;
+  void _loadMoreProducts() async {
+    // ⭐ Performance - Double-check to prevent race conditions
+    if (_isLoadingMoreProducts || !_hasMorePages || _selectedSubcategory == null) return;
     
+    // ⭐ Performance - Set loading state immediately to prevent multiple calls
+    if (!mounted) return;
     setState(() {
       _isLoadingMoreProducts = true;
     });
     
-    Future.delayed(const Duration(milliseconds: 300), () {
+    try {
+      final provider = Provider.of<AppProvider>(context, listen: false);
+      final nextPage = _currentPage + 1;
+      
+      print('🔄 Loading page $nextPage for ${_selectedSubcategory!.name}...');
+      
+      // ⭐ FIXED - Fetch next page from API (async, doesn't block UI)
+      final result = await ApiService.getProducts(
+        section: widget.section,
+        mainCategory: widget.mainCategory,
+        subcategoryId: _selectedSubcategory!.subcategoryId,
+        subcategory: _selectedSubcategory!.name,
+        userPhone: _userPhone,
+        page: nextPage,
+        limit: _productsPerPage,
+        lang: provider.currentLanguage,
+      );
+      
       if (mounted) {
         setState(() {
-          _displayedProductsCount = 
-              (_displayedProductsCount + _productsPerBatch).clamp(0, _products.length);
+          _products.addAll(result.products);  // ⭐ APPEND new products
+          _currentPage = nextPage;
+          _hasMorePages = result.pagination.hasNext;
           _isLoadingMoreProducts = false;
+          _hasTriggeredLoad = false;  // ⭐ Reset trigger after successful load
+        });
+        print('✅ Loaded ${result.products.length} more products. Total: ${_products.length}. Has more: $_hasMorePages');
+      }
+    } catch (e) {
+      print('❌ Error loading more products: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingMoreProducts = false;
+          _hasTriggeredLoad = false;  // ⭐ Reset trigger on error too
         });
       }
-    });
+    }
   }
 
   @override
@@ -4701,8 +4756,13 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
 
   Future<void> _loadProducts(Subcategory subcategory) async {
     setState(() {
+      _hasTriggeredLoad = false;  // ⭐ Performance - Reset trigger
+      _lastScrollPosition = 0;     // ⭐ Performance - Reset scroll tracking
       _isLoadingProducts = true;
       _selectedSubcategory = subcategory;
+      _products = [];  // ⭐ FIXED - Clear products when changing subcategory
+      _currentPage = 1;  // ⭐ FIXED - Reset to page 1
+      _hasMorePages = false;
     });
 
     try {
@@ -4711,28 +4771,34 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
       print('DEBUG: API params: section="${widget.section}" mainCategory="${widget.mainCategory}" subcategoryId="${subcategory.subcategoryId}" subcategory="${subcategory.name}"');
       print('👤 [ADMIN] Calling API with user_phone: ${_userPhone ?? "NOT PROVIDED"}');
       
-      // ⭐ NEW - Use ProductsResponse with userPhone
+      // ⭐ FIXED - Fetch first page with pagination
       final result = await ApiService.getProducts(
         section: widget.section,
         mainCategory: widget.mainCategory,
         subcategoryId: subcategory.subcategoryId,
-        subcategory: subcategory.name,  // Fallback to name if ID is not available
-        userPhone: _userPhone,  // ⭐ NEW - Pass user phone for admin check
+        subcategory: subcategory.name,
+        userPhone: _userPhone,
+        page: 1,  // ⭐ FIXED - Always start from page 1
+        limit: _productsPerPage,
         lang: provider.currentLanguage,
       );
       
-      print('DEBUG: Received ${result.products.length} products');
+      print('DEBUG: Received ${result.products.length} products (Page 1/${result.pagination.totalPages})');
+      print('DEBUG: Total products in DB: ${result.pagination.totalItems}');
       print('✅ [ADMIN] Is Admin: ${result.isAdmin}');
       if (result.isAdmin && result.products.isNotEmpty) {
         print('💰 [ADMIN] Buying prices available: ${result.products.where((p) => p.buyingPrice != null).length}/${result.products.length}');
       }
       
       setState(() {
-        _products = result.products;  // ⭐ CHANGED - Use result.products
-        _isAdmin = result.isAdmin;    // ⭐ NEW - Store admin status
-        _displayedProductsCount = _productsPerBatch.clamp(0, result.products.length);
+        _products = result.products;
+        _isAdmin = result.isAdmin;
+        _currentPage = 1;  // ⭐ FIXED - We're on page 1
+        _hasMorePages = result.pagination.hasNext;  // ⭐ FIXED - Check if there are more pages
         _isLoadingProducts = false;
       });
+      
+      print('✅ Loaded page 1. Has more pages: $_hasMorePages');
     } catch (e) {
       print('DEBUG: Error loading products: $e');
       setState(() {
@@ -4940,16 +5006,19 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
                                       controller: _scrollController,
                                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 140),
                                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                      cacheExtent: 500,  // ⭐ Performance - Cache 500px of items outside viewport
+                                      addAutomaticKeepAlives: true,  // ⭐ Performance - Keep items alive when scrolling
+                                      addRepaintBoundaries: true,    // ⭐ Performance - Isolate repaints per item
                                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                         crossAxisCount: 2,
                                         crossAxisSpacing: 10,
                                         mainAxisSpacing: 10,
                                         childAspectRatio: _isAdmin ? 0.40 : 0.45,  // ⭐ Smaller ratio (taller cards) for admin to fit cost/profit
                                       ),
-                                      itemCount: _displayedProductsCount + (_isLoadingMoreProducts ? 2 : 0),
+                                      itemCount: _products.length + (_isLoadingMoreProducts ? 2 : 0),  // ⭐ FIXED - Show all loaded products
                                       itemBuilder: (context, index) {
                                         // Show skeleton for loading more
-                                        if (index >= _displayedProductsCount) {
+                                        if (index >= _products.length) {
                                           return _buildSkeletonCard();
                                         }
                                         final product = _products[index];

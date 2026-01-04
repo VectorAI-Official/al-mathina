@@ -1386,10 +1386,14 @@ async function loadExportData(startDate = null, endDate = null) {
         });
         const data = await response.json();
         exportStoreList = data.stores || [];
-        exportSelectedList = [...exportStoreList];
+        // Filter out stores with 0 orders
+        exportSelectedList = exportStoreList.filter(store => (store.order_count || 0) > 0);
         exportFilteredList = [...exportSelectedList];
         // Sort by most orders by default
         sortExportByOrdersMost();
+        
+        // Load statistics with the same date filters to ensure they match the export data
+        await loadStatistics();
     } catch (err) {
         console.error('Export load failed', err);
         document.getElementById('exportPreviewBody').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#d32f2f;">Failed to load stores</td></tr>';
@@ -1400,11 +1404,14 @@ async function loadExportData(startDate = null, endDate = null) {
 
 function renderExportPreview() {
     const tbody = document.getElementById('exportPreviewBody');
-    if (!exportFilteredList.length) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#9ca3af;"><i class="fas fa-inbox"></i> No stores found</td></tr>';
+    // Filter out stores with 0 orders
+    const storesWithOrders = exportFilteredList.filter(store => (store.order_count || 0) > 0);
+    
+    if (!storesWithOrders.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#9ca3af;"><i class="fas fa-inbox"></i> No stores with orders found</td></tr>';
         return;
     }
-    tbody.innerHTML = exportFilteredList.map(store => `
+    tbody.innerHTML = storesWithOrders.map(store => `
         <tr>
             <td><i class="fas fa-store" style="margin-right:8px; color:#1B5E20;"></i>${store.store_name || 'Unnamed Store'}</td>
             <td>${store.order_count || 0}</td>
@@ -1744,6 +1751,9 @@ async function exportToPDF() {
         // Show loading
         showLoading();
         
+        // First, ensure statistics are loaded with current filters
+        await loadStatistics();
+        
         // Accept pre-filtered list (from preview modal) or fetch if not provided
         let allStoresForExport = Array.isArray(arguments[0]) ? arguments[0] : null;
         if (!allStoresForExport || !allStoresForExport.length) {
@@ -1775,7 +1785,7 @@ async function exportToPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        // Get current statistics
+        // Get current statistics (now reflects the applied filters)
         const totalStores = document.getElementById('totalStores').textContent;
         const totalOrders = document.getElementById('totalOrders').textContent;
         const totalRevenue = document.getElementById('totalRevenue').textContent.replace(/₹/g, 'Rs.');
@@ -1835,32 +1845,6 @@ async function exportToPDF() {
         
         yPos += 5;
         
-        // Add summary statistics
-        doc.setFontSize(12);
-        doc.setTextColor(0);
-        doc.text('Summary Statistics', 14, yPos);
-        yPos += 7;
-        
-        doc.setFontSize(10);
-        const stats = [
-            ['Total Stores', totalStores],
-            ['Total Orders', totalOrders],
-            ['Total Revenue', totalRevenue],
-            ['Average per Store', avgPerStore]
-        ];
-        
-        doc.autoTable({
-            startY: yPos,
-            head: [['Metric', 'Value']],
-            body: stats,
-            theme: 'grid',
-            headStyles: { fillColor: [40, 167, 69] },
-            margin: { left: 14, right: 14 },
-            styles: { font: 'helvetica', fontSize: 10 }
-        });
-        
-        yPos = doc.lastAutoTable.finalY + 10;
-        
         // Add store details header
         doc.setFontSize(12);
         doc.text('Store Details', 14, yPos);
@@ -1881,14 +1865,17 @@ async function exportToPDF() {
         doc.text('Revenue', 190, yPos + 6.5, { align: 'right' });
         yPos += 12;
         
-        // Add stores one by one
+        // Add stores one by one (filter out stores with 0 orders)
         doc.setTextColor(0);
         doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
         let rowColor = true;
         
-        for (let i = 0; i < allStoresForExport.length; i++) {
-            const store = allStoresForExport[i];
+        // Filter out stores with 0 orders before adding to PDF
+        const storesForPDF = allStoresForExport.filter(store => (store.order_count || 0) > 0);
+        
+        for (let i = 0; i < storesForPDF.length; i++) {
+            const store = storesForPDF[i];
             const storeName = store.store_name || 'Unnamed Store';
             const hasTamil = /[\u0B80-\u0BFF]/.test(storeName);
             

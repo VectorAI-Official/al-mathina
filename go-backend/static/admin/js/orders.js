@@ -25,9 +25,9 @@ let lastScrollTop = 0;
 let scrollTimeout;
 
 // Initialize orders management
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 Orders page initialized');
-    
+
     // Check if we're on the orders page
     if (document.getElementById('ordersContainer')) {
         loadOrders();
@@ -40,27 +40,27 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupHeaderScrollBehavior() {
     const header = document.querySelector('.orders-header');
     if (!header) return;
-    
+
     window.addEventListener('scroll', () => {
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
             const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-            
+
             // Ignore if at top
             if (currentScroll <= 0) {
                 header.classList.remove('header-hidden');
                 return;
             }
-            
+
             // Scrolling down - hide header
             if (currentScroll > lastScrollTop && currentScroll > 100) {
                 header.classList.add('header-hidden');
-            } 
+            }
             // Scrolling up - show header
             else if (currentScroll < lastScrollTop) {
                 header.classList.remove('header-hidden');
             }
-            
+
             lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
         }, 50);
     }, { passive: true });
@@ -69,7 +69,7 @@ function setupHeaderScrollBehavior() {
 // Setup event listeners
 function setupEventListeners() {
     console.log('🎯 Setting up event listeners');
-    
+
     // Search input - try both IDs for compatibility
     const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
     if (searchInput) {
@@ -79,7 +79,7 @@ function setupEventListeners() {
     } else {
         console.warn('   ⚠️  Search input not found');
     }
-    
+
     // Status filter
     const statusFilter = document.getElementById('statusFilter');
     if (statusFilter) {
@@ -88,13 +88,13 @@ function setupEventListeners() {
     } else {
         console.warn('   ⚠️  Status filter not found');
     }
-    
+
     // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             const revenueModal = document.getElementById('revenueModal');
             const orderModal = document.getElementById('orderDetailsModal');
-            
+
             if (revenueModal && revenueModal.style.display !== 'none') {
                 closeRevenueModal();
             } else if (orderModal && orderModal.style.display !== 'none') {
@@ -109,30 +109,30 @@ async function loadOrders() {
     console.log('🔄 Loading orders from /api/admin/orders');
     try {
         showLoading('ordersContainer');
-        
+
         const response = await fetch('/api/admin/orders');
         console.log(`📡 API Response Status: ${response.status} ${response.statusText}`);
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         console.log('📦 Full API Response:', data);
         console.log(`🔢 data.success = ${data.success}`);
         console.log(`📋 data.orders type = ${typeof data.orders}, length = ${data.orders?.length || 'undefined'}`);
         console.log(`✅ Loaded ${data.orders?.length || 0} orders`);
-        
+
         if (data.success) {
             console.log('✔️ data.success is true, assigning to allOrders');
             allOrders = data.orders;
             filteredOrders = data.orders; // Initialize filtered orders with all orders
-            
+
             // Check URL parameters for search/filter on page load
             const urlParams = new URLSearchParams(window.location.search);
             const searchParam = urlParams.get('search');
             const statusParam = urlParams.get('status');
-            
+
             if (searchParam) {
                 console.log(`🔍 Auto-searching for: ${searchParam}`);
                 const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
@@ -140,7 +140,7 @@ async function loadOrders() {
                     searchInput.value = searchParam;
                 }
             }
-            
+
             if (statusParam) {
                 console.log(`🔍 Auto-filtering status: ${statusParam}`);
                 const statusFilter = document.getElementById('statusFilter');
@@ -148,7 +148,7 @@ async function loadOrders() {
                     statusFilter.value = statusParam;
                 }
             }
-            
+
             // Apply filters if URL parameters exist
             if (searchParam || statusParam) {
                 filterOrders();
@@ -168,12 +168,12 @@ async function loadOrders() {
 // Display orders in list with lazy loading
 function displayOrders(orders, append = false) {
     const container = document.getElementById('ordersContainer');
-    
+
     if (!container) {
         console.error('❌ ordersContainer element not found!');
         return;
     }
-    
+
     if (orders.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -185,18 +185,18 @@ function displayOrders(orders, append = false) {
         displayedOrdersCount = 0;
         return;
     }
-    
+
     try {
         // Reset count if not appending
         if (!append) {
             displayedOrdersCount = 0;
         }
-        
+
         // Calculate slice range
         const start = displayedOrdersCount;
         const end = Math.min(start + ORDERS_PER_PAGE, orders.length);
         const ordersToShow = orders.slice(start, end);
-        
+
         const newHTML = ordersToShow.map(order => `
             <div class="order-card" data-order-id="${order.order_id}" data-order-index="${displayedOrdersCount + ordersToShow.indexOf(order)}">
                 <div class="order-card-header">
@@ -264,29 +264,29 @@ function displayOrders(orders, append = false) {
                 </div>
             </div>
         `).join('');
-        
+
         // Append or replace HTML
         if (append) {
             container.insertAdjacentHTML('beforeend', newHTML);
         } else {
             container.innerHTML = newHTML;
         }
-        
+
         // Update displayed count
         displayedOrdersCount = end;
-        
+
         // Restore checkbox states
         selectedOrderIds.forEach(orderId => {
             const checkbox = document.getElementById(`checkbox-${orderId}`);
             if (checkbox) checkbox.checked = true;
         });
-        
+
         // Update bulk action button visibility
         updateBulkActionButton();
-        
+
         // Setup scroll listener
         setupOrderScrollListener(orders);
-        
+
         console.log(`✅ Displayed ${displayedOrdersCount}/${orders.length} orders`);
     } catch (displayError) {
         console.error('❌ Error generating order HTML:', displayError);
@@ -305,18 +305,18 @@ let orderLoadObserver = null;
 
 function setupOrderScrollListener(orders) {
     const container = document.getElementById('ordersContainer');
-    
+
     // Disconnect existing observer
     if (orderLoadObserver) {
         orderLoadObserver.disconnect();
     }
-    
+
     // Store current orders list
     window.currentOrdersList = orders;
-    
+
     // Check if we've loaded everything
     if (displayedOrdersCount >= orders.length) return;
-    
+
     // Create sentinel element at the end
     let sentinel = document.getElementById('order-load-sentinel');
     if (!sentinel) {
@@ -326,7 +326,7 @@ function setupOrderScrollListener(orders) {
         sentinel.style.visibility = 'hidden';
     }
     container.appendChild(sentinel);
-    
+
     // Create IntersectionObserver for smooth lazy loading
     orderLoadObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
@@ -339,7 +339,7 @@ function setupOrderScrollListener(orders) {
         rootMargin: '300px', // Start loading 300px before reaching the end
         threshold: 0.1
     });
-    
+
     orderLoadObserver.observe(sentinel);
 }
 
@@ -349,12 +349,12 @@ async function viewOrderDetails(orderId) {
         // Show loading in the modal content
         const modal = document.getElementById('orderDetailsModal');
         const content = document.getElementById('orderDetailsContent');
-        
+
         if (!content) {
             console.error('orderDetailsContent element not found');
             return;
         }
-        
+
         content.innerHTML = `
             <div class="modal-body">
                 <div class="loading">
@@ -364,10 +364,10 @@ async function viewOrderDetails(orderId) {
             </div>
         `;
         modal.style.display = 'block';
-        
+
         const response = await fetch(`/api/admin/orders/${orderId}`);
         const data = await response.json();
-        
+
         if (data.success) {
             currentOrder = data.order;
             showOrderDetailsModal(data.order);
@@ -402,13 +402,19 @@ async function viewOrderDetails(orderId) {
 // Show order details modal
 function showOrderDetailsModal(order) {
     const modal = document.getElementById('orderDetailsModal');
+    if (!modal) return;
+
+    // Render content
+    renderOrderDetails(order);
+
+    modal.style.display = 'block';
+}
+
+// Render order details content (extracted for re-use)
+function renderOrderDetails(order) {
     const content = document.getElementById('orderDetailsContent');
-    
-    if (!modal || !content) {
-        console.error('Modal elements not found:', { modal: !!modal, content: !!content });
-        return;
-    }
-    
+    if (!content) return;
+
     content.innerHTML = `
         <div class="modal-body">
             <div class="order-details-header">
@@ -577,8 +583,6 @@ function showOrderDetailsModal(order) {
             </button>
         </div>
     `;
-    
-    modal.style.display = 'block';
 }
 
 // Update order status
@@ -586,7 +590,7 @@ async function updateOrderStatus(orderId, newStatus) {
     if (!confirm(`Are you sure you want to mark this order as ${newStatus}?`)) {
         return;
     }
-    
+
     try {
         const response = await fetch(`/api/admin/orders/${orderId}/status`, {
             method: 'PUT',
@@ -595,9 +599,9 @@ async function updateOrderStatus(orderId, newStatus) {
             },
             body: JSON.stringify({ status: newStatus })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             alert(`Order ${newStatus} successfully!`);
             closeOrderDetailsModal();
@@ -637,12 +641,12 @@ function printInvoice(orderId) {
         iframe.style.border = 'none';
         iframe.style.visibility = 'hidden';
         document.body.appendChild(iframe);
-        
+
         const iframeDoc = iframe.contentWindow.document;
         iframeDoc.open();
         iframeDoc.write(invoiceHTML);
         iframeDoc.close();
-        
+
         // Wait for content to load before printing
         iframe.onload = () => {
             setTimeout(() => {
@@ -653,7 +657,7 @@ function printInvoice(orderId) {
                     console.error('Print failed:', e);
                     alert('Print failed. Please try again.');
                 }
-                
+
                 // Clean up after printing
                 setTimeout(() => {
                     if (iframe.parentNode) {
@@ -673,13 +677,13 @@ function printInvoice(orderId) {
 async function shareInvoiceWhatsApp(orderId) {
     const order = currentOrder;
     if (!order) return;
-    
+
     try {
         console.log('📄 Generating PDF invoice for WhatsApp share...');
-        
+
         // Generate invoice HTML - same as print but with shareMode for sizing
         const invoiceHTML = generateInvoiceHTML(order, { shareMode: true, printMode: false });
-        
+
         // Create hidden iframe - SAME APPROACH AS PRINT INVOICE
         const iframe = document.createElement('iframe');
         iframe.style.position = 'absolute';
@@ -690,25 +694,25 @@ async function shareInvoiceWhatsApp(orderId) {
         iframe.style.border = 'none';
         iframe.style.visibility = 'hidden';
         document.body.appendChild(iframe);
-        
+
         const iframeDoc = iframe.contentWindow.document;
         iframeDoc.open();
         iframeDoc.write(invoiceHTML);
         iframeDoc.close();
-        
+
         // Wait for content to fully render (same delay as print)
         await new Promise(resolve => {
             iframe.onload = () => setTimeout(resolve, 500);
         });
-        
+
         // Get the invoice container from iframe
         const invoiceElement = iframe.contentWindow.document.querySelector('.invoice-container');
         if (!invoiceElement) {
             throw new Error('Invoice element not found');
         }
-        
+
         console.log('📸 Capturing invoice as image...');
-        
+
         // Capture with html2canvas
         const canvas = await html2canvas(invoiceElement, {
             scale: 2, // High quality
@@ -721,12 +725,12 @@ async function shareInvoiceWhatsApp(orderId) {
             foreignObjectRendering: false,
             imageTimeout: 0
         });
-        
+
         // Clean up iframe
         document.body.removeChild(iframe);
 
         console.log('📄 Converting to PDF...');
-        
+
         // Create PDF - Simple approach matching print quality
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({
@@ -735,34 +739,34 @@ async function shareInvoiceWhatsApp(orderId) {
             format: 'a4',
             compress: true
         });
-        
+
         // Get PDF dimensions
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
-        
+
         // Define page margins - First page minimal, subsequent pages with safety buffers
         const topMargin = 0; // No top margin on first page
         const bottomMarginFirstPage = 10; // 10mm bottom margin on first page only (minimal)
         const bottomMargin = 20; // 20mm bottom margin on subsequent pages (increased buffer)
         const topMarginSubsequent = 25; // 25mm top margin on pages 2+ (increased buffer)
         const safetyBuffer = 5; // 5mm extra safety buffer on subsequent pages to avoid row splits
-        
+
         // Calculate usable heights - First page gets more space, subsequent pages more conservative
         const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage; // First page with minimal bottom margin
         const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffers
-        
+
         // Calculate scaled image dimensions
         const imgWidth = pdfWidth;
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-        
+
         // Convert canvas to high-quality image
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        
+
         console.log(`📐 PDF Dimensions: ${pdfWidth}mm x ${pdfHeight}mm`);
         console.log(`📐 Image Height: ${imgHeight}mm`);
         console.log(`📐 First Page Usable: ${firstPageUsableHeight}mm`);
         console.log(`📐 Subsequent Usable: ${subsequentPageUsableHeight}mm`);
-        
+
         // Add image to PDF with intelligent pagination
         if (imgHeight <= firstPageUsableHeight) {
             // Single page - fits perfectly
@@ -773,75 +777,75 @@ async function shareInvoiceWhatsApp(orderId) {
             let remainingHeight = imgHeight;
             let sourceY = 0; // Y position in source image (in mm)
             let pageNumber = 1;
-            
+
             // First page
             const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
-            
+
             // Calculate source dimensions in canvas pixels for clipping
             const canvasHeight = canvas.height;
             const canvasWidth = canvas.width;
             const pixelsPerMm = canvasHeight / imgHeight; // Conversion factor
-            
+
             // First page: clip from top of canvas
             const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
-            
+
             // Create canvas for first page
             const page1Canvas = document.createElement('canvas');
             page1Canvas.width = canvasWidth;
             page1Canvas.height = firstPageCanvasHeight;
             const page1Ctx = page1Canvas.getContext('2d');
-            
+
             page1Ctx.drawImage(
                 canvas,
                 0, 0, canvasWidth, firstPageCanvasHeight, // Source clip
                 0, 0, canvasWidth, firstPageCanvasHeight  // Destination
             );
-            
+
             const page1Data = page1Canvas.toDataURL('image/jpeg', 0.95);
             pdf.addImage(page1Data, 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
-            
+
             sourceY += firstPageHeight;
             remainingHeight -= firstPageHeight;
-            
+
             console.log(`📄 Page 1: ${firstPageHeight}mm (source 0 → ${firstPageHeight}mm)`);
-            
+
             // Subsequent pages
             while (remainingHeight > 0) {
                 pdf.addPage();
                 pageNumber++;
-                
+
                 const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
                 const pageCanvasHeight = pageHeight * pixelsPerMm;
                 const sourceCanvasY = sourceY * pixelsPerMm;
-                
+
                 // Create canvas for this page
                 const pageCanvas = document.createElement('canvas');
                 pageCanvas.width = canvasWidth;
                 pageCanvas.height = pageCanvasHeight;
                 const pageCtx = pageCanvas.getContext('2d');
-                
+
                 pageCtx.drawImage(
                     canvas,
                     0, sourceCanvasY, canvasWidth, pageCanvasHeight, // Source clip
                     0, 0, canvasWidth, pageCanvasHeight              // Destination
                 );
-                
+
                 const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
                 pdf.addImage(pageData, 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
-                
+
                 console.log(`📄 Page ${pageNumber}: ${pageHeight}mm (source ${sourceY}mm → ${sourceY + pageHeight}mm)`);
-                
+
                 sourceY += pageHeight;
                 remainingHeight -= pageHeight;
             }
-            
+
             console.log(`✅ Generated ${pageNumber} pages with intelligent pagination`);
         }
-        
+
         // Generate PDF file
         const pdfBlob = pdf.output('blob');
         const pdfFile = new File([pdfBlob], `Invoice_${order.order_id}.pdf`, { type: 'application/pdf' });
-        
+
         console.log('✅ PDF generated:', pdfFile.size, 'bytes');
 
         // Try native share API (works on mobile)
@@ -868,7 +872,7 @@ async function shareInvoiceWhatsApp(orderId) {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
-        
+
         showToast('Invoice downloaded! Share via WhatsApp', 'success');
     } catch (error) {
         console.error('❌ PDF generation error:', error);
@@ -901,7 +905,7 @@ let isEditMode = false;
 
 function toggleEditMode() {
     isEditMode = true;
-    
+
     // Show quantity inputs
     document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.qty-input').forEach(el => {
@@ -911,7 +915,7 @@ function toggleEditMode() {
         el.style.textAlign = 'center';
         el.style.border = '2px solid #4CAF50';
     });
-    
+
     // Show price inputs
     document.querySelectorAll('.price-display').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.price-input').forEach(el => {
@@ -921,71 +925,71 @@ function toggleEditMode() {
         el.style.textAlign = 'center';
         el.style.border = '2px solid #4CAF50';
     });
-    
+
     // Show add product container
     const addProductContainer = document.getElementById('addProductContainer');
     if (addProductContainer) addProductContainer.style.display = 'block';
-    
+
     // Show delete buttons and action column
     document.querySelectorAll('.edit-only-column').forEach(el => el.style.display = 'table-cell');
     document.querySelectorAll('.btn-delete-item').forEach(btn => btn.style.display = 'inline-block');
-    
+
     // Add event listeners
     document.querySelectorAll('.qty-input').forEach(input => input.addEventListener('input', updateItemTotal));
     document.querySelectorAll('.price-input').forEach(input => input.addEventListener('input', updateItemTotal));
-    
+
     const saveContainer = document.getElementById('saveButtonContainer');
     if (saveContainer) saveContainer.style.display = 'block';
-    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = true; btn.style.opacity='0.5'; btn.style.cursor='not-allowed'; });
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; });
     const editBtn = document.querySelector('.btn-edit-items');
-    if (editBtn) editBtn.style.display='none';
+    if (editBtn) editBtn.style.display = 'none';
 }
 
 function cancelEditMode() {
     isEditMode = false;
-    
+
     // Reset quantity inputs
-    document.querySelectorAll('.qty-input').forEach(input => { input.value = input.dataset.original; input.style.display='none'; });
-    document.querySelectorAll('.qty-display').forEach(el => el.style.display='inline');
-    
+    document.querySelectorAll('.qty-input').forEach(input => { input.value = input.dataset.original; input.style.display = 'none'; });
+    document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'inline');
+
     // Reset price inputs
-    document.querySelectorAll('.price-input').forEach(input => { input.value = input.dataset.original; input.style.display='none'; });
-    document.querySelectorAll('.price-display').forEach(el => el.style.display='inline');
-    
+    document.querySelectorAll('.price-input').forEach(input => { input.value = input.dataset.original; input.style.display = 'none'; });
+    document.querySelectorAll('.price-display').forEach(el => el.style.display = 'inline');
+
     // Hide add product container
     const addProductContainer = document.getElementById('addProductContainer');
     if (addProductContainer) addProductContainer.style.display = 'none';
     clearProductSearch();
-    
+
     // Hide delete buttons and action column
     document.querySelectorAll('.edit-only-column').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.btn-delete-item').forEach(btn => btn.style.display = 'none');
-    
+
     const saveContainer = document.getElementById('saveButtonContainer');
-    if (saveContainer) saveContainer.style.display='none';
-    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = false; btn.style.opacity='1'; btn.style.cursor='pointer'; });
+    if (saveContainer) saveContainer.style.display = 'none';
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; });
     const editBtn = document.querySelector('.btn-edit-items');
-    if (editBtn) editBtn.style.display='inline-block';
+    if (editBtn) editBtn.style.display = 'inline-block';
     recalculateGrandTotal();
 }
 
 function updateItemTotal(event) {
     const input = event.target;
     const row = input.closest('tr');
-    
+
     // Get current price (from input if in edit mode, otherwise from data attribute)
     const priceInput = row.querySelector('.price-input');
     const price = priceInput ? parseFloat(priceInput.value) || 0 : parseFloat(row.dataset.price);
-    
+
     // Get current quantity
     const qtyInput = row.querySelector('.qty-input');
     const quantity = parseInt(qtyInput.value) || 0;
-    
+
     // Calculate and update item total
     const itemTotal = price * quantity;
     const totalCell = row.querySelector('.item-total strong');
     if (totalCell) totalCell.textContent = `₹${itemTotal.toFixed(2)}`;
-    
+
     recalculateGrandTotal();
 }
 
@@ -995,11 +999,11 @@ function recalculateGrandTotal() {
         // Get price (from input if exists, otherwise from data attribute)
         const priceInput = row.querySelector('.price-input');
         const price = priceInput ? (parseFloat(priceInput.value) || parseFloat(priceInput.dataset.original)) : parseFloat(row.dataset.price);
-        
+
         // Get quantity
         const qtyInput = row.querySelector('.qty-input');
         const quantity = parseInt(qtyInput?.value) || parseInt(qtyInput?.dataset.original) || 0;
-        
+
         grandTotal += price * quantity;
     });
     const totalEl = document.querySelector('.total-amount');
@@ -1009,51 +1013,51 @@ async function saveOrderChanges(orderId) {
     if (!confirm('Are you sure you want to save these changes? This will update the order in the database.')) {
         return;
     }
-    
+
     // Collect updated items
     const updatedItems = [];
     let hasChanges = false;
-    
+
     // Check if number of items changed (products added or deleted)
     const currentRowCount = document.querySelectorAll('#orderItemsTable tbody tr').length;
     const originalItemCount = currentOrder.items.length;
-    
+
     if (currentRowCount !== originalItemCount) {
         hasChanges = true;
     }
-    
+
     document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
         const qtyInput = row.querySelector('.qty-input');
         const priceInput = row.querySelector('.price-input');
-        
+
         const newQuantity = parseInt(qtyInput.value) || 0;
         const originalQuantity = parseInt(qtyInput.dataset.original);
-        
+
         const newPrice = parseFloat(priceInput.value) || 0;
         const originalPrice = parseFloat(priceInput.dataset.original);
-        
+
         if (newQuantity !== originalQuantity || newPrice !== originalPrice) {
             hasChanges = true;
         }
-        
+
         updatedItems.push({
-            product_id: row.dataset.productId,
+            item_id: row.dataset.productId,
             product_name: row.querySelector('td:first-child strong').textContent,
             weight: row.querySelector('td:nth-child(2)').textContent,
             price: newPrice,
             quantity: newQuantity
         });
     });
-    
+
     if (!hasChanges) {
         alert('No changes were made. Add or remove products, or change quantities.');
         cancelEditMode();
         return;
     }
-    
+
     // Calculate new total
     const newTotal = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
+
     try {
         const response = await fetch(`/api/admin/orders/${orderId}/update-items`, {
             method: 'PUT',
@@ -1065,40 +1069,24 @@ async function saveOrderChanges(orderId) {
                 total_amount: newTotal
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
             alert('Order updated successfully!');
-            
-            // Update current order data
-            currentOrder.items = updatedItems;
-            currentOrder.total_amount = newTotal;
-            
-            // Update display spans with new quantities
-            document.querySelectorAll('.qty-input').forEach(input => {
-                const newQty = input.value;
-                input.dataset.original = newQty;
-                const display = input.parentElement.querySelector('.qty-display');
-                display.textContent = `×${newQty}`;
-            });
-            
-            // Update display spans with new prices
-            document.querySelectorAll('.price-input').forEach(input => {
-                const newPrice = input.value;
-                input.dataset.original = newPrice;
-                const display = input.parentElement.querySelector('.price-display');
-                display.textContent = `₹${parseFloat(newPrice).toFixed(2)}`;
-                
-                // Update row data attribute
-                const row = input.closest('tr');
-                if (row) row.dataset.price = newPrice;
-            });
-            
+
+            // Update current order data with response from server
+            currentOrder.items = data.items || updatedItems;
+            currentOrder.total_amount = data.total_amount || newTotal;
+            currentOrder.grand_total = data.grand_total || newTotal;
+
+            // Re-render the order items table with new data
+            renderOrderDetails(currentOrder);
+
             // Exit edit mode
             cancelEditMode();
-            
-            // Refresh order list
+
+            // Refresh main order list in background
             loadOrders();
         } else {
             throw new Error(data.error || 'Failed to update order');
@@ -1116,7 +1104,7 @@ function generateInvoiceHTML(order, opts = {}) {
     // Use 794px (A4 width at 96dpi) for share mode to match canvas container
     const pageWidth = shareMode ? 794 : 210;
     const pagePadding = shareMode ? 40 : 20;
-    
+
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1545,24 +1533,24 @@ function generateInvoiceHTML(order, opts = {}) {
 // Filter orders
 function filterOrders() {
     console.log('🔍 filterOrders() called');
-    
+
     try {
         // Guard: Check if allOrders exists and is an array
         if (!allOrders || !Array.isArray(allOrders)) {
             console.error('❌ allOrders is not defined or not an array!');
             return;
         }
-        
+
         // Get search input
         const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
         const searchTerm = searchInput?.value?.toLowerCase().trim() || '';
-        
+
         // Get status filter
         const statusFilterElement = document.getElementById('statusFilter');
         const statusFilter = statusFilterElement?.value || '';
-        
+
         console.log(`   Filtering ${allOrders.length} orders - Search: "${searchTerm}", Status: "${statusFilter}"`);
-        
+
         // Update URL with search parameters for automation
         const url = new URL(window.location);
         if (searchTerm) {
@@ -1576,10 +1564,10 @@ function filterOrders() {
             url.searchParams.delete('status');
         }
         window.history.replaceState({}, '', url);
-        
+
         // Update clear button visibility
         updateClearButtonVisibility();
-        
+
         // Filter orders
         let filtered = allOrders.filter((order, index) => {
             try {
@@ -1587,45 +1575,45 @@ function filterOrders() {
                 if (!order) {
                     return false;
                 }
-                
+
                 // Safely handle null/undefined values
                 const orderId = order.order_id ? String(order.order_id).toLowerCase() : '';
                 const userName = order.user_name ? String(order.user_name).toLowerCase() : '';
                 const userPhone = order.user_phone ? String(order.user_phone).toLowerCase() : '';
                 const storeName = order.user_store_name ? String(order.user_store_name).toLowerCase() : '';
                 const orderStatus = order.status ? String(order.status).toLowerCase() : '';
-                
+
                 // Match search term against multiple fields
-                const matchesSearch = !searchTerm || 
+                const matchesSearch = !searchTerm ||
                     orderId.includes(searchTerm) ||
                     userName.includes(searchTerm) ||
                     userPhone.includes(searchTerm) ||
                     storeName.includes(searchTerm);
-                
+
                 // Match status filter
                 const matchesStatus = !statusFilter || orderStatus === statusFilter.toLowerCase();
-                
+
                 // Match date filter
                 const matchesDate = matchesDateFilter(order);
-                
+
                 return matchesSearch && matchesStatus && matchesDate;
             } catch (orderError) {
                 console.error(`❌ Error processing order at index ${index}:`, orderError);
                 return false;
             }
         });
-        
+
         console.log(`   ✅ Filtered: ${filtered.length} orders match criteria`);
-        
+
         // Store filtered orders globally
         filteredOrders = filtered;
-        
+
         // Display filtered results
         displayOrders(filtered);
-        
+
         // Update stats based on filtered orders
         updateFilteredStats(filtered);
-        
+
     } catch (error) {
         console.error('❌ FATAL ERROR in filterOrders:', error);
         console.error('   Error stack:', error.stack);
@@ -1639,7 +1627,7 @@ function updateFilteredStats(orders) {
         console.warn('⚠️  updateFilteredStats: orders is not valid');
         return;
     }
-    
+
     try {
         const pending = orders.filter(o => o && o.status === 'pending').length;
         const delivered = orders.filter(o => o && o.status === 'delivered').length;
@@ -1647,17 +1635,17 @@ function updateFilteredStats(orders) {
             if (!o) return sum;
             return sum + parseFloat(o.total_amount || 0);
         }, 0);
-        
+
         const totalOrdersEl = document.getElementById('totalOrders');
         const pendingOrdersEl = document.getElementById('pendingOrders');
         const deliveredOrdersEl = document.getElementById('deliveredOrders');
         const totalRevenueEl = document.getElementById('totalRevenue');
-        
+
         if (totalOrdersEl) totalOrdersEl.textContent = orders.length;
         if (pendingOrdersEl) pendingOrdersEl.textContent = pending;
         if (deliveredOrdersEl) deliveredOrdersEl.textContent = delivered;
         if (totalRevenueEl) totalRevenueEl.textContent = `₹${totalRevenue.toFixed(2)}`;
-        
+
         // Update revenue modal if it's open
         updateRevenueModalIfOpen(orders);
     } catch (error) {
@@ -1670,10 +1658,10 @@ async function updateOrderStats() {
     try {
         const response = await fetch('/api/admin/orders/stats/summary');
         const data = await response.json();
-        
+
         if (data.success) {
             const stats = data.stats;
-            
+
             // Update stat cards
             document.getElementById('totalOrders').textContent = stats.total_orders;
             document.getElementById('pendingOrders').textContent = stats.pending_orders;
@@ -1694,7 +1682,7 @@ function closeOrderDetailsModal() {
 // Get filtered orders based on current date filter
 function getFilteredOrders() {
     let ordersToCalculate = allOrders;
-    
+
     // Apply date filter if active
     const dateFilterBtn = document.querySelector('.date-filter-btn');
     if (dateFilterBtn && dateFilterBtn.textContent.includes('Single Date')) {
@@ -1715,7 +1703,7 @@ function getFilteredOrders() {
             });
         }
     }
-    
+
     return ordersToCalculate;
 }
 
@@ -1728,7 +1716,7 @@ function calculateRevenueBreakdown(orders) {
     const deliveredRevenue = orders
         .filter(o => o.status === 'delivered')
         .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-    
+
     return { totalRevenue, pendingRevenue, deliveredRevenue };
 }
 
@@ -1736,7 +1724,7 @@ function calculateRevenueBreakdown(orders) {
 function updateRevenueDateDisplay() {
     const dateRangeEl = document.getElementById('revenueDateRange');
     if (!dateRangeEl) return;
-    
+
     const dateFilterBtn = document.querySelector('.date-filter-btn');
     if (dateFilterBtn) {
         const filterText = dateFilterBtn.textContent.trim();
@@ -1766,18 +1754,18 @@ function updateRevenueDateDisplay() {
 function updateRevenueModalIfOpen(orders) {
     const modal = document.getElementById('revenueModal');
     if (!modal || modal.style.display === 'none') return;
-    
+
     // Recalculate and update revenue values
     const { totalRevenue, pendingRevenue, deliveredRevenue } = calculateRevenueBreakdown(orders);
-    
+
     const totalEl = document.getElementById('revenueTotalOrders');
     const pendingEl = document.getElementById('revenuePending');
     const deliveredEl = document.getElementById('revenueDelivered');
-    
+
     if (totalEl) totalEl.textContent = `₹${totalRevenue.toFixed(2)}`;
     if (pendingEl) pendingEl.textContent = `₹${pendingRevenue.toFixed(2)}`;
     if (deliveredEl) deliveredEl.textContent = `₹${deliveredRevenue.toFixed(2)}`;
-    
+
     // Update date display
     updateRevenueDateDisplay();
 }
@@ -1785,19 +1773,19 @@ function updateRevenueModalIfOpen(orders) {
 // Show revenue details modal
 function showRevenueDetails() {
     const modal = document.getElementById('revenueModal');
-    
+
     // Use currently filtered orders
     const ordersToCalculate = filteredOrders.length > 0 ? filteredOrders : allOrders;
     const { totalRevenue, pendingRevenue, deliveredRevenue } = calculateRevenueBreakdown(ordersToCalculate);
-    
+
     // Update modal content
     document.getElementById('revenueTotalOrders').textContent = `₹${totalRevenue.toFixed(2)}`;
     document.getElementById('revenuePending').textContent = `₹${pendingRevenue.toFixed(2)}`;
     document.getElementById('revenueDelivered').textContent = `₹${deliveredRevenue.toFixed(2)}`;
-    
+
     // Update date range display
     updateRevenueDateDisplay();
-    
+
     modal.style.display = 'flex';
 }
 
@@ -1810,9 +1798,9 @@ function closeRevenueModal() {
 function formatDateTime(dateString) {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    const options = { 
-        year: 'numeric', 
-        month: 'short', 
+    const options = {
+        year: 'numeric',
+        month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
@@ -1846,7 +1834,7 @@ function showError(containerId, message) {
 }
 
 // Modal close on outside click
-window.onclick = function(event) {
+window.onclick = function (event) {
     const modal = document.getElementById('orderDetailsModal');
     if (event.target === modal) {
         closeOrderDetailsModal();
@@ -1871,28 +1859,28 @@ function clearSearch() {
 // Reset all filters
 function resetFilters() {
     console.log('🔄 Resetting all filters...');
-    
+
     // Clear search
     const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
     if (searchInput) {
         searchInput.value = '';
     }
-    
+
     // Reset status filter
     const statusFilter = document.getElementById('statusFilter');
     if (statusFilter) {
         statusFilter.value = '';
     }
-    
+
     // Re-display all orders
     displayOrders(allOrders);
-    
+
     // Update stats with all orders
     updateOrderStats();
-    
+
     // Update clear button visibility
     updateClearButtonVisibility();
-    
+
     console.log('   ✅ Filters reset');
 }
 
@@ -1900,7 +1888,7 @@ function resetFilters() {
 function updateClearButtonVisibility() {
     const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
     const clearBtn = document.getElementById('clearSearchBtn');
-    
+
     if (searchInput && clearBtn) {
         if (searchInput.value.trim()) {
             clearBtn.style.display = 'block';
@@ -1913,34 +1901,34 @@ function updateClearButtonVisibility() {
 // Delete order function
 async function deleteOrder(orderId) {
     console.log(`🗑️ Attempting to delete order: ${orderId}`);
-    
+
     if (!confirm(`Are you sure you want to delete Order #${orderId}?\n\nThis action cannot be undone.`)) {
         console.log('   ❌ Deletion cancelled by user');
         return;
     }
-    
+
     try {
         console.log(`   📡 Sending DELETE request for order ${orderId}...`);
-        
+
         const response = await fetch(`/api/admin/orders/${orderId}`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok && data.success) {
             console.log(`   ✅ Order ${orderId} deleted successfully`);
-            
+
             // Remove from allOrders array
             allOrders = allOrders.filter(order => order.order_id !== orderId);
-            
+
             // Refresh display
             filterOrders();
             updateOrderStats();
-            
+
             // Show success message
             showToast('Order deleted successfully', 'success');
         } else {
@@ -1961,13 +1949,13 @@ function showToast(message, type = 'info') {
         <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
         <span>${message}</span>
     `;
-    
+
     // Add to body
     document.body.appendChild(toast);
-    
+
     // Show toast
     setTimeout(() => toast.classList.add('show'), 100);
-    
+
     // Remove toast after 3 seconds
     setTimeout(() => {
         toast.classList.remove('show');
@@ -1980,7 +1968,7 @@ function showToast(message, type = 'info') {
 // Handle date filter dropdown change
 function handleDateFilterChange() {
     const dateFilter = document.getElementById('dateFilter').value;
-    
+
     if (dateFilter === 'all') {
         selectedDateFilter.type = 'all';
         selectedDateFilter.singleDate = null;
@@ -1999,18 +1987,18 @@ function handleDateFilterChange() {
 function openSingleDateModal() {
     const modal = document.getElementById('singleDateModal');
     const datePicker = document.getElementById('singleDatePicker');
-    
+
     // Set max date to today
     const today = new Date().toISOString().split('T')[0];
     datePicker.max = today;
-    
+
     // Set current value if exists
     if (selectedDateFilter.singleDate) {
         datePicker.value = selectedDateFilter.singleDate;
     } else {
         datePicker.value = today;
     }
-    
+
     modal.style.display = 'block';
 }
 
@@ -2019,12 +2007,12 @@ function openRangeDateModal() {
     const modal = document.getElementById('rangeDateModal');
     const startPicker = document.getElementById('startDatePicker');
     const endPicker = document.getElementById('endDatePicker');
-    
+
     // Set max date to today
     const today = new Date().toISOString().split('T')[0];
     startPicker.max = today;
     endPicker.max = today;
-    
+
     // Set current values if exist
     if (selectedDateFilter.startDate && selectedDateFilter.endDate) {
         startPicker.value = selectedDateFilter.startDate;
@@ -2036,7 +2024,7 @@ function openRangeDateModal() {
         startPicker.value = sevenDaysAgo.toISOString().split('T')[0];
         endPicker.value = today;
     }
-    
+
     modal.style.display = 'block';
 }
 
@@ -2044,7 +2032,7 @@ function openRangeDateModal() {
 function closeDateModal() {
     document.getElementById('singleDateModal').style.display = 'none';
     document.getElementById('rangeDateModal').style.display = 'none';
-    
+
     // Reset dropdown if user cancels
     if (selectedDateFilter.type === 'all') {
         document.getElementById('dateFilter').value = 'all';
@@ -2055,27 +2043,27 @@ function closeDateModal() {
 function applySingleDate() {
     const datePicker = document.getElementById('singleDatePicker');
     const selectedDate = datePicker.value;
-    
+
     if (!selectedDate) {
         alert('Please select a date');
         return;
     }
-    
+
     selectedDateFilter.type = 'single';
     selectedDateFilter.singleDate = selectedDate;
     selectedDateFilter.startDate = null;
     selectedDateFilter.endDate = null;
-    
+
     // Update display
     const dateObj = new Date(selectedDate);
-    const dateDisplay = dateObj.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+    const dateDisplay = dateObj.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
     });
     document.getElementById('dateDisplay').textContent = dateDisplay;
     document.getElementById('dateDisplayGroup').style.display = 'block';
-    
+
     closeDateModal();
     filterOrders();
 }
@@ -2086,29 +2074,29 @@ function applyDateRange() {
     const endPicker = document.getElementById('endDatePicker');
     const startDate = startPicker.value;
     const endDate = endPicker.value;
-    
+
     if (!startDate || !endDate) {
         alert('Please select both start and end dates');
         return;
     }
-    
+
     if (new Date(startDate) > new Date(endDate)) {
         alert('Start date must be before or equal to end date');
         return;
     }
-    
+
     selectedDateFilter.type = 'range';
     selectedDateFilter.singleDate = null;
     selectedDateFilter.startDate = startDate;
     selectedDateFilter.endDate = endDate;
-    
+
     // Update display
     const startObj = new Date(startDate);
     const endObj = new Date(endDate);
     const dateDisplay = `${startObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     document.getElementById('dateDisplay').textContent = dateDisplay;
     document.getElementById('dateDisplayGroup').style.display = 'block';
-    
+
     closeDateModal();
     filterOrders();
 }
@@ -2119,10 +2107,10 @@ function clearDateFilter() {
     selectedDateFilter.singleDate = null;
     selectedDateFilter.startDate = null;
     selectedDateFilter.endDate = null;
-    
+
     document.getElementById('dateFilter').value = 'all';
     document.getElementById('dateDisplayGroup').style.display = 'none';
-    
+
     filterOrders();
 }
 
@@ -2131,25 +2119,25 @@ function matchesDateFilter(order) {
     if (selectedDateFilter.type === 'all') {
         return true;
     }
-    
+
     const orderDate = new Date(order.created_at);
     orderDate.setHours(0, 0, 0, 0); // Reset to start of day for comparison
-    
+
     if (selectedDateFilter.type === 'single') {
         const filterDate = new Date(selectedDateFilter.singleDate);
         filterDate.setHours(0, 0, 0, 0);
         return orderDate.getTime() === filterDate.getTime();
     }
-    
+
     if (selectedDateFilter.type === 'range') {
         const startDate = new Date(selectedDateFilter.startDate);
         const endDate = new Date(selectedDateFilter.endDate);
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(23, 59, 59, 999); // End of day
-        
+
         return orderDate >= startDate && orderDate <= endDate;
     }
-    
+
     return true;
 }
 
@@ -2161,22 +2149,22 @@ let allProducts = [];
 // Search products from backend
 async function searchProducts(query) {
     clearTimeout(searchTimeout);
-    
+
     if (query.trim().length < 2) {
         document.getElementById('productSearchResults').style.display = 'none';
         return;
     }
-    
+
     // Show loading indicator
     const resultsContainer = document.getElementById('productSearchResults');
     resultsContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Searching...</div>';
     resultsContainer.style.display = 'block';
-    
+
     searchTimeout = setTimeout(async () => {
         try {
             const response = await fetch(`/api/admin/orders/products/search?q=${encodeURIComponent(query)}`);
             const data = await response.json();
-            
+
             if (data.success && data.products.length > 0) {
                 displaySearchResults(data.products);
             } else {
@@ -2206,12 +2194,12 @@ async function searchProducts(query) {
 // Display search results
 function displaySearchResults(products) {
     const resultsContainer = document.getElementById('productSearchResults');
-    
+
     resultsContainer.innerHTML = products.map((product, index) => {
         const tamilName = product.product_name_tamil || '';
         const displayName = tamilName ? `${product.product_name} / ${tamilName}` : product.product_name;
         const uniqueId = `product-${product.item_id}-${index}`;
-        
+
         return `
             <div class="product-search-item" 
                 style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; background: white;">
@@ -2249,7 +2237,7 @@ function displaySearchResults(products) {
             </div>
         `;
     }).join('');
-    
+
     resultsContainer.style.display = 'block';
 }
 
@@ -2257,7 +2245,7 @@ function displaySearchResults(products) {
 function toggleAddButton(uniqueId, qtyValue) {
     const button = document.getElementById(`btn-${uniqueId}`);
     const qty = parseInt(qtyValue);
-    
+
     if (qty && qty > 0) {
         button.disabled = false;
         button.style.background = '#4CAF50';
@@ -2275,21 +2263,21 @@ function toggleAddButton(uniqueId, qtyValue) {
 function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) {
     const qtyInput = document.getElementById(`qty-${uniqueId}`);
     const quantity = parseInt(qtyInput.value) || 1;
-    
+
     if (quantity <= 0) {
         showToast('Please enter a valid quantity', 'error');
         return;
     }
-    
+
     const tbody = document.querySelector('#orderItemsTable tbody');
-    
+
     // Check if product already exists
     const existingRow = Array.from(tbody.querySelectorAll('tr')).find(row => {
         const existingName = row.querySelector('td:first-child strong')?.textContent;
         const existingWeight = row.dataset.weight;
         return existingName === productName && existingWeight === weight;
     });
-    
+
     if (existingRow) {
         // Increment quantity if product already exists
         const qtyInputExisting = existingRow.querySelector('.qty-input');
@@ -2297,15 +2285,15 @@ function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) 
             const currentQty = parseInt(qtyInputExisting.value) || 0;
             qtyInputExisting.value = currentQty + quantity;
             qtyInputExisting.dataset.original = qtyInputExisting.value;
-            
+
             // Update display
             const qtyDisplay = existingRow.querySelector('.qty-display');
             if (qtyDisplay) qtyDisplay.textContent = `×${qtyInputExisting.value}`;
-            
+
             // Recalculate totals
             updateItemTotal({ target: qtyInputExisting });
         }
-        
+
         showToast(`Quantity increased for ${productName} (+${quantity})`, 'success');
     } else {
         // Add new row
@@ -2315,9 +2303,9 @@ function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) 
         newRow.dataset.productId = itemId;
         newRow.dataset.price = price;
         newRow.dataset.weight = weight;
-        
+
         const totalAmount = (parseFloat(price) * quantity).toFixed(2);
-        
+
         newRow.innerHTML = `
             <td><strong>${productName}</strong></td>
             <td>${weight || '-'}</td>
@@ -2336,21 +2324,21 @@ function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) 
                 </button>
             </td>
         `;
-        
+
         tbody.appendChild(newRow);
-        
+
         // Add event listeners to new inputs
         const priceInput = newRow.querySelector('.price-input');
         const qtyInputNew = newRow.querySelector('.qty-input');
         if (priceInput) priceInput.addEventListener('input', updateItemTotal);
         if (qtyInputNew) qtyInputNew.addEventListener('input', updateItemTotal);
-        
+
         showToast(`${productName} (×${quantity}) added to order`, 'success');
     }
-    
+
     // Clear search
     clearProductSearch();
-    
+
     // Recalculate grand total
     recalculateGrandTotal();
 }
@@ -2360,13 +2348,13 @@ function removeOrderItem(button) {
     if (!confirm('Are you sure you want to remove this item?')) {
         return;
     }
-    
+
     const row = button.closest('tr');
     const productName = row.querySelector('td:first-child strong')?.textContent || 'Product';
-    
+
     row.remove();
     recalculateGrandTotal();
-    
+
     showToast(`${productName} removed from order`, 'info');
 }
 
@@ -2386,17 +2374,17 @@ function toggleOrderSelection(orderId, isChecked) {
 function selectAllPendings() {
     // Get all currently displayed order cards
     const orderCards = document.querySelectorAll('.order-card');
-    
+
     let selectedCount = 0;
     orderCards.forEach(card => {
         const orderId = card.getAttribute('data-order-id');
         const checkbox = document.getElementById(`checkbox-${orderId}`);
-        
+
         // Only select if checkbox exists (not delivered) and is pending status
         if (checkbox) {
             const statusBadge = card.querySelector('.status-badge');
             const status = statusBadge ? statusBadge.textContent.trim().toLowerCase() : '';
-            
+
             if (status === 'pending') {
                 checkbox.checked = true;
                 selectedOrderIds.add(orderId);
@@ -2404,9 +2392,9 @@ function selectAllPendings() {
             }
         }
     });
-    
+
     updateBulkActionButton();
-    
+
     // Show feedback
     if (selectedCount > 0) {
         showToast(`Selected ${selectedCount} pending order${selectedCount > 1 ? 's' : ''}`, 'success');
@@ -2418,7 +2406,7 @@ function selectAllPendings() {
 // Update bulk action button visibility and count
 function updateBulkActionButton() {
     let bulkActionBtn = document.getElementById('bulkMarkDeliveredBtn');
-    
+
     if (selectedOrderIds.size > 0) {
         // Create button if it doesn't exist
         if (!bulkActionBtn) {
@@ -2426,14 +2414,14 @@ function updateBulkActionButton() {
             bulkActionBtn.id = 'bulkMarkDeliveredBtn';
             bulkActionBtn.className = 'bulk-action-btn';
             bulkActionBtn.onclick = markSelectedAsDelivered;
-            
+
             // Insert after orders header
             const ordersHeader = document.querySelector('.orders-header');
             if (ordersHeader) {
                 ordersHeader.after(bulkActionBtn);
             }
         }
-        
+
         bulkActionBtn.innerHTML = `
             <i class="fas fa-check-circle"></i>
             Mark as Delivered (${selectedOrderIds.size})
@@ -2453,20 +2441,20 @@ async function markSelectedAsDelivered() {
         showToast('No orders selected', 'error');
         return;
     }
-    
+
     const count = selectedOrderIds.size;
     const confirmation = confirm(`Mark ${count} order${count > 1 ? 's' : ''} as delivered?`);
-    
+
     if (!confirmation) return;
-    
+
     try {
         const orderIdsArray = Array.from(selectedOrderIds);
         let successCount = 0;
         let failCount = 0;
-        
+
         // Show progress
         showToast(`Processing ${count} orders...`, 'info');
-        
+
         // Update each order
         for (const orderId of orderIdsArray) {
             try {
@@ -2477,7 +2465,7 @@ async function markSelectedAsDelivered() {
                     },
                     body: JSON.stringify({ status: 'delivered' })
                 });
-                
+
                 if (response.ok) {
                     successCount++;
                     // Update order in local array
@@ -2491,14 +2479,14 @@ async function markSelectedAsDelivered() {
                 failCount++;
             }
         }
-        
+
         // Clear selection
         selectedOrderIds.clear();
-        
+
         // Refresh display
         displayOrders(filteredOrders);
         updateOrderStats();
-        
+
         // Show result
         if (successCount > 0) {
             showToast(`${successCount} order${successCount > 1 ? 's' : ''} marked as delivered!`, 'success');
@@ -2506,7 +2494,7 @@ async function markSelectedAsDelivered() {
         if (failCount > 0) {
             showToast(`${failCount} order${failCount > 1 ? 's' : ''} failed to update`, 'error');
         }
-        
+
     } catch (error) {
         console.error('Bulk update error:', error);
         showToast('Failed to update orders', 'error');
@@ -2521,12 +2509,12 @@ function clearProductSearch() {
 }
 
 // Close search results when clicking outside
-document.addEventListener('click', function(event) {
+document.addEventListener('click', function (event) {
     const searchInput = document.getElementById('productSearchInput');
     const searchResults = document.getElementById('productSearchResults');
-    
-    if (searchInput && searchResults && 
-        !searchInput.contains(event.target) && 
+
+    if (searchInput && searchResults &&
+        !searchInput.contains(event.target) &&
         !searchResults.contains(event.target)) {
         searchResults.style.display = 'none';
     }

@@ -313,16 +313,6 @@ func sendOrderEmailNotification(order models.Order) {
 		return
 	}
 
-	// Safely resolve order date string
-	var orderDateStr string
-	if order.OrderDate != nil {
-		orderDateStr = order.OrderDate.Format("2006-01-02 15:04:05")
-	} else if !order.CreatedAt.IsZero() {
-		orderDateStr = order.CreatedAt.Format("2006-01-02 15:04:05")
-	} else {
-		orderDateStr = time.Now().Format("2006-01-02 15:04:05")
-	}
-
 	// Build email subject
 	subject := fmt.Sprintf("🛒 New Order - %s - %s", order.Section, order.OrderID)
 	if order.Section == "" {

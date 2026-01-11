@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management - AL-Madhina</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
     <style>
         * {
             margin: 0;
@@ -357,6 +359,7 @@
                 opacity: 0;
                 transform: translateY(20px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -456,8 +459,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Responsive */
@@ -495,6 +503,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <!-- Header -->
@@ -578,7 +587,7 @@
             </div>
             <form id="inventoryForm">
                 <input type="hidden" id="inventoryId">
-                
+
                 <div class="form-group">
                     <label>Item Name *</label>
                     <input type="text" id="inventoryName" required placeholder="e.g., Sugar, Rice, Oil">
@@ -600,6 +609,13 @@
                             <option value="packets">Packets</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Section *</label>
+                    <select id="section" required>
+                        <option value="" disabled selected>Select Section</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -629,7 +645,7 @@
             <form id="stockForm">
                 <input type="hidden" id="stockInventoryId">
                 <input type="hidden" id="currentStock">
-                
+
                 <div class="form-group">
                     <label>Item: <strong id="stockItemName"></strong></label>
                 </div>
@@ -685,14 +701,15 @@
                 <h2>🔗 Link Products to Inventory</h2>
                 <span class="close-btn" onclick="closeLinkProductsModal()">&times;</span>
             </div>
-            
+
             <div style="margin-bottom: 20px;">
                 <div class="form-group">
                     <label>Inventory Item: <strong id="linkInventoryName" style="color: #059669;"></strong></label>
                     <input type="hidden" id="linkInventoryId">
                 </div>
-                
-                <div style="background: #e8f5e9; border-left: 4px solid #059669; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+
+                <div
+                    style="background: #e8f5e9; border-left: 4px solid #059669; padding: 12px; margin-bottom: 16px; border-radius: 4px;">
                     <strong style="color: #2e7d32;">ℹ️ Stock Isolation</strong>
                     <p style="margin: 4px 0 0 0; font-size: 13px; color: #1b5e20;">
                         • Product stock and inventory stock are <strong>separate</strong><br>
@@ -700,16 +717,18 @@
                         • When orders deliver, only inventory stock reduces
                     </p>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Search Products</label>
-                    <input type="text" id="productSearchInput" placeholder="Search products to link..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;">
+                    <input type="text" id="productSearchInput" placeholder="Search products to link..."
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;">
                 </div>
             </div>
 
             <div style="max-height: 400px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
                 <table style="width: 100%; border-collapse: collapse;">
-                    <thead style="position: sticky; top: 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
+                    <thead
+                        style="position: sticky; top: 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
                         <tr>
                             <th style="padding: 12px; text-align: left;">Product Name</th>
                             <th style="padding: 12px; text-align: left;">Weight/Size</th>
@@ -738,4 +757,5 @@
 
     <script src="/static/admin/js/inventory.js"></script>
 </body>
+
 </html>

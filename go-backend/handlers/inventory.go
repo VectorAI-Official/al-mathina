@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,11 +21,26 @@ import (
 
 // GetAllInventory retrieves all inventory items with optional filters
 // GET /admin/api/inventory?search=sugar&section=Provisions&low_stock=true
+// GetAllInventory retrieves all inventory items with optional filters and pagination
+// GET /admin/api/inventory?page=1&limit=50&search=sugar&section=Provisions&low_stock=true
 func GetAllInventory(c *gin.Context) {
 	ctx, cancel := database.GetDBContext()
 	defer cancel()
 
 	inventoryCol := database.GetCollection("inventory")
+
+	// Pagination parameters
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "20")
+	page, _ := strconv.Atoi(pageStr)
+	limit, _ := strconv.Atoi(limitStr)
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	skip := (page - 1) * limit
 
 	// Build filter
 	filter := bson.M{"is_active": true}
@@ -42,10 +58,28 @@ func GetAllInventory(c *gin.Context) {
 	// Filter by low stock
 	if lowStock := c.Query("low_stock"); lowStock == "true" {
 		filter["$expr"] = bson.M{"$lte": []interface{}{"$stock_quantity", "$low_stock_threshold"}}
+	} else if stockStatus := c.Query("stock_status"); stockStatus != "" {
+		// Support precise stock status filtering if needed by frontend
+		if stockStatus == "out_of_stock" {
+			filter["stock_quantity"] = 0
+		} else if stockStatus == "in_stock" {
+			filter["$expr"] = bson.M{"$gt": []interface{}{"$stock_quantity", "$low_stock_threshold"}}
+		}
+	}
+
+	// Get total count for pagination
+	totalCount, err := inventoryCol.CountDocuments(ctx, filter)
+	if err != nil {
+		log.Printf("❌ Error counting inventory: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count inventory"})
+		return
 	}
 
 	// Sort by inventory name
-	opts := options.Find().SetSort(bson.D{{Key: "inventory_name", Value: 1}})
+	opts := options.Find().
+		SetSort(bson.D{{Key: "inventory_name", Value: 1}}).
+		SetSkip(int64(skip)).
+		SetLimit(int64(limit))
 
 	cursor, err := inventoryCol.Find(ctx, filter, opts)
 	if err != nil {
@@ -62,37 +96,82 @@ func GetAllInventory(c *gin.Context) {
 		return
 	}
 
-	// Count linked products for each inventory item
+	// If no items found on this page, return empty list immediately
+	if len(inventoryItems) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"inventory":   []models.Inventory{}, // Empty list
+			"count":       0,
+			"total_count": totalCount,
+			"page":        page,
+			"total_pages": int(math.Ceil(float64(totalCount) / float64(limit))),
+		})
+		return
+	}
+
+	// Count linked products efficiently using Aggregation (avoids N+1 problem)
 	productsCol := database.GetCollection("products")
 	type InventoryWithCount struct {
 		models.Inventory    `bson:",inline"`
 		LinkedProductsCount int `json:"linked_products_count" bson:"linked_products_count"`
 	}
 
-	var inventoryWithCounts []InventoryWithCount
-	for _, item := range inventoryItems {
-		count, err := productsCol.CountDocuments(ctx, bson.M{
-			"inventory_id": item.InventoryID,
+	// 1. Extract all Inventory IDs for CURRENT PAGE ONLY
+	inventoryIDs := make([]string, len(inventoryItems))
+	for i, item := range inventoryItems {
+		inventoryIDs[i] = item.InventoryID
+	}
+
+	// 2. Aggregate counts for these IDs
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{
+			"inventory_id": bson.M{"$in": inventoryIDs},
 			"$or": []bson.M{
 				{"active": true},
-				{"active": bson.M{"$exists": false}}, // Treat missing active field as true (legacy compatibility)
+				{"active": bson.M{"$exists": false}}, // Legacy support
 			},
-		})
-		if err != nil {
-			log.Printf("⚠️ Error counting linked products for %s: %v", item.InventoryID, err)
-			count = 0
-		}
+		}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":   "$inventory_id",
+			"count": bson.M{"$sum": 1},
+		}}},
+	}
 
+	cursorCounts, err := productsCol.Aggregate(ctx, pipeline)
+	countsMap := make(map[string]int)
+
+	if err == nil {
+		defer cursorCounts.Close(ctx)
+		var results []struct {
+			ID    string `bson:"_id"`
+			Count int    `bson:"count"`
+		}
+		if err := cursorCounts.All(ctx, &results); err == nil {
+			for _, res := range results {
+				countsMap[res.ID] = res.Count
+			}
+		} else {
+			log.Printf("⚠️ Error decoding aggregated counts: %v", err)
+		}
+	} else {
+		log.Printf("⚠️ Error aggregating product counts: %v", err)
+	}
+
+	// 3. Map counts back to inventory items
+	var inventoryWithCounts []InventoryWithCount
+	for _, item := range inventoryItems {
 		inventoryWithCounts = append(inventoryWithCounts, InventoryWithCount{
 			Inventory:           item,
-			LinkedProductsCount: int(count),
+			LinkedProductsCount: countsMap[item.InventoryID],
 		})
 	}
 
-	log.Printf("✅ Retrieved %d inventory items with linked counts", len(inventoryWithCounts))
+	log.Printf("✅ Retrieved page %d inventory items (%d items)", page, len(inventoryWithCounts))
 	c.JSON(http.StatusOK, gin.H{
-		"inventory": inventoryWithCounts,
-		"count":     len(inventoryWithCounts),
+		"inventory":   inventoryWithCounts,
+		"count":       len(inventoryWithCounts),
+		"total_count": totalCount,
+		"page":        page,
+		"total_pages": int(math.Ceil(float64(totalCount) / float64(limit))),
 	})
 }
 

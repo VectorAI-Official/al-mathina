@@ -4940,9 +4940,12 @@ function switchStockMode(mode) {
 }
 
 // Set inventory selection for edit mode
-function setInventorySelection(inventoryId) {
+async function setInventorySelection(inventoryId) {
+    console.log('%c🔗 setInventorySelection called', 'color: #9900cc; font-weight: bold;', { inventoryId });
+
     if (!inventoryId) {
         // No inventory linked - use individual mode
+        console.log('   ℹ️ No inventory ID provided - switching to INDIVIDUAL mode');
         switchStockMode('individual');
         return;
     }
@@ -4950,10 +4953,26 @@ function setInventorySelection(inventoryId) {
     // Switch to inventory mode
     switchStockMode('inventory');
 
+    // Check if items are loaded
+    if (inventoryItems.length === 0) {
+        console.warn('   ⚠️ Inventory items not yet loaded! Attempting to load...');
+        await loadInventoryItems();
+    }
+
     // Find and select the inventory item
     const item = inventoryItems.find(inv => inv.inventory_id === inventoryId);
     if (item) {
+        console.log('   ✅ Found linked inventory item:', item.inventory_name);
         selectInventoryItem(item);
+    } else {
+        console.error('   ❌ Linked inventory item NOT FOUND in list:', inventoryId);
+        // Fallback: Show ID if name not found? Or maybe just error
+        const searchInput = document.getElementById('inventorySearch');
+        if (searchInput) {
+            searchInput.value = `Linked Item (ID: ${inventoryId}) - details not found`;
+            // Keep the ID in hidden input so it doesn't get lost on save
+            document.getElementById('selectedInventoryId').value = inventoryId;
+        }
     }
 }
 

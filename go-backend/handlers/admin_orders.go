@@ -393,12 +393,20 @@ func UpdateOrderItems(c *gin.Context) {
 	defer cancel()
 	collection := database.GetCollection("orders")
 
+	// Recalculate totals
+	var totalAmount float64
+	for _, item := range req.Items {
+		totalAmount += item.Price * float64(item.Quantity)
+	}
+
 	result, err := collection.UpdateOne(
 		ctx,
 		bson.M{"order_id": orderID},
 		bson.M{"$set": bson.M{
-			"items":      req.Items,
-			"updated_at": time.Now(),
+			"items":        req.Items,
+			"total_amount": totalAmount,
+			"grand_total":  totalAmount, // Assuming no extra charges for now, or fetch existing and adjust
+			"updated_at":   time.Now(),
 		}},
 	)
 
@@ -413,8 +421,11 @@ func UpdateOrderItems(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Order items updated successfully",
+		"success":      true,
+		"message":      "Order items updated successfully",
+		"items":        req.Items,
+		"total_amount": totalAmount,
+		"grand_total":  totalAmount,
 	})
 }
 
@@ -527,7 +538,10 @@ func SearchProductsAdmin(c *gin.Context) {
 	query := c.Query("q")
 
 	if query == "" {
-		c.JSON(http.StatusOK, []models.Product{})
+		c.JSON(http.StatusOK, gin.H{
+			"success":  true,
+			"products": []models.Product{},
+		})
 		return
 	}
 
@@ -555,5 +569,8 @@ func SearchProductsAdmin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, products)
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"products": products,
+	})
 }

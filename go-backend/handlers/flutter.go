@@ -16,6 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 // GetHome returns the home screen data: Most Bought + all sections with main categories
@@ -86,7 +88,17 @@ func GetHome(c *gin.Context) {
 
 			// Get all main categories from hierarchy if they exist
 			if hierarchyDoc.MainCategories != nil && len(hierarchyDoc.MainCategories) > 0 {
+				// Get sorted keys using Tamil collation for linguistic correctness
+				mainCatNames := make([]string, 0, len(hierarchyDoc.MainCategories))
 				for mainCatName := range hierarchyDoc.MainCategories {
+					mainCatNames = append(mainCatNames, mainCatName)
+				}
+
+				// Create Tamil collator and sort
+				c := collate.New(language.Tamil)
+				c.SortStrings(mainCatNames)
+
+				for _, mainCatName := range mainCatNames {
 					mainCat := buildMainCategoryCard(ctx, sectionName, mainCatName)
 					if mainCat != nil {
 						mainCats = append(mainCats, *mainCat)

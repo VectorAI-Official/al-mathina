@@ -73,7 +73,10 @@ func GetAllInventory(c *gin.Context) {
 	for _, item := range inventoryItems {
 		count, err := productsCol.CountDocuments(ctx, bson.M{
 			"inventory_id": item.InventoryID,
-			"active":       true,
+			"$or": []bson.M{
+				{"active": true},
+				{"active": bson.M{"$exists": false}}, // Treat missing active field as true (legacy compatibility)
+			},
 		})
 		if err != nil {
 			log.Printf("⚠️ Error counting linked products for %s: %v", item.InventoryID, err)

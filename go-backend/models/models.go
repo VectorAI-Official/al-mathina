@@ -8,23 +8,25 @@ import (
 // BSON tags MUST match MongoDB field names exactly (case-sensitive)
 // JSON tags are for API responses (match FastAPI output)
 type Product struct {
-	ItemID         string    `bson:"item_id" json:"item_id"`
-	ProductName    string    `bson:"product_name" json:"product_name"`
-	ProductNameTa  string    `bson:"product_name_ta,omitempty" json:"product_name_ta"` // Tamil name
-	Weight         string    `bson:"weight,omitempty" json:"weight"`                    // Product weight/size
-	Price          float64   `bson:"price" json:"price"`
-	BuyingPrice    *float64  `bson:"buying_price,omitempty" json:"buying_price,omitempty"` // Only for admin users
-	Section        string    `bson:"category_section" json:"section"`
-	MainCategory   string    `bson:"category_main" json:"main_category"`
-	Subcategory    string    `bson:"category_sub" json:"subcategory"`
-	ImageURL       string    `bson:"image_url" json:"image_url"` // Changed from product_image to image_url (Cloudinary URLs)
-	Description    string    `bson:"description" json:"description"`
-	Unit           string    `bson:"unit" json:"unit"`
-	Stock          int       `bson:"stock" json:"stock"`
-	InStock        bool      `bson:"-" json:"in_stock"`                    // Computed field: stock > 0 (not stored in DB)
-	IsBestSeller   bool      `bson:"is_best_seller,omitempty" json:"is_best_seller"` // Featured product flag
-	CreatedAt      time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt      time.Time `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ItemID        string    `bson:"item_id" json:"item_id"`
+	ProductName   string    `bson:"product_name" json:"product_name"`
+	ProductNameTa string    `bson:"product_name_ta,omitempty" json:"product_name_ta"` // Tamil name
+	Weight        string    `bson:"weight,omitempty" json:"weight"`                   // Product weight/size
+	Price         float64   `bson:"price" json:"price"`
+	BuyingPrice   *float64  `bson:"buying_price,omitempty" json:"buying_price,omitempty"` // Only for admin users
+	Section       string    `bson:"category_section" json:"section"`
+	MainCategory  string    `bson:"category_main" json:"main_category"`
+	Subcategory   string    `bson:"category_sub" json:"subcategory"`
+	InventoryID   string    `bson:"inventory_id,omitempty" json:"inventory_id,omitempty"` // Linked inventory item
+	ImageURL      string    `bson:"image_url" json:"image_url"`                           // Changed from product_image to image_url (Cloudinary URLs)
+	Description   string    `bson:"description" json:"description"`
+	Unit          string    `bson:"unit" json:"unit"`
+	Stock         int       `bson:"stock" json:"stock"`
+	Active        bool      `bson:"active" json:"active"`                           // Status: true=active, false=inactive
+	InStock       bool      `bson:"-" json:"in_stock"`                              // Computed field: stock > 0 (not stored in DB)
+	IsBestSeller  bool      `bson:"is_best_seller,omitempty" json:"is_best_seller"` // Featured product flag
+	CreatedAt     time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     time.Time `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 // OrderItem represents a single item within an order
@@ -56,7 +58,7 @@ type Order struct {
 	UserPhone         string                 `bson:"user_phone" json:"user_phone"`
 	UserName          string                 `bson:"user_name,omitempty" json:"user_name,omitempty"`
 	UserStoreName     string                 `bson:"user_store_name,omitempty" json:"user_store_name,omitempty"` // Enriched from users collection
-	Section           string                 `bson:"section,omitempty" json:"section,omitempty"`                // Section for split orders
+	Section           string                 `bson:"section,omitempty" json:"section,omitempty"`                 // Section for split orders
 	DeliveryAddress   DeliveryAddress        `bson:"delivery_address" json:"delivery_address"`
 	Items             []OrderItem            `bson:"items" json:"items"`
 	TotalAmount       float64                `bson:"total_amount" json:"total_amount"`
@@ -168,9 +170,9 @@ type BestSellers struct {
 // HomeSection represents a section with its main categories
 // Used in GET /api/flutter/home response
 type HomeSection struct {
-	Title          string         `json:"title"`           // Display name (localized)
-	Icon           string         `json:"icon"`            // Section icon
-	SectionName    string         `json:"section_name"`    // Original section name (for queries)
+	Title          string         `json:"title"`        // Display name (localized)
+	Icon           string         `json:"icon"`         // Section icon
+	SectionName    string         `json:"section_name"` // Original section name (for queries)
 	MainCategories []MainCategory `json:"main_categories"`
 }
 

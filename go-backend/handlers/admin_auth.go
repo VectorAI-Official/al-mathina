@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"al-mathina-backend/config"
 	"log"
 	"net/http"
 	"sync"
@@ -81,6 +82,17 @@ func AuthMiddleware() gin.HandlerFunc {
 		mu.RUnlock()
 
 		if !exists {
+			// DEV MODE: Allow login to persist across restarts if cookie exists
+			if config.AppConfig.Environment == "development" {
+				// Re-hydrate session
+				mu.Lock()
+				sessions[cookie] = "admin (dev)"
+				mu.Unlock()
+				c.Set("username", "admin (dev)")
+				c.Next()
+				return
+			}
+
 			// Invalid session, redirect to login
 			c.SetCookie("admin_session", "", -1, "/", "", false, true)
 			c.Redirect(http.StatusSeeOther, "/admin")

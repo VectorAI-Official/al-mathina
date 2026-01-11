@@ -313,7 +313,7 @@ func sendOrderEmailNotification(order models.Order) {
 		return
 	}
 
-	// Safely resolve order date string (OrderDate is a legacy optional pointer)
+	// Safely resolve order date string
 	var orderDateStr string
 	if order.OrderDate != nil {
 		orderDateStr = order.OrderDate.Format("2006-01-02 15:04:05")
@@ -323,36 +323,194 @@ func sendOrderEmailNotification(order models.Order) {
 		orderDateStr = time.Now().Format("2006-01-02 15:04:05")
 	}
 
-	// Build email subject with section info for split orders (matching FastAPI)
+	// Build email subject
 	subject := fmt.Sprintf("🛒 New Order - %s - %s", order.Section, order.OrderID)
 	if order.Section == "" {
-		subject = fmt.Sprintf("🛒 New Order: %s - ₹%.2f", order.OrderID, order.TotalAmount)
+		subject = fmt.Sprintf("🛒 New Order Received - %s", order.OrderID)
 	}
+
+	// Format Request Data
+	storeName := order.UserName
+	if storeName == "" {
+		storeName = "Not provided"
+	}
+
+	// Format Payment Method
+	paymentMethod := "COD"
+	if order.PaymentMethod != "" {
+		paymentMethod = order.PaymentMethod // Uppercase logic handled if needed, usually passed as is
+	}
+
+	// Build Address HTML
+	addressHtml := "Not provided"
+	if order.DeliveryAddress.Street != "" || order.DeliveryAddress.City != "" {
+		var parts []string
+		if order.DeliveryAddress.Street != "" {
+			parts = append(parts, order.DeliveryAddress.Street)
+		}
+		if order.DeliveryAddress.City != "" {
+			parts = append(parts, order.DeliveryAddress.City)
+		}
+		if order.DeliveryAddress.State != "" {
+			parts = append(parts, order.DeliveryAddress.State)
+		}
+		if order.DeliveryAddress.Pincode != "" {
+			parts = append(parts, fmt.Sprintf("PIN: %s", order.DeliveryAddress.Pincode))
+		}
+		if order.DeliveryAddress.Landmark != "" {
+			parts = append(parts, fmt.Sprintf("Landmark: %s", order.DeliveryAddress.Landmark))
+		}
+
+		// Join with <br>
+		if len(parts) > 0 {
+			var buffer bytes.Buffer
+			for i, part := range parts {
+				if i > 0 {
+					buffer.WriteString("<br>")
+				}
+				buffer.WriteString(part)
+			}
+			addressHtml = buffer.String()
+		}
+	}
+
+	// Items HTML (Table Rows)
+	itemsHtml := buildItemsHTML(order.Items)
+
+	// Order Link
+	orderLink := fmt.Sprintf("https://al-mathina.onrender.com/admin/orders?search=%s", order.OrderID)
+
+	// Rich HTML Body (Ported from FastAPI)
+	// NOTE: CSS percentages like 100% must be escaped as 100%% for fmt.Sprintf
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<style>
+			body { 
+				font-family: Arial, 'Noto Sans Tamil', 'Lohit Tamil', sans-serif; 
+				line-height: 1.6; 
+				color: #333; 
+				margin: 0; 
+				padding: 0; 
+			}
+			.container { max-width: 600px; margin: 0 auto; padding: 10px; }
+			@media screen and (max-width: 640px) {
+				.container { max-width: 100%%; padding: 5px; }
+			}
+			.header { background: linear-gradient(135deg, #28a745 0%%, #20c997 100%%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+			.content { background: #f8f9fa; padding: 20px; }
+			.order-details { background: white; padding: 15px; border-radius: 5px; margin: 10px 0; }
+			.table { 
+				width: 100%%; 
+				border-collapse: collapse; 
+				table-layout: fixed; 
+				font-family: Arial, 'Noto Sans Tamil', sans-serif;
+			}
+			.table th { 
+				background: #28a745; 
+				color: white; 
+				padding: 8px 4px; 
+				text-align: left; 
+				font-size: 12px; 
+				font-weight: 600;
+			}
+			.table td { 
+				padding: 8px 4px; 
+				border-bottom: 1px solid #ddd; 
+				font-size: 13px; 
+				word-wrap: break-word; 
+				overflow-wrap: break-word;
+				min-width: 0;
+			}
+			@media screen and (max-width: 640px) {
+				.table th, .table td { 
+					padding: 6px 2px; 
+					font-size: 11px; 
+				}
+				.order-details { padding: 10px; }
+			}
+			.total { font-size: 18px; font-weight: bold; color: #28a745; text-align: right; padding: 10px 0; }
+			.button { display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 15px 0; }
+			.footer { background: #e9ecef; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1 style="margin: 0;">🛒 New Order Received!</h1>
+				<p style="margin: 5px 0 0 0;">Order ID: <strong>%s</strong></p>
+			</div>
+			
+			<div class="content">
+				<div class="order-details">
+					<h2 style="color: #28a745; margin-top: 0;">Customer Information</h2>
+					<p><strong>Store Name:</strong> %s</p>
+					<p><strong>Phone:</strong> %s</p>
+					<p><strong>Payment Method:</strong> %s</p>
+				</div>
+				
+				<div class="order-details">
+					<h2 style="color: #28a745; margin-top: 0;">Delivery Address</h2>
+					<p>%s</p>
+				</div>
+				
+				<div class="order-details">
+					<h2 style="color: #28a745; margin-top: 0;">Order Items</h2>
+					<table class="table">
+						<thead>
+							<tr>
+								<th style="width: 6%%;">#</th>
+								<th style="width: 42%%;">Item</th>
+								<th style="width: 13%%; text-align: center;">Qty</th>
+								<th style="width: 19%%; text-align: right;">Price</th>
+								<th style="width: 20%%; text-align: right;">Total</th>
+							</tr>
+						</thead>
+						<tbody>
+							%s
+						</tbody>
+					</table>
+					<div class="total">
+						Total Amount: ₹%.2f
+					</div>
+				</div>
+				
+				<div style="text-align: center;">
+					<a href="%s" class="button">
+						📋 View Order in Admin Panel
+					</a>
+					<p style="font-size: 12px; color: #6c757d;">
+						Click the button above to manage this order
+					</p>
+				</div>
+			</div>
+			
+			<div class="footer">
+				<p>AL-Madhina Wholesale Management System</p>
+				<p>This is an automated notification. Please do not reply to this email.</p>
+			</div>
+		</div>
+	</body>
+	</html>
+	`,
+		order.OrderID,
+		storeName,
+		order.UserPhone,
+		paymentMethod,
+		addressHtml,
+		itemsHtml,
+		order.TotalAmount,
+		orderLink,
+	)
 
 	// Build email payload matching Vercel webhook structure
 	payload := map[string]interface{}{
 		"to":      cfg.AdminEmail, // comma-separated admin emails
 		"subject": subject,
-		"html": fmt.Sprintf(`
-			<h2>New Order Received</h2>
-			<p><strong>Order ID:</strong> %s</p>
-			<p><strong>Customer:</strong> %s (%s)</p>
-			<p><strong>Delivery Address:</strong> %s</p>
-			<p><strong>Total Amount:</strong> ₹%.2f</p>
-			<p><strong>Items:</strong></p>
-			<ul>%s</ul>
-			<p><strong>Notes:</strong> %s</p>
-			<p><strong>Order Date:</strong> %s</p>
-		`,
-			order.OrderID,
-			order.UserName,
-			order.UserPhone,
-			order.DeliveryAddress,
-			order.TotalAmount,
-			buildItemsHTML(order.Items),
-			order.Notes,
-			orderDateStr,
-		),
+		"html":    htmlBody,
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -413,19 +571,36 @@ func sendFCMOrderNotification(userPhone, orderID string, totalAmount float64, it
 	}
 }
 
-// buildItemsHTML formats order items as HTML list
+// buildItemsHTML formats order items as HTML table rows using fmt.Sprintf
+// Matches the structure required by the new email template
 func buildItemsHTML(items []models.OrderItem) string {
-	html := ""
-	for _, item := range items {
-		html += fmt.Sprintf(
-			"<li>%s - Qty: %d - ₹%.2f (Subtotal: ₹%.2f)</li>",
-			item.ProductName,
+	var buffer bytes.Buffer
+	for i, item := range items {
+		// Use display name: "Name (Weight)" or just "Name"
+		displayName := item.ProductName
+		if item.Weight != "" {
+			displayName = fmt.Sprintf("%s (%s)", item.ProductName, item.Weight)
+		}
+
+		// Row HTML
+		row := fmt.Sprintf(`
+		<tr>
+			<td>%d</td>
+			<td style="word-wrap: break-word; font-family: Arial, 'Noto Sans Tamil', sans-serif;">%s</td>
+			<td style="text-align: center;">%d</td>
+			<td style="text-align: right;">₹%.2f</td>
+			<td style="text-align: right;">₹%.2f</td>
+		</tr>
+		`,
+			i+1,
+			displayName,
 			item.Quantity,
 			item.Price,
 			item.Subtotal,
 		)
+		buffer.WriteString(row)
 	}
-	return html
+	return buffer.String()
 }
 
 // GetAppVersion returns API version info

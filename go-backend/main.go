@@ -223,19 +223,24 @@ func main() {
 	legacyAPI := router.Group("/api/flutter/user")
 	{
 		legacyAPI.GET("/profile/:phone", handlers.GetUserProfile)
+		legacyAPI.PUT("/profile/:phone", handlers.UpdateUserProfile)
+		legacyAPI.DELETE("/profile/:phone", handlers.DeleteUserProfile)
+		legacyAPI.PUT("/phone/:old_phone", handlers.ChangePhoneNumber)
+		
 		legacyAPI.GET("/store-details/:phone", handlers.GetStoreDetails)
+		legacyAPI.PUT("/store-details/:phone", handlers.UpdateStoreDetails)
 
-		// Fix 404s for other legacy endpoints
 		legacyAPI.GET("/favorites/:phone", handlers.GetFavorites)
-		legacyAPI.GET("/orders/:phone", handlers.GetUserOrders)
+		legacyAPI.POST("/favorites/:phone", handlers.AddFavorite)
+		legacyAPI.DELETE("/favorites/:phone/:item_id", handlers.RemoveFavorite)
 
-		// Add address if needed
+		legacyAPI.GET("/orders/:phone", handlers.GetUserOrders)
+		legacyAPI.POST("/orders", handlers.CreateOrder)
+		legacyAPI.GET("/orders/:phone/:order_id", handlers.GetOrderDetails)
+
 		legacyAPI.POST("/address/:phone", handlers.AddAddress)
 		legacyAPI.PUT("/address/:phone/:index", handlers.UpdateAddress)
 		legacyAPI.DELETE("/address/:phone/:index", handlers.DeleteAddress)
-
-		// Fix 404 for POST orders (Create Order)
-		legacyAPI.POST("/orders", handlers.CreateOrder)
 	}
 
 	// Static file serving (matches FastAPI pattern)

@@ -48,6 +48,9 @@ func main() {
 		log.Println("⚠️  Firebase service account path not set - FCM notifications disabled")
 	}
 
+	// Initialize Email Service
+	utils.InitEmailService()
+
 	// Initialize Gin router
 	// Use release mode in production for better performance
 	if cfg.IsProduction() {
@@ -226,7 +229,7 @@ func main() {
 		legacyAPI.PUT("/profile/:phone", handlers.UpdateUserProfile)
 		legacyAPI.DELETE("/profile/:phone", handlers.DeleteUserProfile)
 		legacyAPI.PUT("/phone/:old_phone", handlers.ChangePhoneNumber)
-		
+
 		legacyAPI.GET("/store-details/:phone", handlers.GetStoreDetails)
 		legacyAPI.PUT("/store-details/:phone", handlers.UpdateStoreDetails)
 

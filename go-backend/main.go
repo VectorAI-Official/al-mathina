@@ -223,7 +223,15 @@ func main() {
 	{
 		legacyAPI.GET("/profile/:phone", handlers.GetUserProfile)
 		legacyAPI.GET("/store-details/:phone", handlers.GetStoreDetails)
-		// Add other legacy routes as needed
+
+		// Fix 404s for other legacy endpoints
+		legacyAPI.GET("/favorites/:phone", handlers.GetFavorites)
+		legacyAPI.GET("/orders/:phone", handlers.GetUserOrders)
+
+		// Add address if needed
+		legacyAPI.POST("/address/:phone", handlers.AddAddress)
+		legacyAPI.PUT("/address/:phone/:index", handlers.UpdateAddress)
+		legacyAPI.DELETE("/address/:phone/:index", handlers.DeleteAddress)
 	}
 
 	// Static file serving (matches FastAPI pattern)

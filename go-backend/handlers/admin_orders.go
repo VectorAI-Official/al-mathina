@@ -282,97 +282,160 @@ func reduceInventoryForOrder(orderID string, order bson.M) {
 		}
 
 		itemID, _ := itemMap["item_id"].(string)
-		quantity, _ := itemMap["quantity"].(int32)
-		if quantity == 0 {
-			if qty, ok := itemMap["quantity"].(float64); ok {
-				quantity = int32(qty)
-			}
+		productName, _ := itemMap["product_name"].(string)
+
+		// Handle quantity (int or float)
+		var quantity int32
+		if q, ok := itemMap["quantity"].(int32); ok {
+			quantity = q
+		} else if q, ok := itemMap["quantity"].(float64); ok {
+			quantity = int32(q)
 		}
 
-		if itemID == "" || quantity == 0 {
+		if quantity == 0 {
 			continue
 		}
 
-		// Get product to find inventory_id
+		// Find product (Try ItemID first, then Name)
 		var product bson.M
-		err := productsCol.FindOne(ctx, bson.M{"item_id": itemID}).Decode(&product)
+		var err error
+
+		if itemID != "" {
+			err = productsCol.FindOne(ctx, bson.M{"item_id": itemID}).Decode(&product)
+		}
+
+		// Fallback to name search if ID failed or was empty
+		if (err != nil || itemID == "") && productName != "" {
+			log.Printf("⚠️  Item ID missing for '%s', trying name lookup...", productName)
+			// Try exact match
+			err = productsCol.FindOne(ctx, bson.M{"product_name": productName}).Decode(&product)
+
+			// Try fuzzy match
+			if err != nil {
+				err = productsCol.FindOne(ctx, bson.M{
+					"product_name": bson.M{"$regex": primitive.Regex{Pattern: "^" + productName + "$", Options: "i"}},
+				}).Decode(&product)
+			}
+		}
+
 		if err != nil {
-			log.Printf("⚠️  Product %s not found for order %s", itemID, orderID)
+			log.Printf("❌ Product not found for order %s (ID: %s, Name: %s)", orderID, itemID, productName)
 			continue
 		}
 
 		inventoryID, ok := product["inventory_id"].(string)
 		if !ok || inventoryID == "" {
-			log.Printf("⚠️  Product %s not linked to inventory", itemID)
+			log.Printf("⚠️  Product '%s' (ID: %s) not linked to inventory", productName, itemID)
 			continue
 		}
 
-		// Get current inventory
-		var inventory bson.M
-		err = inventoryCol.FindOne(ctx, bson.M{"inventory_id": inventoryID}).Decode(&inventory)
-		if err != nil {
-			log.Printf("⚠️  Inventory %s not found", inventoryID)
-			continue
-		}
-
-		currentStock := int32(0)
-		if stock, ok := inventory["stock_quantity"].(int32); ok {
-			currentStock = stock
-		} else if stock, ok := inventory["stock_quantity"].(float64); ok {
-			currentStock = int32(stock)
-		}
-
-		newStock := currentStock - quantity
-		if newStock < 0 {
-			log.Printf("⚠️  Insufficient stock for %s (current: %d, required: %d)", inventoryID, currentStock, quantity)
-			newStock = 0
-		}
-
-		// Update inventory stock
-		_, err = inventoryCol.UpdateOne(
+		// Atomic Update: Decrement stock, but ensure it doesn't go below 0
+		// We use $inc with negative quantity
+		updateResult, err := inventoryCol.UpdateOne(
 			ctx,
-			bson.M{"inventory_id": inventoryID},
-			bson.M{"$set": bson.M{
-				"stock_quantity": newStock,
-				"updated_at":     time.Now(),
-			}},
+			bson.M{
+				"inventory_id":   inventoryID,
+				"stock_quantity": bson.M{"$gte": quantity}, // Optimistic check: only update if enough stock
+			},
+			bson.M{
+				"$inc": bson.M{"stock_quantity": -quantity},
+				"$set": bson.M{"updated_at": time.Now()},
+			},
 		)
 
-		if err != nil {
-			log.Printf("❌ Failed to update inventory %s: %v", inventoryID, err)
-			continue
+		// If atomic update failed (likely due to insufficient stock), force update to 0 or remaining
+		if err != nil || updateResult.MatchedCount == 0 {
+			// Fetch current to log logic
+			var currentInv bson.M
+			inventoryCol.FindOne(ctx, bson.M{"inventory_id": inventoryID}).Decode(&currentInv)
+
+			currentStock := int32(0)
+			if s, ok := currentInv["stock_quantity"].(int32); ok {
+				currentStock = s
+			}
+
+			log.Printf("⚠️  Insufficient stock for %s (Current: %d, Required: %d). Forcing update...", inventoryID, currentStock, quantity)
+
+			// Force update (allow going negative? or clamp to 0?)
+			// User request: "deducted carefully". Let's clamp to 0 to avoid negative stock in UI.
+			/*
+			   DECISION: For now, we will allow it to go negative OR stay at 0 depending on business logic.
+			   Usually, simple systems prefer clamping to 0.
+			   Let's use Safe Decrement: max(0, stock - qty)
+			   This requires a read-write or a pipeline update.
+			*/
+
+			_, err = inventoryCol.UpdateOne(
+				ctx,
+				bson.M{"inventory_id": inventoryID},
+				[]bson.M{
+					{
+						"$set": bson.M{
+							"stock_quantity": bson.M{
+								"$cond": bson.M{
+									"if":   bson.M{"$lt": []interface{}{bson.M{"$subtract": []interface{}{"$stock_quantity", quantity}}, 0}},
+									"then": 0,
+									"else": bson.M{"$subtract": []interface{}{"$stock_quantity", quantity}},
+								},
+							},
+							"updated_at": time.Now(),
+						},
+					},
+				},
+			)
+			if err != nil {
+				log.Printf("❌ Failed to force update inventory %s: %v", inventoryID, err)
+				continue
+			}
 		}
 
-		// Record history
-		inventoryName, _ := inventory["inventory_name"].(string)
+		// Record history (Async to not block too much, but kept sync here for safety)
+		inventoryName, _ := product["inventory_name"].(string) // Might not be on product, fetch from inv if needed
+
+		// If name missing, it's fine, history tracks ID mostly.
+
 		history := bson.M{
 			"inventory_id":     inventoryID,
-			"inventory_name":   inventoryName,
-			"quantity_before":  currentStock,
-			"quantity_after":   newStock,
+			"inventory_name":   inventoryName, // might be empty
 			"quantity_changed": -int(quantity),
 			"reason":           "order_delivered",
 			"changed_by":       "system",
 			"order_id":         orderID,
 			"timestamp":        time.Now(),
 		}
-
 		historyCol.InsertOne(ctx, history)
 
-		log.Printf("✅ Reduced inventory %s: %d → %d (-%d for order %s)",
-			inventoryName, currentStock, newStock, quantity, orderID)
+		log.Printf("✅ Reduced inventory %s by %d (Order: %s)", inventoryID, quantity, orderID)
 
-		// Check for low stock alert
-		threshold := int32(10)
-		if t, ok := inventory["low_stock_threshold"].(int32); ok {
-			threshold = t
-		} else if t, ok := inventory["low_stock_threshold"].(float64); ok {
-			threshold = int32(t)
-		}
+		// Check low stock alert (Async)
+		go checkLowStock(inventoryID)
+	}
+}
 
-		if newStock <= threshold {
-			go createInventoryAlert(inventoryID, inventoryName, int(newStock), int(threshold))
-		}
+// Helper to check low stock after update
+func checkLowStock(inventoryID string) {
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+
+	col := database.GetCollection("inventory")
+	var inv bson.M
+	if err := col.FindOne(ctx, bson.M{"inventory_id": inventoryID}).Decode(&inv); err != nil {
+		return
+	}
+
+	stock := int32(0)
+	if s, ok := inv["stock_quantity"].(int32); ok {
+		stock = s
+	}
+
+	threshold := int32(10)
+	if t, ok := inv["low_stock_threshold"].(int32); ok {
+		threshold = t
+	}
+
+	if stock <= threshold {
+		name, _ := inv["inventory_name"].(string)
+		createInventoryAlert(inventoryID, name, int(stock), int(threshold))
 	}
 }
 

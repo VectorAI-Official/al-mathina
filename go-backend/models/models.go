@@ -41,6 +41,10 @@ type OrderItem struct {
 	Price        float64 `bson:"price" json:"price"`
 	ImageURL     string  `bson:"image_url,omitempty" json:"image_url,omitempty"`
 	Subtotal     float64 `bson:"subtotal,omitempty" json:"subtotal,omitempty"`
+
+	// Compatibility fields for Flutter App (matches Python backend)
+	Brand    string `bson:"brand,omitempty" json:"brand,omitempty"`       // Maps to ProductName
+	Category string `bson:"category,omitempty" json:"category,omitempty"` // Maps to MainCategory
 }
 
 // DeliveryAddress represents the delivery address structure in orders

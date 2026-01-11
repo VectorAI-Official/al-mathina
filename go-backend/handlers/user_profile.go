@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -188,8 +189,57 @@ func CreateOrder(c *gin.Context) {
 		paymentMethod = "cod"
 	}
 
-	// Ensure item subtotals are calculated
+	// Maintain item compatibility, ensure subtotals, and ENRICH with product details
+	productsCol := database.GetCollection("products")
+
 	for i := range req.Items {
+		// 1. Map Legacy/Flutter fields if standard fields are empty
+		if req.Items[i].ProductName == "" && req.Items[i].Brand != "" {
+			req.Items[i].ProductName = req.Items[i].Brand
+		}
+		if req.Items[i].MainCategory == "" && req.Items[i].Category != "" {
+			req.Items[i].MainCategory = req.Items[i].Category
+		}
+
+		// 2. Enrich with Product Details from DB if missing (Crucial for Weight/Image)
+		// Flutter app sends minimal data (name/price/qty), we need to fill the rest.
+		if req.Items[i].ProductName != "" {
+			var product models.Product
+			// Try exact match on name
+			err := productsCol.FindOne(ctx, bson.M{"product_name": req.Items[i].ProductName}).Decode(&product)
+
+			// If not found, try case-insensitive regex
+			if err != nil {
+				productsCol.FindOne(ctx, bson.M{
+					"product_name": bson.M{"$regex": primitive.Regex{Pattern: "^" + req.Items[i].ProductName + "$", Options: "i"}},
+				}).Decode(&product)
+			}
+
+			if product.ItemID != "" {
+				// Found product! Fill in missing fields
+				if req.Items[i].ItemID == "" {
+					req.Items[i].ItemID = product.ItemID
+				}
+				if req.Items[i].Weight == "" {
+					req.Items[i].Weight = product.Weight
+				}
+				if req.Items[i].ImageURL == "" {
+					req.Items[i].ImageURL = product.ImageURL
+				}
+				if req.Items[i].Section == "" {
+					req.Items[i].Section = product.Section
+				}
+				if req.Items[i].MainCategory == "" {
+					req.Items[i].MainCategory = product.MainCategory
+				}
+				if req.Items[i].Subcategory == "" {
+					req.Items[i].Subcategory = product.Subcategory
+				}
+				log.Printf("✨ Enriched item: %s -> ID: %s, Weight: %s", req.Items[i].ProductName, product.ItemID, product.Weight)
+			}
+		}
+
+		// 3. Ensure Subtotal
 		if req.Items[i].Subtotal == 0 {
 			req.Items[i].Subtotal = float64(req.Items[i].Quantity) * req.Items[i].Price
 		}

@@ -215,7 +215,9 @@ func (s *SupabaseClient) GetFCMToken(phone string) (string, error) {
 
 // queryFCMToken performs the actual Supabase REST API call for FCM token lookup
 func (s *SupabaseClient) queryFCMToken(phone string) (string, error) {
-	url := fmt.Sprintf("%s/rest/v1/user_devices?phone=eq.%s&select=fcm_token", s.BaseURL, phone)
+	// URL-encode phone to handle + sign correctly
+	encodedPhone := strings.ReplaceAll(phone, "+", "%2B")
+	url := fmt.Sprintf("%s/rest/v1/user_devices?phone=eq.%s&select=fcm_token", s.BaseURL, encodedPhone)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

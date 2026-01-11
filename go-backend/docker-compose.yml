@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  go-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: almathina-go-backend
+    ports:
+      - "9000:9000"
+    environment:
+      # Load from .env file
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - PORT=9000
+      - MONGO_URI=${MONGO_URI}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - EMAIL_WEBHOOK_URL=${EMAIL_WEBHOOK_URL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+    env_file:
+      - .env
+    volumes:
+      # Mount Firebase service account from Backend directory
+      - ../Backend/firebase-service-account.json:/app/firebase-service-account.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - almathina-network
+
+networks:
+  almathina-network:
+    driver: bridge

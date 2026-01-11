@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^docker restart almathina-go-backend$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

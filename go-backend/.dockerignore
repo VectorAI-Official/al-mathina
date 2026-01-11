@@ -1,0 +1,46 @@
+# .dockerignore for Go backend
+# Excludes files from Docker build context (faster builds)
+
+# Git
+.git
+.gitignore
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Dependencies (will be downloaded in Dockerfile)
+vendor/
+
+# Environment files (secrets loaded separately)
+.env
+.env.local
+.env.production
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+*_test.go
+test_connections.go
+
+# Build artifacts
+main
+go-backend
+
+# OS
+.DS_Store
+Thumbs.db

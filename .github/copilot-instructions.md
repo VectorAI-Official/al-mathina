@@ -67,19 +67,17 @@ Deployment & Requirements (CRITICAL)
 - Deployment failed twice because forgot to update production and docker files
 
 **Deployment Target**: Render.com (https://al-mathina.onrender.com)
-- Dockerfile-based deployment
+- Dockerfile-based deployment (root Dockerfile builds Go backend)
 - Auto-deploys on git push to main branch
-- Uses `main_production.py` as entrypoint
+- Uses Go backend (port 9000) - FastAPI code kept but NOT hosted
 - Monitor at: Render dashboard
 
 **Docker Local Development**:
-- Start: `cd Backend; docker-compose up -d`
-- Logs: `docker-compose logs --tail=50 backend`
-- Restart: `docker-compose restart`
-- **CRITICAL**: Requires Supabase credentials in `Backend/.env.production`
+- Go Backend: `cd go-backend; docker-compose up -d` (port 9000)
+- FastAPI (local only, not in Docker): `cd Backend; .\venv\Scripts\Activate.ps1; python -m uvicorn main_local:app --reload --host 127.0.0.1 --port 8000`
+- Go Backend Logs: `cd go-backend; docker-compose logs --tail=50 go-backend`
+- **CRITICAL**: Requires Supabase credentials in `go-backend/.env`
   - Without them, admin system fails with "Name or service not known" DNS error
-  - Volume mount: `.:/app` enables hot-reload for code changes
-  - Environment: `RELOAD=true` for auto-reload on file changes
 
 
 

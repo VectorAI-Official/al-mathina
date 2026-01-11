@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """Debug script to check hierarchy structure"""
 
-from database.mongodb_client import get_mongo_db
+from pymongo import MongoClient
 
-db = get_mongo_db()
+client = MongoClient('mongodb://localhost:27017/')
+db = client['almadhinadb']
 
 print("=== METADATA COLLECTION ===")
 soft_drinks_meta = db.category_metadata.find_one({"name": "Soft Drinks"})

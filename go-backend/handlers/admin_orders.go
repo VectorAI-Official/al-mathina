@@ -1,0 +1,559 @@
+package handlers
+
+import (
+	"al-mathina-backend/database"
+	"al-mathina-backend/models"
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+// GetAllOrders - GET /api/admin/orders
+func GetAllOrders(c *gin.Context) {
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	ordersCollection := database.GetCollection("orders")
+	usersCollection := database.GetCollection("users")
+
+	// Fetch all orders sorted by created_at (newest first)
+	cursor, err := ordersCollection.Find(ctx, bson.M{}, &options.FindOptions{
+		Sort: bson.D{{Key: "created_at", Value: -1}},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to fetch orders: %v", err)})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var orders []models.Order
+	if err := cursor.All(ctx, &orders); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to decode orders: %v", err)})
+		return
+	}
+
+	// Collect unique user phones for batch lookup
+	userPhones := make(map[string]bool)
+	for _, order := range orders {
+		if order.UserPhone != "" {
+			userPhones[order.UserPhone] = true
+		}
+	}
+
+	// Batch fetch all users
+	userPhoneList := make([]string, 0, len(userPhones))
+	for phone := range userPhones {
+		userPhoneList = append(userPhoneList, phone)
+	}
+
+	userLookup := make(map[string]*models.User)
+	if len(userPhoneList) > 0 {
+		userCursor, err := usersCollection.Find(ctx, bson.M{
+			"phone": bson.M{"$in": userPhoneList},
+		})
+		if err == nil {
+			defer userCursor.Close(ctx)
+			var users []models.User
+			if err := userCursor.All(ctx, &users); err == nil {
+				for i := range users {
+					userLookup[users[i].Phone] = &users[i]
+				}
+			}
+		}
+	}
+
+	// Enrich orders with user details
+	for i := range orders {
+		if user, ok := userLookup[orders[i].UserPhone]; ok {
+			orders[i].UserName = user.Name
+			if user.StoreDetails != nil {
+				orders[i].UserStoreName = user.StoreDetails.StoreName
+			}
+		} else {
+			orders[i].UserName = "Unknown"
+			orders[i].UserStoreName = ""
+		}
+	}
+
+	// Return response matching JavaScript expectations: {"success": true, "orders": [...]}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"orders":  orders,
+	})
+}
+
+// GetOrderByID - GET /api/admin/orders/:order_id
+func GetOrderByID(c *gin.Context) {
+	orderID := c.Param("order_id")
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	ordersCollection := database.GetCollection("orders")
+	usersCollection := database.GetCollection("users")
+	productsCollection := database.GetCollection("products")
+
+	// Find order by order_id
+	var orderDoc bson.M
+	err := ordersCollection.FindOne(ctx, bson.M{"order_id": orderID}).Decode(&orderDoc)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Order not found"})
+		return
+	}
+
+	// Get user details to enrich order
+	userPhone := ""
+	if up, ok := orderDoc["user_phone"].(string); ok {
+		userPhone = up
+	}
+
+	var user bson.M
+	if userPhone != "" {
+		usersCollection.FindOne(ctx, bson.M{"phone": userPhone}).Decode(&user)
+	}
+
+	// Add user information to order
+	if user != nil {
+		if name, ok := user["name"].(string); ok {
+			orderDoc["user_name"] = name
+		} else {
+			orderDoc["user_name"] = "Unknown"
+		}
+
+		// Get store details
+		if storeDetails, ok := user["store_details"].(bson.M); ok {
+			if storeName, ok := storeDetails["store_name"].(string); ok {
+				orderDoc["user_store_name"] = storeName
+			}
+		}
+	} else {
+		orderDoc["user_name"] = "Unknown"
+		orderDoc["user_store_name"] = ""
+	}
+
+	// Enrich items with product weights
+	if items, ok := orderDoc["items"].(primitive.A); ok {
+		enrichedItems := make([]bson.M, 0)
+		for _, itemInterface := range items {
+			if item, ok := itemInterface.(bson.M); ok {
+				// Find product to get weight
+				section := item["section"]
+				mainCat := item["main_category"]
+				subCat := item["subcategory"]
+				itemID := item["item_id"]
+
+				var product bson.M
+				productsCollection.FindOne(ctx, bson.M{
+					"section":       section,
+					"main_category": mainCat,
+					"subcategory":   subCat,
+					"item_id":       itemID,
+				}).Decode(&product)
+
+				if product != nil {
+					// Add weight from product
+					if weight, ok := product["weight"]; ok {
+						item["weight"] = weight
+					}
+					// Add current stock
+					if stock, ok := product["stock"]; ok {
+						item["current_stock"] = stock
+					} else {
+						item["current_stock"] = 0
+					}
+					// Add image URL
+					if imageURL, ok := product["image_url"]; ok {
+						item["image_url"] = imageURL
+					}
+				} else {
+					// No product found - set defaults
+					if _, hasWeight := item["weight"]; !hasWeight {
+						item["weight"] = ""
+					}
+					item["current_stock"] = 0
+					item["image_url"] = ""
+				}
+
+				enrichedItems = append(enrichedItems, item)
+			}
+		}
+		orderDoc["items"] = enrichedItems
+	}
+
+	// Return response matching JavaScript expectations: {"success": true, "order": {...}}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"order":   orderDoc,
+	})
+}
+
+// UpdateOrderStatus - PUT /api/admin/orders/:order_id/status
+func UpdateOrderStatus(c *gin.Context) {
+	orderID := c.Param("order_id")
+
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	collection := database.GetCollection("orders")
+
+	// Get the order before updating to check previous status
+	var order bson.M
+	err := collection.FindOne(ctx, bson.M{"order_id": orderID}).Decode(&order)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch order"})
+		}
+		return
+	}
+
+	previousStatus := ""
+	if status, ok := order["status"].(string); ok {
+		previousStatus = status
+	}
+
+	// Update order status
+	result, err := collection.UpdateOne(
+		ctx,
+		bson.M{"order_id": orderID},
+		bson.M{"$set": bson.M{
+			"status":     req.Status,
+			"updated_at": time.Now(),
+		}},
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order status"})
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	// If order status changed to "delivered", reduce inventory stock
+	if req.Status == "delivered" && previousStatus != "delivered" {
+		go reduceInventoryForOrder(orderID, order)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Order status updated successfully",
+	})
+}
+
+// reduceInventoryForOrder reduces inventory stock when order is delivered
+func reduceInventoryForOrder(orderID string, order bson.M) {
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+
+	productsCol := database.GetCollection("products")
+	inventoryCol := database.GetCollection("inventory")
+	historyCol := database.GetCollection("inventory_history")
+
+	// Get order items
+	items, ok := order["items"].([]interface{})
+	if !ok {
+		log.Printf("⚠️  Order %s has no items", orderID)
+		return
+	}
+
+	log.Printf("📦 Processing inventory reduction for order %s (%d items)", orderID, len(items))
+
+	for _, item := range items {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		itemID, _ := itemMap["item_id"].(string)
+		quantity, _ := itemMap["quantity"].(int32)
+		if quantity == 0 {
+			if qty, ok := itemMap["quantity"].(float64); ok {
+				quantity = int32(qty)
+			}
+		}
+
+		if itemID == "" || quantity == 0 {
+			continue
+		}
+
+		// Get product to find inventory_id
+		var product bson.M
+		err := productsCol.FindOne(ctx, bson.M{"item_id": itemID}).Decode(&product)
+		if err != nil {
+			log.Printf("⚠️  Product %s not found for order %s", itemID, orderID)
+			continue
+		}
+
+		inventoryID, ok := product["inventory_id"].(string)
+		if !ok || inventoryID == "" {
+			log.Printf("⚠️  Product %s not linked to inventory", itemID)
+			continue
+		}
+
+		// Get current inventory
+		var inventory bson.M
+		err = inventoryCol.FindOne(ctx, bson.M{"inventory_id": inventoryID}).Decode(&inventory)
+		if err != nil {
+			log.Printf("⚠️  Inventory %s not found", inventoryID)
+			continue
+		}
+
+		currentStock := int32(0)
+		if stock, ok := inventory["stock_quantity"].(int32); ok {
+			currentStock = stock
+		} else if stock, ok := inventory["stock_quantity"].(float64); ok {
+			currentStock = int32(stock)
+		}
+
+		newStock := currentStock - quantity
+		if newStock < 0 {
+			log.Printf("⚠️  Insufficient stock for %s (current: %d, required: %d)", inventoryID, currentStock, quantity)
+			newStock = 0
+		}
+
+		// Update inventory stock
+		_, err = inventoryCol.UpdateOne(
+			ctx,
+			bson.M{"inventory_id": inventoryID},
+			bson.M{"$set": bson.M{
+				"stock_quantity": newStock,
+				"updated_at":     time.Now(),
+			}},
+		)
+
+		if err != nil {
+			log.Printf("❌ Failed to update inventory %s: %v", inventoryID, err)
+			continue
+		}
+
+		// Record history
+		inventoryName, _ := inventory["inventory_name"].(string)
+		history := bson.M{
+			"inventory_id":     inventoryID,
+			"inventory_name":   inventoryName,
+			"quantity_before":  currentStock,
+			"quantity_after":   newStock,
+			"quantity_changed": -int(quantity),
+			"reason":           "order_delivered",
+			"changed_by":       "system",
+			"order_id":         orderID,
+			"timestamp":        time.Now(),
+		}
+
+		historyCol.InsertOne(ctx, history)
+
+		log.Printf("✅ Reduced inventory %s: %d → %d (-%d for order %s)",
+			inventoryName, currentStock, newStock, quantity, orderID)
+
+		// Check for low stock alert
+		threshold := int32(10)
+		if t, ok := inventory["low_stock_threshold"].(int32); ok {
+			threshold = t
+		} else if t, ok := inventory["low_stock_threshold"].(float64); ok {
+			threshold = int32(t)
+		}
+
+		if newStock <= threshold {
+			go createInventoryAlert(inventoryID, inventoryName, int(newStock), int(threshold))
+		}
+	}
+}
+
+// UpdateOrderItems - PUT /api/admin/orders/:order_id/update-items
+func UpdateOrderItems(c *gin.Context) {
+	orderID := c.Param("order_id")
+
+	var req struct {
+		Items []models.OrderItem `json:"items" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	collection := database.GetCollection("orders")
+
+	result, err := collection.UpdateOne(
+		ctx,
+		bson.M{"order_id": orderID},
+		bson.M{"$set": bson.M{
+			"items":      req.Items,
+			"updated_at": time.Now(),
+		}},
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order items"})
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Order items updated successfully",
+	})
+}
+
+// DeleteOrder - DELETE /api/admin/orders/:order_id
+func DeleteOrder(c *gin.Context) {
+	orderID := c.Param("order_id")
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	collection := database.GetCollection("orders")
+
+	result, err := collection.DeleteOne(ctx, bson.M{"order_id": orderID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete order"})
+		return
+	}
+
+	if result.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Order deleted successfully",
+	})
+}
+
+// GetOrderStats - GET /api/admin/orders/stats/summary
+func GetOrderStats(c *gin.Context) {
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	collection := database.GetCollection("orders")
+
+	// Aggregate stats by status
+	statusPipeline := []bson.D{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$status"},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, statusPipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to get stats"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var stats []struct {
+		ID    string `bson:"_id"`
+		Count int    `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &stats); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to decode stats"})
+		return
+	}
+
+	// Calculate totals
+	pending := 0
+	delivered := 0
+	total := 0
+	for _, stat := range stats {
+		total += stat.Count
+		if stat.ID == "pending" {
+			pending = stat.Count
+		} else if stat.ID == "delivered" {
+			delivered = stat.Count
+		}
+	}
+
+	// Calculate total revenue
+	revenuePipeline := []bson.D{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "total_revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
+		}}},
+	}
+
+	revenueCursor, err := collection.Aggregate(ctx, revenuePipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to calculate revenue"})
+		return
+	}
+	defer revenueCursor.Close(ctx)
+
+	var revenueResult []struct {
+		TotalRevenue float64 `bson:"total_revenue"`
+	}
+	totalRevenue := 0.0
+	if err := revenueCursor.All(ctx, &revenueResult); err == nil && len(revenueResult) > 0 {
+		totalRevenue = revenueResult[0].TotalRevenue
+	}
+
+	// Return response matching JavaScript expectations
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"stats": gin.H{
+			"total_orders":     total,
+			"pending_orders":   pending,
+			"delivered_orders": delivered,
+			"total_revenue":    totalRevenue,
+		},
+	})
+}
+
+// SearchProductsAdmin - GET /api/admin/orders/products/search
+func SearchProductsAdmin(c *gin.Context) {
+	query := c.Query("q")
+
+	if query == "" {
+		c.JSON(http.StatusOK, []models.Product{})
+		return
+	}
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	collection := database.GetCollection("products")
+
+	filter := bson.M{
+		"$or": []bson.M{
+			{"product_name": bson.M{"$regex": primitive.Regex{Pattern: query, Options: "i"}}},
+			{"item_id": bson.M{"$regex": primitive.Regex{Pattern: query, Options: "i"}}},
+		},
+	}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var products []models.Product
+	if err := cursor.All(ctx, &products); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode products"})
+		return
+	}
+
+	c.JSON(http.StatusOK, products)
+}

@@ -1,36 +1,42 @@
-services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: al-mathina-backend
-    ports:
-      - "8000:8080"  # localhost:8000 → container:8080
-    env_file:
-      - .env.production  # Cloud database credentials
-    environment:
-      # Configuration
-      - ENVIRONMENT=production
-      - RELOAD=true
-      - LOG_LEVEL=INFO
-    volumes:
-      # Mount Backend directory for hot-reload during development
-      - .:/app
-      # Exclude cache and dependencies from mounting
-      - /app/__pycache__
-      - /app/.pytest_cache
-      - /app/venv
-    restart: unless-stopped
-    # Health check to verify backend is running
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    # Logging configuration
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+# NOTE: FastAPI backend code is kept for reference but NOT hosted in Docker
+# Only Go backend is hosted. To run FastAPI locally, use:
+# cd Backend
+# .\venv\Scripts\Activate.ps1
+# python -m uvicorn main_local:app --reload --host 127.0.0.1 --port 8000
+
+# services:
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: al-mathina-backend
+#     ports:
+#       - "8000:8080"  # localhost:8000 → container:8080
+#     env_file:
+#       - .env.production  # Cloud database credentials
+#     environment:
+#       # Configuration
+#       - ENVIRONMENT=production
+#       - RELOAD=true
+#       - LOG_LEVEL=INFO
+#     volumes:
+#       # Mount Backend directory for hot-reload during development
+#       - .:/app
+#       # Exclude cache and dependencies from mounting
+#       - /app/__pycache__
+#       - /app/.pytest_cache
+#       - /app/venv
+#     restart: unless-stopped
+#     # Health check to verify backend is running
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 40s
+#     # Logging configuration
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "3"

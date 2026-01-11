@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Orders API</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+        .test-container { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        h2 { color: #1B5E20; margin-top: 0; }
+        pre { background: #f0f0f0; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        .status { padding: 10px; border-radius: 4px; margin-bottom: 10px; }
+        .status.success { background: #c8e6c9; color: #2e7d32; }
+        .status.error { background: #ffcdd2; color: #c62828; }
+        button { background: #1B5E20; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #155a2e; }
+    </style>
+</head>
+<body>
+    <h1>Orders API Test</h1>
+    
+    <div class="test-container">
+        <h2>Test 1: Fetch Orders API</h2>
+        <button onclick="testOrdersAPI()">Test API</button>
+        <div id="test1-result"></div>
+    </div>
+
+    <div class="test-container">
+        <h2>Test 2: Check Response Structure</h2>
+        <div id="test2-result"></div>
+    </div>
+
+    <div class="test-container">
+        <h2>Test 3: Full API Response</h2>
+        <pre id="test3-result">Click "Test API" button first...</pre>
+    </div>
+
+    <script>
+        let lastResponse = null;
+
+        async function testOrdersAPI() {
+            const result = document.getElementById('test1-result');
+            result.innerHTML = '<div class="status">Loading...</div>';
+
+            try {
+                console.log('🔄 Starting API test...');
+                
+                const response = await fetch('/api/admin/orders');
+                console.log(`📡 Response status: ${response.status}`);
+                console.log(`📊 Content-Type: ${response.headers.get('content-type')}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                lastResponse = data;
+                
+                console.log('✅ Full Response:', data);
+
+                let html = `<div class="status success">✅ API call successful</div>`;
+                html += `<p><strong>Status Code:</strong> ${response.status}</p>`;
+                html += `<p><strong>Response Type:</strong> ${typeof data}</p>`;
+                html += `<p><strong>success field:</strong> ${data.success}</p>`;
+                html += `<p><strong>orders field exists:</strong> ${data.hasOwnProperty('orders')}</p>`;
+                html += `<p><strong>orders type:</strong> ${Array.isArray(data.orders) ? 'Array' : typeof data.orders}</p>`;
+                html += `<p><strong>orders length:</strong> ${data.orders?.length || 'undefined/null'}</p>`;
+                
+                result.innerHTML = html;
+
+                // Show structure
+                const test2 = document.getElementById('test2-result');
+                test2.innerHTML = `<pre>${JSON.stringify({
+                    success: data.success,
+                    ordersCount: data.orders?.length || 0,
+                    firstOrderKeys: data.orders?.[0] ? Object.keys(data.orders[0]) : 'N/A',
+                    sampleOrder: data.orders?.[0] ? {
+                        order_id: data.orders[0].order_id,
+                        user_name: data.orders[0].user_name,
+                        total_amount: data.orders[0].total_amount,
+                        status: data.orders[0].status
+                    } : null
+                }, null, 2)}</pre>`;
+
+                // Show full response
+                document.getElementById('test3-result').innerHTML = `<strong>Full Response (${JSON.stringify(data).length} chars):</strong>\n${JSON.stringify(data, null, 2)}`;
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                result.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                document.getElementById('test2-result').innerHTML = `<div class="status error">Error occurred before structure check</div>`;
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', testOrdersAPI);
+    </script>
+</body>
+</html>

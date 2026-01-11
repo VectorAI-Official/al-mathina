@@ -5,12 +5,19 @@ import 'dart:io';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 
-// Production backend URL on Render (with Cloudflare CDN)
-const String BASE_URL = "https://al-mathina-upcraft.onrender.com";
+// LOCAL TESTING: Go backend on port 9000
+// For Android Emulator/USB Debugging: 10.0.2.2 maps to host machine's localhost
+// For iOS Simulator: use localhost
+// For physical device on same WiFi: use your computer's local IP (e.g., 192.168.1.x)
+const String BASE_URL = "http://192.168.1.6:9000";  // Physical USB device - use Windows host IP on LAN
 const String API_BASE = "$BASE_URL/api/flutter";
 
-// Fallback: Direct Cloudflare origin (in case main domain fails)
-const String FALLBACK_URL = "https://gcp-us-west1-1.origin.onrender.com";
+// PRODUCTION: Backend URL on Render (uncomment for production)
+// const String BASE_URL = "https://al-mathina-upcraft.onrender.com";
+// const String API_BASE = "$BASE_URL/api/flutter";
+
+// Fallback: Direct localhost (for iOS simulator or browser testing)
+const String FALLBACK_URL = "http://10.0.2.2:9000";
 const String FALLBACK_API_BASE = "$FALLBACK_URL/api/flutter";
 
 // Simple in-memory cache with TTL
@@ -462,7 +469,7 @@ class ApiService {
       final startTime = DateTime.now();
 
       final response = await http.put(
-        Uri.parse('$API_BASE/user/phone/$oldPhone'),
+        Uri.parse('$BASE_URL/api/phone/$oldPhone'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -821,7 +828,7 @@ class ApiService {
       
       print('💾 [PROFILE] Cache miss - fetching from server...');
       final fetchStartTime = DateTime.now();
-      final response = await http.get(Uri.parse('$API_BASE/user/profile/$phone'));
+      final response = await http.get(Uri.parse('$BASE_URL/api/profile/$phone'));
       final fetchDuration = DateTime.now().difference(fetchStartTime);
       
       print('🌐 [PROFILE] Network request completed in ${fetchDuration.inMilliseconds}ms');
@@ -851,7 +858,7 @@ class ApiService {
   static Future<Map<String, dynamic>> updateUserProfile(String phone, String? name, String? email) async {
     try {
       final response = await http.put(
-        Uri.parse('$API_BASE/user/profile/$phone'),
+        Uri.parse('$BASE_URL/api/profile/$phone'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           if (name != null) 'name': name,
@@ -874,7 +881,7 @@ class ApiService {
   static Future<Map<String, dynamic>> addAddress(String phone, Map<String, dynamic> address) async {
     try {
       final response = await http.post(
-        Uri.parse('$API_BASE/user/address/$phone'),
+        Uri.parse('$BASE_URL/api/address/$phone'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(address),
       );
@@ -891,7 +898,7 @@ class ApiService {
   static Future<Map<String, dynamic>> updateAddress(String phone, int index, Map<String, dynamic> address) async {
     try {
       final response = await http.put(
-        Uri.parse('$API_BASE/user/address/$phone/$index'),
+        Uri.parse('$BASE_URL/api/address/$phone/$index'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(address),
       );
@@ -908,7 +915,7 @@ class ApiService {
   static Future<Map<String, dynamic>> deleteAddress(String phone, int index) async {
     try {
       final response = await http.delete(
-        Uri.parse('$API_BASE/user/address/$phone/$index'),
+        Uri.parse('$BASE_URL/api/address/$phone/$index'),
       );
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -922,7 +929,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getUserOrders(String phone) async {
     try {
-      final response = await http.get(Uri.parse('$API_BASE/user/orders/$phone'));
+      final response = await http.get(Uri.parse('$BASE_URL/api/orders/$phone'));
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
@@ -956,7 +963,7 @@ class ApiService {
         'status': 'pending',
       };
       
-      final url = '$API_BASE/user/orders';
+      final url = '$BASE_URL/api/orders';
       print('🌐 [ORDER] POST URL: $url');
       print('📤 [ORDER] Request body: ${json.encode(orderData).substring(0, 200)}...');
       
@@ -985,7 +992,7 @@ class ApiService {
   // Get order details
   static Future<Map<String, dynamic>> getOrderDetails(String phone, String orderId) async {
     try {
-      final response = await http.get(Uri.parse('$API_BASE/user/orders/$phone/$orderId'));
+      final response = await http.get(Uri.parse('$BASE_URL/api/orders/$phone/$orderId'));
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
@@ -1008,7 +1015,7 @@ class ApiService {
       }
       
       print('📡 Fetching fresh store details for: $phone');
-      final response = await http.get(Uri.parse('$API_BASE/user/store-details/$phone'));
+      final response = await http.get(Uri.parse('$BASE_URL/api/store-details/$phone'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         // Backend returns {"success": true, "store_details": {...}}.
@@ -1038,7 +1045,7 @@ class ApiService {
   static Future<Map<String, dynamic>> updateStoreDetails(String phone, Map<String, dynamic> storeDetails) async {
     try {
       final response = await http.put(
-        Uri.parse('$API_BASE/user/store-details/$phone'),
+        Uri.parse('$BASE_URL/api/store-details/$phone'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(storeDetails),
       );
@@ -1058,7 +1065,7 @@ class ApiService {
   // Favorites APIs
   static Future<List<Product>> getFavorites(String phone) async {
     try {
-      final response = await http.get(Uri.parse('$API_BASE/user/favorites/$phone'));
+      final response = await http.get(Uri.parse('$BASE_URL/api/favorites/$phone'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List<dynamic> favorites = data['favorites'] ?? [];
@@ -1074,7 +1081,7 @@ class ApiService {
   static Future<Map<String, dynamic>> addFavorite(String phone, String itemId) async {
     try {
       final response = await http.post(
-        Uri.parse('$API_BASE/user/favorites/$phone'),
+        Uri.parse('$BASE_URL/api/favorites/$phone'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'item_id': itemId}),
       );
@@ -1091,7 +1098,7 @@ class ApiService {
   static Future<Map<String, dynamic>> removeFavorite(String phone, String itemId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$API_BASE/user/favorites/$phone/$itemId'),
+        Uri.parse('$BASE_URL/api/favorites/$phone/$itemId'),
       );
       if (response.statusCode == 200) {
         return json.decode(response.body);

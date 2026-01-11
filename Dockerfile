@@ -1,24 +1,57 @@
-FROM python:3.11-slim
+# Dockerfile for AL-Madhina Go Backend
+# Multi-stage build for smaller production image
+
+# Stage 1: Build
+FROM golang:1.24-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates tzdata
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Copy go mod files first (for better Docker layer caching)
+COPY go-backend/go.mod go-backend/go.sum ./
 
-# Copy requirements first for better caching
-COPY Backend/requirements.txt .
+# Download dependencies
+RUN go mod download
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy source code (this will overwrite go.mod/go.sum but that's fine)
+COPY go-backend/ .
 
-# Copy backend code
-COPY Backend/ .
+# Build binary with optimizations
+# CGO_ENABLED=0 for static binary (no external dependencies)
+# -ldflags="-s -w" strips debug info for smaller binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main .
 
-# Expose port
-EXPOSE 8080
+# Stage 2: Production
+FROM alpine:latest
 
-# Run the application
-CMD ["python", "-m", "uvicorn", "main_production:app", "--host", "0.0.0.0", "--port", "8080"]
+# Install ca-certificates for HTTPS calls (MongoDB Atlas, Supabase)
+RUN apk --no-cache add ca-certificates tzdata wget
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/main .
+
+# Copy static files for admin dashboard
+COPY --from=builder /app/static ./static
+
+# Copy Firebase service account from Backend directory (if needed)
+# Note: This should be provided via environment variable or volume mount in production
+COPY Backend/firebase-service-account.json /app/firebase-service-account.json
+
+# Expose port 9000
+EXPOSE 9000
+
+# Run as non-root user for security
+RUN adduser -D -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:9000/health || exit 1
+
+# Run the binary
+CMD ["./main"]

@@ -185,7 +185,8 @@ async def get_home_data(request: Request, lang: str = Query("en", description="L
                 
                 # Get IDs from metadata or hierarchy (added by migration)
                 section_id = section_doc.get("section_id")
-                main_category_id = metadata.get("main_category_id") if metadata else main_cat_data.get("main_category_id")
+                # main_cat_data is a list (array of subcategories), not a dict, so get ID from metadata only
+                main_category_id = metadata.get("main_category_id") if metadata else None
                 
                 section_data["main_categories"].append({
                     "id": f"{section_name.lower().replace(' ', '_')}_{main_cat_name.lower().replace(' ', '_')}",

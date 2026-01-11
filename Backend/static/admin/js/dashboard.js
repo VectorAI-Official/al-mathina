@@ -1,4 +1,5 @@
-// Admin Dashboard JavaScript
+// Admin Dashboard JavaScript - v2.1.0 (2026-01-10 22:35)
+// Fixed: All clearImage functions now have null checks, removed duplicates
 // Handles CRUD operations, image uploads, and UI interactions
 
 let allProducts = [];
@@ -2423,11 +2424,17 @@ function handleAddMainCategoryConverterResult(file, blob) {
 // Clear add main category image preview
 function clearAddMainCategoryImagePreview() {
     addMainCategoryConvertedFile = null;
+    
+    const fileInput = document.getElementById('addMainCategoryImageFile');
+    if (fileInput) fileInput.value = '';
+    
     const preview = document.getElementById('addMainCategoryImagePreview');
     if (preview) preview.style.display = 'none';
     
     const previewImg = document.getElementById('addMainCategoryPreviewImg');
     if (previewImg) previewImg.src = '';
+    
+    showToast('Image removed', 'info');
 }
 
 // Handle add main category form submission
@@ -2569,14 +2576,6 @@ async function handleAddMainCategoryImagePreview(event) {
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
-}
-
-// Clear Add Main Category image preview
-function clearAddMainCategoryImagePreview() {
-    document.getElementById('addMainCategoryImageFile').value = '';
-    document.getElementById('addMainCategoryImagePreview').style.display = 'none';
-    document.getElementById('addMainCategoryPreviewImg').src = '';
-    showToast('Image removed', 'info');
 }
 
 function openAddSectionCategory(section) {
@@ -2790,11 +2789,17 @@ function handleAddSubcategoryConverterResult(file, blob) {
 // Clear add subcategory image preview
 function clearAddSubCategoryImagePreview() {
     addSubcategoryConvertedFile = null;
+    
+    const fileInput = document.getElementById('addSubCategoryImageFile');
+    if (fileInput) fileInput.value = '';
+    
     const preview = document.getElementById('addSubCategoryImagePreview');
     if (preview) preview.style.display = 'none';
     
     const previewImg = document.getElementById('addSubCategoryPreviewImg');
     if (previewImg) previewImg.src = '';
+    
+    showToast('Image removed', 'info');
 }
 
 // Handle section category image upload
@@ -2858,9 +2863,16 @@ async function handleSectionCategoryImageUpload(event) {
 
 // Clear section category image preview
 function clearSectionCategoryImagePreview() {
-    document.getElementById('sectionCategoryImageUrl').value = '';
-    document.getElementById('sectionCategoryImageFile').value = '';
-    document.getElementById('sectionCategoryImagePreview').style.display = 'none';
+    const imageUrl = document.getElementById('sectionCategoryImageUrl');
+    if (imageUrl) imageUrl.value = '';
+    
+    const fileInput = document.getElementById('sectionCategoryImageFile');
+    if (fileInput) fileInput.value = '';
+    
+    const preview = document.getElementById('sectionCategoryImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    showToast('Image removed', 'info');
 }
 
 // Handle add section category form submission
@@ -3822,11 +3834,17 @@ function handleEditMainCategoryConverterResult(file, blob) {
 // Clear edit main category image
 function clearEditMainCategoryImage() {
     editMainCategoryConvertedFile = null;
+    
+    const fileInput = document.getElementById('editMainCategoryImageFile');
+    if (fileInput) fileInput.value = '';
+    
     const preview = document.getElementById('editMainCategoryImagePreview');
     if (preview) preview.style.display = 'none';
     
     const previewImg = document.getElementById('editMainCategoryPreviewImg');
     if (previewImg) previewImg.src = '';
+    
+    showToast('Image removed', 'info');
 }
 
 function closeEditMainCategoryModal() {
@@ -4073,18 +4091,6 @@ async function uploadMainCategoryImage(file) {
     }
 }
 
-function clearEditMainCategoryImage() {
-    const fileInput = document.getElementById('editMainCategoryImageFile');
-    const preview = document.getElementById('editMainCategoryImagePreview');
-    const previewImg = document.getElementById('editMainCategoryPreviewImg');
-    
-    fileInput.value = '';
-    previewImg.src = '';
-    preview.style.display = 'none';
-    
-    showToast('Image removed', 'info');
-}
-
 // ============================================
 // SUBCATEGORY EDIT MODAL FUNCTIONS (Level 3)
 // ============================================
@@ -4171,11 +4177,17 @@ function handleEditSubcategoryConverterResult(file, blob) {
 // Clear edit subcategory image
 function clearEditSubCategoryImage() {
     editSubcategoryConvertedFile = null;
+    
+    const fileInput = document.getElementById('editSubCategoryImageFile');
+    if (fileInput) fileInput.value = '';
+    
     const preview = document.getElementById('editSubCategoryImagePreview');
     if (preview) preview.style.display = 'none';
     
     const previewImg = document.getElementById('editSubCategoryPreviewImg');
     if (previewImg) previewImg.src = '';
+    
+    showToast('Image removed', 'info');
 }
 
 // ===== PRODUCT IMAGE CONVERTER INTEGRATION =====
@@ -4203,11 +4215,17 @@ function handleProductConverterResult(file, blob) {
 // Clear product image
 function clearProductImage() {
     productConvertedFile = null;
+    
+    const fileInput = document.getElementById('productImageFile');
+    if (fileInput) fileInput.value = '';
+    
     const preview = document.getElementById('productImagePreview');
     if (preview) preview.style.display = 'none';
     
     const previewImg = document.getElementById('productPreviewImg');
     if (previewImg) previewImg.src = '';
+    
+    showToast('Image removed', 'info');
 }
 // ===== END PRODUCT IMAGE CONVERTER INTEGRATION =====
 
@@ -4431,19 +4449,6 @@ async function uploadSubCategoryImage(file) {
     }
 }
 
-// Clear image from edit subcategory modal
-function clearEditSubCategoryImage() {
-    const fileInput = document.getElementById('editSubCategoryImageFile');
-    const preview = document.getElementById('editSubCategoryImagePreview');
-    const previewImg = document.getElementById('editSubCategoryPreviewImg');
-    
-    fileInput.value = '';
-    previewImg.src = '';
-    preview.style.display = 'none';
-    
-    showToast('Image removed', 'info');
-}
-
 // Handle image preview for ADD subcategory modal
 async function handleAddSubCategoryImagePreview(event) {
     const file = event.target.files[0];
@@ -4490,19 +4495,6 @@ async function handleAddSubCategoryImagePreview(event) {
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
-}
-
-// Clear image from ADD subcategory modal
-function clearAddSubCategoryImagePreview() {
-    const fileInput = document.getElementById('addSubCategoryImageFile');
-    const preview = document.getElementById('addSubCategoryImagePreview');
-    const previewImg = document.getElementById('addSubCategoryPreviewImg');
-    
-    fileInput.value = '';
-    previewImg.src = '';
-    preview.style.display = 'none';
-    
-    showToast('Image removed', 'info');
 }
 
 // ============================================
@@ -4654,9 +4646,16 @@ async function handleCategoryImageUpload(event) {
 
 // Clear category image preview
 function clearCategoryImagePreview() {
-    document.getElementById('editCategoryImageUrl').value = '';
-    document.getElementById('editCategoryImageFile').value = '';
-    document.getElementById('editCategoryImagePreview').style.display = 'none';
+    const imageUrl = document.getElementById('editCategoryImageUrl');
+    if (imageUrl) imageUrl.value = '';
+    
+    const fileInput = document.getElementById('editCategoryImageFile');
+    if (fileInput) fileInput.value = '';
+    
+    const preview = document.getElementById('editCategoryImagePreview');
+    if (preview) preview.style.display = 'none';
+    
+    showToast('Image removed', 'info');
 }
 
 // Handle category edit form submission

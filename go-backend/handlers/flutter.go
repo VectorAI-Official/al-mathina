@@ -616,6 +616,17 @@ func GetProductDetails(c *gin.Context) {
 		return
 	}
 
+	// Check if user is admin (for buying_price field)
+	userPhone := c.Query("user_phone")
+	isAdmin := false
+	if userPhone != "" && database.SupabaseDB != nil {
+		var err error
+		isAdmin, err = database.SupabaseDB.CheckIsAdmin(userPhone)
+		if err != nil {
+			log.Printf("⚠️  GetProductDetails: Admin check failed for %s: %v", userPhone, err)
+		}
+	}
+
 	// Build response matching FastAPI structure
 	response := gin.H{
 		"item_id":         itemID,
@@ -629,14 +640,20 @@ func GetProductDetails(c *gin.Context) {
 			"main_category": product.MainCategory,
 			"subcategory":   product.Subcategory,
 		},
-		"weight":         product.Unit, // Unit field represents weight/measurement
+		"weight":         product.Unit,
 		"price":          product.Price,
 		"stock":          product.Stock,
 		"in_stock":       product.Stock > 0,
-		"is_best_seller": false, // Add if field exists in model
+		"is_best_seller": false,
 		"description":    product.Description,
 		"image_url":      makeAbsolute(c, product.ImageURL),
-		"images":         []string{makeAbsolute(c, product.ImageURL)}, // Can be extended for multiple images
+		"images":         []string{makeAbsolute(c, product.ImageURL)}, // Can be extended
+		"is_admin":       isAdmin,
+	}
+
+	// Add buying_price only for admins
+	if isAdmin && product.BuyingPrice != nil {
+		response["buying_price"] = *product.BuyingPrice
 	}
 
 	log.Printf("Retrieved product details for %s", itemID)

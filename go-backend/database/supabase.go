@@ -88,7 +88,9 @@ func (s *SupabaseClient) queryIsAdmin(phone string) (bool, error) {
 	// Construct Supabase REST API URL
 	// Filter: phone=eq.{phone} (exact match)
 	// Select: only is_admin column (reduce payload)
-	url := fmt.Sprintf("%s/rest/v1/users?phone=eq.%s&select=is_admin", s.BaseURL, phone)
+	// URL encode the phone number to handle '+' correctly
+	encodedPhone := strings.ReplaceAll(phone, "+", "%2B")
+	url := fmt.Sprintf("%s/rest/v1/users?phone=eq.%s&select=is_admin", s.BaseURL, encodedPhone)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

@@ -369,7 +369,7 @@ func sendOrderEmailNotification(order models.Order) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if cfg.EmailWebhookSecret != "" {
-		req.Header.Set("X-Webhook-Secret", cfg.EmailWebhookSecret)
+		req.Header.Set("x-api-key", cfg.EmailWebhookSecret)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}

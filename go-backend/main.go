@@ -217,6 +217,15 @@ func main() {
 		userAPI.DELETE("/favorites/:phone/:item_id", handlers.RemoveFavorite)
 	}
 
+	// Legacy Flutter Routes (for compatibility with older APKs/FastAPI structure)
+	// These mirror the /api/flutter/user/... structure
+	legacyAPI := router.Group("/api/flutter/user")
+	{
+		legacyAPI.GET("/profile/:phone", handlers.GetUserProfile)
+		legacyAPI.GET("/store-details/:phone", handlers.GetStoreDetails)
+		// Add other legacy routes as needed
+	}
+
 	// Static file serving (matches FastAPI pattern)
 	router.Static("/static", "./static")
 

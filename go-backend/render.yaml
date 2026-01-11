@@ -1,0 +1,42 @@
+# Render Deployment Configuration for AL-Mathina Go Backend
+# https://render.com/docs/yaml-spec
+
+services:
+  - type: web
+    name: al-mathina-go-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "9000"
+      - key: ENVIRONMENT
+        value: production
+      # MongoDB - set in Render Dashboard
+      - key: MONGO_URI
+        sync: false
+      # Supabase - set in Render Dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # Firebase - base64 encoded service account JSON
+      - key: FIREBASE_SERVICE_ACCOUNT_BASE64
+        sync: false
+      # Email Webhook
+      - key: EMAIL_WEBHOOK_URL
+        sync: false
+      - key: EMAIL_WEBHOOK_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      # Cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

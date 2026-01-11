@@ -448,6 +448,12 @@ function displayProducts(products, append = false) {
             <td><strong>₹${(product.price ?? 0).toFixed(2)}</strong></td>
             <td>${product.stock}</td>
             <td>
+                ${product.inventory_id ?
+            `<span class="link-badge link-active" title="Linked to Inventory ID: ${product.inventory_id}">🟢 Linked</span>` :
+            `<span class="link-badge link-none" title="Stock managed individually">⚪ Not Linked</span>`
+        }
+            </td>
+            <td>
                 <div class="action-buttons">
                     <button class="action-btn btn-edit" onclick="editProduct('${product._id}')">
                         ✏️ Edit
@@ -4960,14 +4966,40 @@ async function setInventorySelection(inventoryId) {
     }
 
     // Find and select the inventory item
-    const item = inventoryItems.find(inv => inv.inventory_id === inventoryId);
+    let item = inventoryItems.find(inv => inv.inventory_id === inventoryId);
+
     if (item) {
-        console.log('   ✅ Found linked inventory item:', item.inventory_name);
+        console.log('   ✅ Found linked inventory item in list:', item.inventory_name);
         selectInventoryItem(item);
     } else {
-        console.error('   ❌ Linked inventory item NOT FOUND in list:', inventoryId);
-        // Fallback: Show ID if name not found? Or maybe just error
+        console.log('   ⚠️  Linked inventory item NOT found in list. Fetching from server:', inventoryId);
+
+        // Show loading state
         const searchInput = document.getElementById('inventorySearch');
+        if (searchInput) searchInput.value = `Loading details for ${inventoryId}...`;
+
+        try {
+            const response = await fetch(`/admin/api/inventory/${inventoryId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.inventory) {
+                    item = data.inventory;
+                    console.log('   ✅ Fetched inventory item from server:', item.inventory_name);
+
+                    // Add to local list to prevent re-fetching
+                    inventoryItems.push(item);
+
+                    selectInventoryItem(item);
+                    return;
+                }
+            }
+            console.error('   ❌ Failed to fetch inventory item details');
+        } catch (error) {
+            console.error('   ❌ Error fetching specific inventory item:', error);
+        }
+
+        // Fallback if fetch fails
+        console.error('   ❌ Linked inventory item details could not be loaded:', inventoryId);
         if (searchInput) {
             searchInput.value = `Linked Item (ID: ${inventoryId}) - details not found`;
             // Keep the ID in hidden input so it doesn't get lost on save

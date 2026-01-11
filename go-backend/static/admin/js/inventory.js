@@ -270,8 +270,8 @@ function renderTableRows(items) {
                     <button class="btn-icon" onclick="openLinkProductsModal('${item.inventory_id}', '${item.inventory_name}')" title="Link Products" style="background: #e8f5e9; color: #2e7d32;">
                         🔗
                     </button>
-                    <button class="btn-icon btn-stock" onclick="openStockModal('${item.inventory_id}')" title="Update Stock">
-                        📊
+                    <button class="btn-icon btn-edit" onclick="openEditModal('${item.inventory_id}')" title="Edit Item">
+                        ✏️
                     </button>
                     <button class="btn-icon btn-delete" onclick="deleteInventory('${item.inventory_id}')" title="Delete">
                         🗑️
@@ -359,31 +359,18 @@ async function loadSections() {
     }
 }
 
-// Update statistics (simplified or needs separate API if counts are total)
+// Update statistics
 function updateStats(totalCount, currentItems) {
-    // For pagination, accurate counts need a separate stats endpoint or aggregate from server
-    // For now, if we have total_count from pagination, use it for Total Items
-    // Other specific statuses are hard to count accurately server-side without extra queries
-    // We can fallback to 'N/A' or try to approximate if needed.
-    // Ideally, the backend should return the stats summary.
-
     if (totalCount !== undefined) {
         document.getElementById('totalItems').textContent = totalCount;
     } else {
-        // Fallback for search results
         document.getElementById('totalItems').textContent = currentItems.length + (hasMore ? '+' : '');
     }
 
-    // Disable other detailed counters for now as they require full scan
-    // or implement server-side stats endpoint
     document.getElementById('inStockItems').textContent = '-';
     document.getElementById('lowStockItems').textContent = '-';
     document.getElementById('outOfStockItems').textContent = '-';
 }
-
-// ... (Rest of operations: getStockBadge, getLinkBadge, Create/Edit/Update/Delete Modals) ...
-// The rest of the functions (modal logic) remain largely the same, 
-// but need to be sure they access `inventoryData` correctly which might be incomplete relative to full DB.
 
 // Get stock badge HTML
 function getStockBadge(item) {
@@ -416,7 +403,29 @@ function openCreateModal() {
     document.getElementById('inventoryModal').classList.add('active');
 }
 
-// Open stock update modal
+// Open edit modal
+function openEditModal(inventoryId) {
+    const item = inventoryData.find(i => i.inventory_id === inventoryId);
+    if (!item) return;
+
+    document.getElementById('modalTitle').textContent = 'Edit Inventory Item';
+    document.getElementById('inventoryId').value = item.inventory_id;
+    document.getElementById('inventoryName').value = item.inventory_name;
+    document.getElementById('stockQuantity').value = item.stock_quantity;
+
+    // Set dropdowns
+    const unitSelect = document.getElementById('unit');
+    if (unitSelect) unitSelect.value = item.unit || "";
+
+    const sectionSelect = document.getElementById('section');
+    if (sectionSelect) sectionSelect.value = item.section || "";
+
+    document.getElementById('lowStockThreshold').value = item.low_stock_threshold || 10;
+
+    document.getElementById('inventoryModal').classList.add('active');
+}
+
+// Open stock update modal (Keeping for backward compatibility or direct stock adjustments if needed later)
 function openStockModal(inventoryId) {
     // We need to fetch latest item details because local pagination cache might be stale
     // or item might not be in loaded set (if we implement search-jump)
@@ -614,8 +623,11 @@ async function loadProductsForLinking(inventoryId, inventoryName) {
         const data = await response.json();
         allProducts = data.products || [];
 
-        // Initialize as empty - wait for user search
-        filteredProducts = [];
+        // INITIALIZE WITH LINKED PRODUCTS
+        // Instead of empty, show products already linked to this inventory
+        filteredProducts = allProducts.filter(p => p.inventory_id === inventoryId);
+
+        console.log(`Found ${filteredProducts.length} linked products for ${inventoryName}`);
 
         renderProductsList();
     } catch (error) {
@@ -627,6 +639,7 @@ async function loadProductsForLinking(inventoryId, inventoryName) {
 // Filter products list based on search
 function filterProductsList() {
     const searchTerm = document.getElementById('productSearchInput').value.toLowerCase();
+    const currentInventoryId = document.getElementById('linkInventoryId').value;
 
     if (searchTerm) {
         filteredProducts = allProducts.filter(p =>
@@ -634,8 +647,8 @@ function filterProductsList() {
             (p.product_name_tamil && p.product_name_tamil.toLowerCase().includes(searchTerm))
         );
     } else {
-        // Reset to empty if no search
-        filteredProducts = [];
+        // Reset to ONLY linked products if no search
+        filteredProducts = allProducts.filter(p => p.inventory_id === currentInventoryId);
     }
 
     renderProductsList();
@@ -657,22 +670,29 @@ function renderProductsList() {
     const currentInventoryId = document.getElementById('linkInventoryId').value;
 
     tbody.innerHTML = filteredProducts.map(product => {
-        const isLinked = product.inventory_id === currentInventoryId;
+        const isLinkedToCurrent = product.inventory_id === currentInventoryId;
+        const isLinkedToOther = product.inventory_id && !isLinkedToCurrent;
+
+        let statusBadge, actionButton;
+
+        if (isLinkedToCurrent) {
+            statusBadge = '<span style="padding: 4px 12px; background: #d4edda; color: #155724; border-radius: 12px; font-size: 12px; font-weight: 600;">✓ Linked</span>';
+            actionButton = `<button onclick="unlinkProduct('${product._id}')" style="padding: 6px 12px; background: #ffebee; color: #c62828; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">🔗 Unlink</button>`;
+        } else if (isLinkedToOther) {
+            statusBadge = '<span style="padding: 4px 12px; background: #fff3cd; color: #856404; border-radius: 12px; font-size: 12px; font-weight: 600;" title="Linked to another inventory item">⚠️ Linked to Other</span>';
+            // Disable linking or show disabled button
+            actionButton = `<button disabled style="padding: 6px 12px; background: #f5f5f5; color: #aaa; border: none; border-radius: 6px; cursor: not-allowed; font-size: 12px;">🚫 Linked</button>`;
+        } else {
+            statusBadge = '<span style="padding: 4px 12px; background: #f8f9fa; color: #666; border-radius: 12px; font-size: 12px;">Not linked</span>';
+            actionButton = `<button onclick="linkProduct('${product._id}')" style="padding: 6px 12px; background: #e8f5e9; color: #2e7d32; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">🔗 Link</button>`;
+        }
 
         return `
             <tr style="border-bottom: 1px solid #f0f0f0;">
                 <td style="padding: 12px;">${product.product_name}</td>
                 <td style="padding: 12px;">${product.weight || 'N/A'}</td>
-                <td style="padding: 12px; text-align: center;">
-                    ${isLinked ? '<span style="padding: 4px 12px; background: #d4edda; color: #155724; border-radius: 12px; font-size: 12px; font-weight: 600;">✓ Linked</span>' :
-                '<span style="padding: 4px 12px; background: #f8f9fa; color: #666; border-radius: 12px; font-size: 12px;">Not linked</span>'}
-                </td>
-                <td style="padding: 12px; text-align: center;">
-                    ${isLinked ?
-                `<button onclick="unlinkProduct('${product._id}')" style="padding: 6px 12px; background: #ffebee; color: #c62828; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">🔗 Unlink</button>` :
-                `<button onclick="linkProduct('${product._id}')" style="padding: 6px 12px; background: #e8f5e9; color: #2e7d32; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">🔗 Link</button>`
-            }
-                </td>
+                <td style="padding: 12px; text-align: center;">${statusBadge}</td>
+                <td style="padding: 12px; text-align: center;">${actionButton}</td>
             </tr>
         `;
     }).join('');
@@ -707,19 +727,38 @@ async function linkProduct(productId) {
 }
 
 // Unlink product from inventory
+// Unlink product from inventory
 async function unlinkProduct(productId) {
+    const inventoryId = document.getElementById('linkInventoryId').value;
+
+    // Check if this is the last linked product
+    // filteredProducts contains the currently displayed list, but we should check 'allProducts' for accuracy
+    // count current links for this inventoryId
+    const currentLinks = allProducts.filter(p => p.inventory_id === inventoryId);
+
+    if (currentLinks.length <= 1) {
+        alert('⚠️ Cannot unlink the only product. An inventory item must have at least one product linked.\n\nSince this inventory item relies on product sales to deduct stock, removing the last link would orphan it.');
+        return;
+    }
+
     if (!confirm(`Unlink this product? It will revert to individual stock.`)) return;
 
     try {
-        const response = await fetch(`/admin/api/products/${productId}/unlink-inventory`, {
-            method: 'POST'
+        // Corrected endpoint to match main.go: DELETE /products/:id/link-inventory
+        const response = await fetch(`/admin/api/products/${productId}/link-inventory`, {
+            method: 'DELETE'
         });
 
         if (response.ok) {
             showSuccess('✅ Product unlinked!');
-            const inventoryId = document.getElementById('linkInventoryId').value;
             const inventoryName = document.getElementById('linkInventoryName').textContent;
+
+            // Refresh modal list
             await loadProductsForLinking(inventoryId, inventoryName);
+
+            // Auto-refresh the main background table to update counts/status
+            // We use 'true' to reset/reload the list to ensure accurate data
+            loadInventory(true);
         } else {
             const error = await response.json();
             showError(error.error || 'Failed to unlink product');
@@ -728,4 +767,13 @@ async function unlinkProduct(productId) {
         console.error('Error unlinking product:', error);
         showError('Failed to unlink product');
     }
+}
+        } else {
+    const error = await response.json();
+    showError(error.error || 'Failed to unlink product');
+}
+    } catch (error) {
+    console.error('Error unlinking product:', error);
+    showError('Failed to unlink product');
+}
 }

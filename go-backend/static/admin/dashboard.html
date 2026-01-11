@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -7,9 +8,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Admin Dashboard - AL-Madhina</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
     <link rel="stylesheet" href="/static/admin/css/dashboard.css">
 </head>
+
 <body>
     <!-- Header -->
     <header class="header">
@@ -31,24 +34,23 @@
         <!-- Top Action Bar -->
         <div class="action-bar">
             <div class="search-section">
-                <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="🔍 Search by product name, ID, section, category..." 
-                    class="search-input"
-                >
+                <input type="text" id="searchInput" placeholder="🔍 Search by product name, ID, section, category..."
+                    class="search-input">
                 <select id="categoryFilter" class="category-filter">
                     <option value="">All Categories</option>
                 </select>
             </div>
             <div class="action-buttons-group">
-                <button class="btn-secondary" onclick="window.location.href='/admin/orders'" style="background: #004D40; color: white;">
+                <button class="btn-secondary" onclick="window.location.href='/admin/orders'"
+                    style="background: #004D40; color: white;">
                     🛒 Orders
                 </button>
-                <button class="btn-secondary" onclick="window.location.href='/admin/revenue'" style="background: #1B5E20; color: white;">
+                <button class="btn-secondary" onclick="window.location.href='/admin/revenue'"
+                    style="background: #1B5E20; color: white;">
                     🏪 Revenue
                 </button>
-                <button class="btn-secondary" onclick="window.location.href='/admin/inventory'" style="background: #059669; color: white;">
+                <button class="btn-secondary" onclick="window.location.href='/admin/inventory'"
+                    style="background: #059669; color: white;">
                     📦 Inventory
                 </button>
                 <button class="btn-secondary" onclick="openMobileView()">
@@ -96,6 +98,7 @@
                         <th>Buying Date</th>
                         <th>Selling Price</th>
                         <th>Stock</th>
+                        <th>Inventory Link</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -120,7 +123,7 @@
             </div>
             <form id="productForm" class="product-form">
                 <input type="hidden" id="productId" value="">
-                
+
                 <div class="form-row">
                     <div class="form-group">
                         <label for="productItemId">Item ID (SKU) *</label>
@@ -198,10 +201,12 @@
                 <div class="stock-mode-toggle">
                     <label class="toggle-label">Stock Management Mode:</label>
                     <div class="toggle-buttons">
-                        <button type="button" class="toggle-btn active" data-mode="individual" onclick="switchStockMode('individual')">
+                        <button type="button" class="toggle-btn active" data-mode="individual"
+                            onclick="switchStockMode('individual')">
                             📊 Individual Stock
                         </button>
-                        <button type="button" class="toggle-btn" data-mode="inventory" onclick="switchStockMode('inventory')">
+                        <button type="button" class="toggle-btn" data-mode="inventory"
+                            onclick="switchStockMode('inventory')">
                             📦 Linked Inventory
                         </button>
                     </div>
@@ -221,20 +226,16 @@
                     <div class="form-group">
                         <label for="inventorySearch">📦 Search & Link Inventory *</label>
                         <div class="searchable-dropdown">
-                            <input 
-                                type="text" 
-                                id="inventorySearch" 
-                                placeholder="Type to search inventory items..."
-                                autocomplete="off"
-                                oninput="filterInventoryDropdown()"
-                                onfocus="showInventoryDropdown()"
-                            >
+                            <input type="text" id="inventorySearch" placeholder="Type to search inventory items..."
+                                autocomplete="off" oninput="filterInventoryDropdown()"
+                                onfocus="showInventoryDropdown()">
                             <div id="inventoryDropdown" class="dropdown-menu" style="display: none;">
                                 <div class="dropdown-item no-results">No inventory items found</div>
                             </div>
                         </div>
                         <input type="hidden" id="selectedInventoryId" value="">
-                        <small class="form-hint">Search and select centralized inventory item. Product stock managed via inventory.</small>
+                        <small class="form-hint">Search and select centralized inventory item. Product stock managed via
+                            inventory.</small>
                     </div>
                 </div>
 
@@ -250,14 +251,16 @@
                     <label style="color: #D32F2F; font-weight: bold;">
                         📸 Product Image <span style="color: #D32F2F;">*</span> (Required)
                     </label>
-                    <button type="button" class="btn-secondary" onclick="openInlineConverter('productConverterContainer', handleProductConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                    <button type="button" class="btn-secondary"
+                        onclick="openInlineConverter('productConverterContainer', handleProductConverterResult)"
+                        style="width: 100%; background: #7B1FA2; color: white;">
                         🖼️ Open Image Converter
                     </button>
                     <small class="form-hint">📷 Click to convert your image to 400×400px at 100% quality</small>
                 </div>
-                
+
                 <div id="productConverterContainer" style="display: none;"></div>
-                
+
                 <div id="productImagePreview" class="image-preview" style="display: none;">
                     <img id="productPreviewImg" alt="Preview">
                     <button type="button" class="remove-image-btn" onclick="clearProductImage()">✕ Remove</button>
@@ -295,28 +298,25 @@
                 <h2>🖼️ Image Converter - Resize to 400×400px</h2>
                 <span class="close" onclick="closeImageConverterModal()">&times;</span>
             </div>
-            
+
             <div class="image-converter-container">
                 <!-- Upload Section -->
                 <div class="converter-section">
                     <h3>📤 Upload Image</h3>
                     <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                        Upload any image. It will be converted to 400×400px and compressed to ~1MB while maintaining quality.
+                        Upload any image. It will be converted to 400×400px and compressed to ~1MB while maintaining
+                        quality.
                     </p>
-                    
-                    <div class="file-upload-area" id="converterUploadArea" onclick="document.getElementById('converterImageInput').click()">
+
+                    <div class="file-upload-area" id="converterUploadArea"
+                        onclick="document.getElementById('converterImageInput').click()">
                         <div class="upload-icon">📁</div>
                         <div class="upload-text">Click to select image</div>
                         <div class="upload-hint">JPG, PNG, WEBP (any size)</div>
                     </div>
-                    
-                    <input 
-                        type="file" 
-                        id="converterImageInput" 
-                        accept="image/jpeg,image/jpg,image/png,image/webp" 
-                        style="display: none;"
-                        onchange="handleConverterImageUpload(event)"
-                    >
+
+                    <input type="file" id="converterImageInput" accept="image/jpeg,image/jpg,image/png,image/webp"
+                        style="display: none;" onchange="handleConverterImageUpload(event)">
                 </div>
 
                 <!-- Preview Section -->
@@ -351,15 +351,8 @@
                     <h3>⚙️ Compression Settings</h3>
                     <div class="setting-row">
                         <label for="qualitySlider">Quality: <span id="qualityValue">85</span>%</label>
-                        <input 
-                            type="range" 
-                            id="qualitySlider" 
-                            min="60" 
-                            max="100" 
-                            value="85" 
-                            oninput="updateQualityValue(this.value); reconvertImage()"
-                            style="width: 100%;"
-                        >
+                        <input type="range" id="qualitySlider" min="60" max="100" value="85"
+                            oninput="updateQualityValue(this.value); reconvertImage()" style="width: 100%;">
                         <div style="font-size: 12px; color: #666; margin-top: 5px;">
                             Higher quality = larger file size. Adjust until file is ~1MB or less.
                         </div>
@@ -421,13 +414,14 @@
             </div>
             <form id="editSectionForm" onsubmit="handleSectionEdit(event)">
                 <input type="hidden" id="editSectionOldName">
-                
+
                 <div class="form-group">
                     <label for="editSectionName">Category Name *</label>
                     <input type="text" id="editSectionName" required placeholder="Enter category name">
-                    <span class="form-hint">📝 Section icons are automatically assigned based on the category name</span>
+                    <span class="form-hint">📝 Section icons are automatically assigned based on the category
+                        name</span>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="editSectionNameTa">Category Name (Tamil)</label>
                     <input type="text" id="editSectionNameTa" placeholder="பிரிவு பெயரை உள்ளிடவும்">
@@ -451,19 +445,19 @@
             <form id="editMainCategoryForm" onsubmit="handleMainCategoryEdit(event)">
                 <input type="hidden" id="editMainCategoryOldName">
                 <input type="hidden" id="editMainCategorySection">
-                
+
                 <div class="form-group">
                     <label for="editMainCategorySectionDisplay">Section (Level 1)</label>
                     <input type="text" id="editMainCategorySectionDisplay" disabled placeholder="Section name">
                     <span class="form-hint">📂 Parent section (cannot be changed)</span>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="editMainCategoryName">Main Category Name *</label>
                     <input type="text" id="editMainCategoryName" required placeholder="Enter main category name">
                     <span class="form-hint">🏷️ Name displayed on the category card</span>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="editMainCategoryNameTa">Main Category Name (Tamil)</label>
                     <input type="text" id="editMainCategoryNameTa" placeholder="முக்கிய வகையின் பெயரை உள்ளிடவும்">
@@ -471,17 +465,20 @@
 
                 <div class="form-group">
                     <label>Change Image</label>
-                    <button type="button" class="btn-secondary" onclick="openInlineConverter('editMainCategoryConverterContainer', handleEditMainCategoryConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                    <button type="button" class="btn-secondary"
+                        onclick="openInlineConverter('editMainCategoryConverterContainer', handleEditMainCategoryConverterResult)"
+                        style="width: 100%; background: #7B1FA2; color: white;">
                         🖼️ Open Image Converter
                     </button>
                     <span class="form-hint">📷 Click to convert your image to 400×400px automatically</span>
                 </div>
-                
+
                 <div id="editMainCategoryConverterContainer" style="display: none;"></div>
-                
+
                 <div id="editMainCategoryImagePreview" class="image-preview" style="display: none;">
                     <img id="editMainCategoryPreviewImg" alt="Preview">
-                    <button type="button" class="remove-image-btn" onclick="clearEditMainCategoryImage()">✕ Remove</button>
+                    <button type="button" class="remove-image-btn" onclick="clearEditMainCategoryImage()">✕
+                        Remove</button>
                 </div>
 
                 <div class="modal-actions">
@@ -503,28 +500,28 @@
                 <input type="hidden" id="editSubCategoryOldName">
                 <input type="hidden" id="editSubCategorySection">
                 <input type="hidden" id="editSubCategoryMainCategory">
-                
+
                 <!-- DISABLED SECTION FIELD -->
                 <div class="form-group">
                     <label for="editSubCategorySectionDisplay">Section (Level 1)</label>
                     <input type="text" id="editSubCategorySectionDisplay" disabled>
                     <span class="form-hint">📂 Parent section (cannot be changed)</span>
                 </div>
-                
+
                 <!-- DISABLED MAIN CATEGORY FIELD -->
                 <div class="form-group">
                     <label for="editSubCategoryMainCategoryDisplay">Main Category (Level 2)</label>
                     <input type="text" id="editSubCategoryMainCategoryDisplay" disabled>
                     <span class="form-hint">📂 Parent main category (cannot be changed)</span>
                 </div>
-                
+
                 <!-- EDITABLE SUBCATEGORY NAME -->
                 <div class="form-group">
                     <label for="editSubCategoryName">Subcategory Name *</label>
                     <input type="text" id="editSubCategoryName" required placeholder="Enter subcategory name">
                     <span class="form-hint">🏷️ Name displayed in the sidebar</span>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="editSubCategoryNameTa">Subcategory Name (Tamil)</label>
                     <input type="text" id="editSubCategoryNameTa" placeholder="துணைப்பிரிவு பெயரை உள்ளிடவும்">
@@ -533,19 +530,21 @@
                 <!-- IMAGE UPLOAD -->
                 <div class="form-group">
                     <label>Change Image</label>
-                    <button type="button" class="btn-secondary" onclick="openInlineConverter('editSubcategoryConverterContainer', handleEditSubcategoryConverterResult)" style="width: 100%; background: #7B1FA2; color: white;">
+                    <button type="button" class="btn-secondary"
+                        onclick="openInlineConverter('editSubcategoryConverterContainer', handleEditSubcategoryConverterResult)"
+                        style="width: 100%; background: #7B1FA2; color: white;">
                         🖼️ Open Image Converter
                     </button>
                     <span class="form-hint">📷 Click to convert your image to 400×400px automatically</span>
                 </div>
-                
+
                 <div id="editSubcategoryConverterContainer" style="display: none;"></div>
-                
+
                 <!-- IMAGE PREVIEW -->
                 <div id="editSubCategoryImagePreview" class="image-preview" style="display: none;">
                     <img id="editSubCategoryPreviewImg" alt="Preview">
-                    <button type="button" class="remove-image-btn" 
-                            onclick="clearEditSubCategoryImage()">✕ Remove</button>
+                    <button type="button" class="remove-image-btn" onclick="clearEditSubCategoryImage()">✕
+                        Remove</button>
                 </div>
 
                 <div class="modal-actions">
@@ -566,9 +565,10 @@
             <form id="addCategoryForm" onsubmit="handleAddCategory(event)">
                 <div class="form-group">
                     <label for="addCategoryName">Category Name *</label>
-                    <input type="text" id="addCategoryName" required placeholder="Enter category name (e.g., Electronics, Clothing)">
+                    <input type="text" id="addCategoryName" required
+                        placeholder="Enter category name (e.g., Electronics, Clothing)">
                 </div>
-                
+
                 <div class="form-group">
                     <label for="addCategoryNameTa">Category Name (Tamil)</label>
                     <input type="text" id="addCategoryNameTa" placeholder="பிரிவு பெயரை உள்ளிடவும்">
@@ -585,4 +585,5 @@
     <script src="/static/admin/js/dashboard.js?v=2.1.0"></script>
     <script src="/static/admin/js/imageConverter.js"></script>
 </body>
+
 </html>

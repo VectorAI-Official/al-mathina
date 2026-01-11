@@ -486,6 +486,29 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+/* Link Badge Styles */
+.link-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.link-none {
+    background: #f5f5f5;
+    color: #757575;
+    border: 1px solid #e0e0e0;
+}
+
+.link-active {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+}
+
 /* Modal */
 .modal {
     display: none;

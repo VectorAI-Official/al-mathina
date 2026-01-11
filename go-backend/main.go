@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -240,20 +241,42 @@ func main() {
 	// Static file serving (matches FastAPI pattern)
 	router.Static("/static", "./static")
 
-	// Admin UI routes (matches FastAPI URLs exactly)
-	router.GET("/admin/dashboard", func(c *gin.Context) {
-		c.File("./static/admin/dashboard.html")
+	// Admin Authentication Routes
+	router.GET("/admin", func(c *gin.Context) {
+		// Check if already logged in
+		if cookie, err := c.Cookie("admin_session"); err == nil && cookie != "" {
+			c.Redirect(http.StatusSeeOther, "/admin/dashboard")
+			return
+		}
+
+		c.File("./static/admin/login.html")
 	})
 
-	router.GET("/admin/inventory", func(c *gin.Context) {
-		c.File("./static/admin/inventory.html")
+	router.GET("/admin/login", func(c *gin.Context) {
+		c.Redirect(http.StatusSeeOther, "/admin")
 	})
-	router.GET("/admin/orders", func(c *gin.Context) {
-		c.File("./static/admin/orders.html")
-	})
-	router.GET("/admin/revenue", func(c *gin.Context) {
-		c.File("./static/admin/stores.html")
-	})
+
+	router.POST("/admin/login", handlers.AdminLogin)
+	router.POST("/admin/logout", handlers.AdminLogout)
+
+	// Admin UI routes (Protected)
+	adminUI := router.Group("/admin")
+	adminUI.Use(handlers.AuthMiddleware())
+	{
+		adminUI.GET("/dashboard", func(c *gin.Context) {
+			c.File("./static/admin/dashboard.html")
+		})
+
+		adminUI.GET("/inventory", func(c *gin.Context) {
+			c.File("./static/admin/inventory.html")
+		})
+		adminUI.GET("/orders", func(c *gin.Context) {
+			c.File("./static/admin/orders.html")
+		})
+		adminUI.GET("/revenue", func(c *gin.Context) {
+			c.File("./static/admin/stores.html")
+		})
+	}
 
 	// Start server
 	port := cfg.Port

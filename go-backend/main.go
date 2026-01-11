@@ -232,6 +232,9 @@ func main() {
 		legacyAPI.POST("/address/:phone", handlers.AddAddress)
 		legacyAPI.PUT("/address/:phone/:index", handlers.UpdateAddress)
 		legacyAPI.DELETE("/address/:phone/:index", handlers.DeleteAddress)
+
+		// Fix 404 for POST orders (Create Order)
+		legacyAPI.POST("/orders", handlers.CreateOrder)
 	}
 
 	// Static file serving (matches FastAPI pattern)

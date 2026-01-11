@@ -83,7 +83,7 @@ func GetHome(c *gin.Context) {
 
 			// Initialize empty array for sections (even if no main categories)
 			mainCats := []models.MainCategory{}
-			
+
 			// Get all main categories from hierarchy if they exist
 			if hierarchyDoc.MainCategories != nil && len(hierarchyDoc.MainCategories) > 0 {
 				for mainCatName := range hierarchyDoc.MainCategories {
@@ -93,7 +93,7 @@ func GetHome(c *gin.Context) {
 					}
 				}
 			}
-			
+
 			// Store section even if it has no main categories (empty array, not nil)
 			sectionsMap[sectionName] = mainCats
 		}
@@ -319,7 +319,7 @@ func SearchProducts(c *gin.Context) {
 
 	query := c.Query("q")
 	log.Printf("🔵 SearchProducts: query=%s", query)
-	
+
 	if query == "" {
 		log.Printf("❌ SearchProducts: Missing query parameter")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Query parameter 'q' is required"})
@@ -398,6 +398,9 @@ func SearchProducts(c *gin.Context) {
 			productsChan <- productsResult{err: err}
 			return
 		}
+		if products == nil {
+			products = []models.Product{}
+		}
 		productsChan <- productsResult{products: products, err: nil}
 	}()
 
@@ -427,13 +430,37 @@ func SearchProducts(c *gin.Context) {
 		HasPrev:      page > 1,
 	}
 
+	// Check if user is admin (for buying_price field) - Copied from GetProducts
+	userPhone := c.Query("user_phone")
+	isAdmin := false
+	if userPhone != "" && database.SupabaseDB != nil {
+		var err error
+		isAdmin, err = database.SupabaseDB.CheckIsAdmin(userPhone)
+		if err != nil {
+			log.Printf("⚠️  SearchProducts: Admin check failed for %s: %v", userPhone, err)
+		}
+	}
+
+	// Process products to handle admin-only data
+	for i := range productsRes.products {
+		// Set in_stock computed field
+		productsRes.products[i].InStock = productsRes.products[i].Stock > 0
+
+		// Remove buying_price for non-admin users
+		if !isAdmin {
+			productsRes.products[i].BuyingPrice = nil
+		}
+	}
+
 	log.Printf("✅ SearchProducts: Found %d total results, returning %d products (page %d/%d)", countRes.count, len(productsRes.products), page, totalPages)
 
-	// Return response
-	c.JSON(http.StatusOK, models.SearchResponse{
-		Products:   productsRes.products,
-		Query:      query,
-		Pagination: pagination,
+	// Return response matching FastAPI structure: {results: [...], is_admin: bool, ...}
+	// CRITICAL: Flutter app expects "results" key, not "products"
+	c.JSON(http.StatusOK, gin.H{
+		"results":    productsRes.products,
+		"is_admin":   isAdmin,
+		"query":      query,
+		"pagination": pagination,
 	})
 }
 
@@ -458,7 +485,7 @@ func GetSubcategories(c *gin.Context) {
 	// Parallel batch processing: Count products + Fetch metadata in parallel
 	type subcategoryResult struct {
 		subcategories []models.SubcategoryInfo
-		err          error
+		err           error
 	}
 
 	subcategoryChan := make(chan subcategoryResult, 1)
@@ -591,22 +618,22 @@ func GetProductDetails(c *gin.Context) {
 
 	// Build response matching FastAPI structure
 	response := gin.H{
-		"item_id":        itemID,
-		"product_name":   product.ProductName,
-		"product_name_ta": "",  // Add if field exists in model
-		"section":        product.Section,
-		"main_category":  product.MainCategory,
-		"subcategory":    product.Subcategory,
+		"item_id":         itemID,
+		"product_name":    product.ProductName,
+		"product_name_ta": "", // Add if field exists in model
+		"section":         product.Section,
+		"main_category":   product.MainCategory,
+		"subcategory":     product.Subcategory,
 		"category": gin.H{
 			"section":       product.Section,
 			"main_category": product.MainCategory,
 			"subcategory":   product.Subcategory,
 		},
-		"weight":         product.Unit,  // Unit field represents weight/measurement
+		"weight":         product.Unit, // Unit field represents weight/measurement
 		"price":          product.Price,
 		"stock":          product.Stock,
 		"in_stock":       product.Stock > 0,
-		"is_best_seller": false,  // Add if field exists in model
+		"is_best_seller": false, // Add if field exists in model
 		"description":    product.Description,
 		"image_url":      makeAbsolute(c, product.ImageURL),
 		"images":         []string{makeAbsolute(c, product.ImageURL)}, // Can be extended for multiple images

@@ -167,6 +167,12 @@ func (s *SupabaseClient) SaveFCMToken(phone, fcmToken string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		// Handle 409 Conflict (Duplicate Key) gracefully - this is a success for us (idempotent)
+		if resp.StatusCode == http.StatusConflict {
+			log.Printf("✅ FCM token already exists for phone: %s (Status 409 ignored)", phone)
+			return nil
+		}
+
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Supabase returned status %d: %s", resp.StatusCode, string(body))
 	}

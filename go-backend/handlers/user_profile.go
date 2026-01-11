@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // ===== USER PROFILE HANDLERS =====
@@ -25,7 +26,7 @@ import (
 func GetUserProfile(c *gin.Context) {
 	phone := c.Param("phone")
 	log.Printf("🔵 GetUserProfile: phone=%s", phone)
-	
+
 	ctx, cancel := database.GetDBContext()
 	defer cancel()
 
@@ -42,14 +43,14 @@ func GetUserProfile(c *gin.Context) {
 			Email:     "",
 			CreatedAt: time.Now(),
 		}
-		
+
 		_, insertErr := usersCol.InsertOne(ctx, newUser)
 		if insertErr != nil {
 			log.Printf("❌ GetUserProfile: Failed to create user: %v", insertErr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
-		
+
 		log.Printf("✅ GetUserProfile: Created new user for phone=%s", phone)
 		// Match FastAPI response structure: {"success": true, "user": {...}}
 		c.JSON(http.StatusOK, gin.H{
@@ -115,7 +116,11 @@ func GetUserOrders(c *gin.Context) {
 
 	ordersCol := database.GetCollection("orders")
 
-	cursor, err := ordersCol.Find(ctx, bson.M{"user_phone": phone})
+	// options for sorting by created_at desc
+	// options for sorting by created_at desc
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+
+	cursor, err := ordersCol.Find(ctx, bson.M{"user_phone": phone}, opts)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
 		return
@@ -132,7 +137,11 @@ func GetUserOrders(c *gin.Context) {
 		orders = []models.Order{}
 	}
 
-	c.JSON(http.StatusOK, orders)
+	// Match FastAPI response structure: {"success": true, "orders": [...]}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"orders":  orders,
+	})
 }
 
 // CreateOrder creates a new order and sends email notification
@@ -141,11 +150,11 @@ func GetUserOrders(c *gin.Context) {
 func CreateOrder(c *gin.Context) {
 	var req struct {
 		UserPhone       string                 `json:"user_phone" binding:"required"`
-		UserName        string                 `json:"user_name"`        // Optional - will be fetched from DB if not provided
+		UserName        string                 `json:"user_name"` // Optional - will be fetched from DB if not provided
 		DeliveryAddress models.DeliveryAddress `json:"delivery_address" binding:"required"`
 		Items           []models.OrderItem     `json:"items" binding:"required,min=1"`
 		TotalAmount     float64                `json:"total_amount"`
-		PaymentMethod   string                 `json:"payment_method"`   // Optional - defaults to "cod"
+		PaymentMethod   string                 `json:"payment_method"` // Optional - defaults to "cod"
 		Notes           string                 `json:"notes"`
 	}
 
@@ -622,14 +631,14 @@ func GetStoreDetails(c *gin.Context) {
 			Email:     "",
 			CreatedAt: time.Now(),
 		}
-		
+
 		_, insertErr := usersCol.InsertOne(ctx, newUser)
 		if insertErr != nil {
 			log.Printf("❌ GetStoreDetails: Failed to create user: %v", insertErr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
-		
+
 		log.Printf("✅ GetStoreDetails: Created new user for phone=%s", phone)
 		// Return empty store details
 		c.JSON(http.StatusOK, gin.H{
@@ -742,14 +751,14 @@ func GetFavorites(c *gin.Context) {
 			"favorites":  []string{},
 			"created_at": time.Now(),
 		}
-		
+
 		_, insertErr := usersCol.InsertOne(ctx, newUser)
 		if insertErr != nil {
 			log.Printf("❌ GetFavorites: Failed to create user: %v", insertErr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
-		
+
 		log.Printf("✅ GetFavorites: Created new user for phone=%s (0 favorites)", phone)
 		c.JSON(http.StatusOK, gin.H{"favorites": []interface{}{}})
 		return
@@ -816,20 +825,20 @@ func GetFavorites(c *gin.Context) {
 
 		// Map product fields to Flutter-friendly format (matching FastAPI response)
 		favoriteProducts = append(favoriteProducts, map[string]interface{}{
-			"item_id":            product["item_id"],
-			"section":            categorySection,
-			"main_category":      categoryMain,
-			"subcategory":        categorySub,
-			"product_name":       product["product_name"],
-			"weight":             product["weight"],           // FastAPI uses 'weight'
-			"price":              product["price"],
-			"image_url":          product["image_url"],
-			"stock":              stock,
-			"in_stock":           stock > 0,
-			"is_best_seller":     product["is_best_seller"],
-			"description":        product["description"],
-			"category_section":   categorySection,
-			"category_main":      categoryMain,
+			"item_id":             product["item_id"],
+			"section":             categorySection,
+			"main_category":       categoryMain,
+			"subcategory":         categorySub,
+			"product_name":        product["product_name"],
+			"weight":              product["weight"], // FastAPI uses 'weight'
+			"price":               product["price"],
+			"image_url":           product["image_url"],
+			"stock":               stock,
+			"in_stock":            stock > 0,
+			"is_best_seller":      product["is_best_seller"],
+			"description":         product["description"],
+			"category_section":    categorySection,
+			"category_main":       categoryMain,
 			"category_breadcrumb": categorySection + " > " + categoryMain + " > " + categorySub,
 		})
 	}
@@ -1072,6 +1081,7 @@ func GetOrderDetails(c *gin.Context) {
 
 	ordersCol := database.GetCollection("orders")
 	usersCol := database.GetCollection("users")
+	productsCol := database.GetCollection("products")
 
 	// Find order for this user
 	var order models.Order
@@ -1085,30 +1095,58 @@ func GetOrderDetails(c *gin.Context) {
 		return
 	}
 
-	// Enrich order with user's store details if delivery_address is empty
-	var user struct {
-		StoreDetails map[string]interface{} `bson:"store_details"`
-	}
+	// Enrich order with user's store details for delivery address
+	var user models.User
+	err = usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 
-	usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
-
-	// Build response with store details fallback
-	response := gin.H{
-		"order_id":         order.OrderID,
-		"user_phone":       order.UserPhone,
-		"user_name":        order.UserName,
-		"delivery_address": order.DeliveryAddress,
-		"items":            order.Items,
-		"total_amount":     order.TotalAmount,
-		"status":           order.Status,
-		"order_date":       order.OrderDate,
-		"notes":            order.Notes,
-	}
-
-	// Add store details if available
+	// If delivery_address is not in order or is empty, use store_details
+	// Matching FastAPI logic
 	if user.StoreDetails != nil {
-		response["store_details"] = user.StoreDetails
+		if order.DeliveryAddress.Street == "" {
+			order.DeliveryAddress = models.DeliveryAddress{
+				Street:   user.StoreDetails.Street,
+				City:     user.StoreDetails.City,
+				State:    user.StoreDetails.State,
+				Pincode:  user.StoreDetails.Pincode,
+				Landmark: user.StoreDetails.Landmark,
+			}
+		}
 	}
 
-	c.JSON(http.StatusOK, response)
+	// Enrich items with product images if not already present
+	// Matching FastAPI logic to ensure icons appear in UI
+	for i, item := range order.Items {
+		if item.ImageURL == "" {
+			var product models.Product
+
+			// Try to find product by item_id first
+			filter := bson.M{"item_id": item.ItemID}
+			err := productsCol.FindOne(ctx, filter).Decode(&product)
+
+			// If not found by item_id, try by category fields and product name
+			if err != nil && item.Section != "" {
+				filter = bson.M{
+					"category_section": item.Section,
+					"category_main":    item.MainCategory,
+					"category_sub":     item.Subcategory,
+					"product_name":     item.ProductName,
+				}
+				productsCol.FindOne(ctx, filter).Decode(&product)
+			}
+
+			// Add image_url if product found
+			if product.ImageURL != "" {
+				order.Items[i].ImageURL = makeAbsolute(c, product.ImageURL)
+			}
+		} else {
+			// Ensure existing URL is absolute
+			order.Items[i].ImageURL = makeAbsolute(c, item.ImageURL)
+		}
+	}
+
+	// Build response matching FastAPI structure: {success: true, order: {...}}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"order":   order,
+	})
 }

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../api_service.dart';
 
 /// Firebase Cloud Messaging Service for push notifications
 class FCMService {
@@ -258,11 +259,9 @@ class FCMService {
         return;
       }
 
-      // Use same base URL as ApiService
-      const String baseUrl = 'https://al-mathina-upcraft.onrender.com'; // Production
-      // For local testing: 'http://127.0.0.1:8000' or 'http://10.0.2.2:8000' (Android emulator)
-      
-      final url = '$baseUrl/api/user/fcm-token';
+      // Use BASE_URL from api_service.dart
+      // This ensures we hit the same backend as the rest of the app (local or production)
+      final url = '$BASE_URL/api/fcm-token';
       print('🌐 FCM: Sending to: $url');
       print('📦 FCM: Payload: {phone: $phone, fcm_token: ${token.substring(0, 20)}...}');
       

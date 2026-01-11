@@ -57,7 +57,7 @@ func LoadConfig() *Config {
 		FirebaseServiceAccountPath: getEnv("FIREBASE_SERVICE_ACCOUNT_PATH", "./firebase-service-account.json"),
 
 		// Email
-		EmailWebhookURL:    getEnv("EMAIL_WEBHOOK_URL", ""),
+		EmailWebhookURL:    fixURL(getEnv("EMAIL_WEBHOOK_URL", "")),
 		EmailWebhookSecret: getEnv("EMAIL_WEBHOOK_SECRET", ""),
 		AdminEmail:         getEnv("ADMIN_EMAIL", "faizalbashafaizalbasha07@gmail.com"),
 		AdminEmails:        getEnvList("ADMIN_EMAIL", []string{"faizalbashafaizalbasha07@gmail.com"}),
@@ -143,4 +143,12 @@ func (c *Config) GetBaseURL() string {
 		return "https://al-mathina.onrender.com"
 	}
 	return "http://localhost:" + c.Port
+}
+
+// Helper function to ensure URL has scheme
+func fixURL(url string) string {
+	if url != "" && !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return "https://" + url
+	}
+	return url
 }

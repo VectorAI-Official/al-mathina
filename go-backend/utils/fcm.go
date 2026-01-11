@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,17 +29,40 @@ func InitFirebase(serviceAccountPath string) error {
 	}
 
 	var credPath string
-	for _, path := range paths {
-		if path == "" {
-			continue
+	// 1. Check for BASE64 environment variable (Render/Cloud)
+	base64Creds := os.Getenv("FIREBASE_SERVICE_ACCOUNT_BASE64")
+	if base64Creds != "" {
+		log.Println("🔥 Firebase: Found FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable")
+		decoded, err := base64.StdEncoding.DecodeString(base64Creds)
+		if err == nil {
+			// Write to temp file
+			tempFile := "firebase-creds-temp.json"
+			err = os.WriteFile(tempFile, decoded, 0644)
+			if err == nil {
+				credPath = tempFile
+				log.Println("✅ Firebase: Decoded base64 credentials to temp file")
+			} else {
+				log.Printf("❌ Firebase: Failed to write temp credentials file: %v", err)
+			}
+		} else {
+			log.Printf("❌ Firebase: Failed to decode base64 credentials: %v", err)
 		}
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			continue
-		}
-		if _, err := os.Stat(absPath); err == nil {
-			credPath = absPath
-			break
+	}
+
+	// 2. If not found in env, check paths
+	if credPath == "" {
+		for _, path := range paths {
+			if path == "" {
+				continue
+			}
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				continue
+			}
+			if _, err := os.Stat(absPath); err == nil {
+				credPath = absPath
+				break
+			}
 		}
 	}
 

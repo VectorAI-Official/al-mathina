@@ -139,10 +139,18 @@ func (c *Config) IsDevelopment() bool {
 
 // GetBaseURL returns the base URL for the server
 func (c *Config) GetBaseURL() string {
-	if c.IsProduction() {
-		return "https://al-mathina.onrender.com"
+	// 1. Prefer explicit BASE_URL from env
+	if baseURL := os.Getenv("BASE_URL"); baseURL != "" {
+		return strings.TrimSuffix(baseURL, "/")
 	}
-	return "http://localhost:" + c.Port
+
+	// 2. Default production URL
+	if c.IsProduction() {
+		return "https://al-mathina-upcraft.onrender.com"
+	}
+
+	// 3. Default dev URL
+	return "https://al-mathina-upcraft.onrender.com"
 }
 
 // Helper function to ensure URL has scheme and endpoint

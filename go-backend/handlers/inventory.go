@@ -585,6 +585,57 @@ func GetInventoryAlerts(c *gin.Context) {
 	})
 }
 
+// GetInventoryStats retrieves global inventory statistics
+// GET /admin/api/inventory/stats
+func GetInventoryStats(c *gin.Context) {
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+
+	inventoryCol := database.GetCollection("inventory")
+
+	// 1. Total Count
+	totalCount, err := inventoryCol.CountDocuments(ctx, bson.M{"is_active": true})
+	if err != nil {
+		log.Printf("❌ Error counting total inventory: %v", err)
+	}
+
+	// 2. Out of Stock (stock == 0)
+	outOfStockCount, err := inventoryCol.CountDocuments(ctx, bson.M{
+		"is_active":      true,
+		"stock_quantity": 0,
+	})
+
+	// 3. Low Stock (0 < stock <= threshold)
+	// We need an aggregation or explicit query for comparing fields
+	// simpler: count all where stock > 0 AND stock <= threshold (but threshold varies per item)
+	lowStockCount, err := inventoryCol.CountDocuments(ctx, bson.M{
+		"is_active": true,
+		"$expr": bson.M{
+			"$and": []interface{}{
+				bson.M{"$gt": []interface{}{"$stock_quantity", 0}},
+				bson.M{"$lte": []interface{}{"$stock_quantity", "$low_stock_threshold"}},
+			},
+		},
+	})
+
+	// 4. In Stock
+	// Easier to calculate: Total - (Out + Low)
+	// Or query: stock > threshold
+	inStockCount := totalCount - outOfStockCount - lowStockCount
+
+	// Safety check if counts don't align (e.g. concurrent edits), ensure non-negative
+	if inStockCount < 0 {
+		inStockCount = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_items":  totalCount,
+		"out_of_stock": outOfStockCount,
+		"low_stock":    lowStockCount,
+		"in_stock":     inStockCount,
+	})
+}
+
 // Helper function to create inventory alert
 func createInventoryAlert(inventoryID, inventoryName string, currentStock, threshold int) {
 	ctx, cancel := database.GetDBContext()

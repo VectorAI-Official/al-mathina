@@ -176,6 +176,7 @@ func main() {
 	{
 		inventoryAPI.GET("", handlers.GetAllInventory)
 		inventoryAPI.GET("/search", handlers.SearchInventory)
+		inventoryAPI.GET("/stats", handlers.GetInventoryStats)
 		inventoryAPI.GET("/alerts", handlers.GetInventoryAlerts)
 		inventoryAPI.GET("/:inventory_id", handlers.GetInventoryByID)
 		inventoryAPI.GET("/:inventory_id/history", handlers.GetInventoryHistory)

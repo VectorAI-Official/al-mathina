@@ -360,16 +360,23 @@ async function loadSections() {
 }
 
 // Update statistics
-function updateStats(totalCount, currentItems) {
-    if (totalCount !== undefined) {
-        document.getElementById('totalItems').textContent = totalCount;
-    } else {
-        document.getElementById('totalItems').textContent = currentItems.length + (hasMore ? '+' : '');
-    }
+async function updateStats(totalCountFromPagination, currentItems) {
+    try {
+        // Fetch accurate stats from server
+        const response = await fetch('/admin/api/inventory/stats');
+        const stats = await response.json();
 
-    document.getElementById('inStockItems').textContent = '-';
-    document.getElementById('lowStockItems').textContent = '-';
-    document.getElementById('outOfStockItems').textContent = '-';
+        document.getElementById('totalItems').textContent = stats.total_items || 0;
+        document.getElementById('inStockItems').textContent = stats.in_stock || 0;
+        document.getElementById('lowStockItems').textContent = stats.low_stock || 0;
+        document.getElementById('outOfStockItems').textContent = stats.out_of_stock || 0;
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        // Fallback
+        if (totalCountFromPagination !== undefined) {
+            document.getElementById('totalItems').textContent = totalCountFromPagination;
+        }
+    }
 }
 
 // Get stock badge HTML

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"al-mathina-backend/config"
@@ -326,9 +327,13 @@ func sendOrderEmailNotification(order models.Order) {
 	}
 
 	// Format Payment Method
-	paymentMethod := "COD"
+	paymentMethod := "CASH ON DELIVERY"
 	if order.PaymentMethod != "" {
-		paymentMethod = order.PaymentMethod // Uppercase logic handled if needed, usually passed as is
+		if strings.ToLower(order.PaymentMethod) == "online" {
+			paymentMethod = "ONLINE PAYMENT"
+		} else {
+			paymentMethod = strings.ToUpper(order.PaymentMethod)
+		}
 	}
 
 	// Build Address HTML
@@ -390,7 +395,7 @@ func sendOrderEmailNotification(order models.Order) {
 			@media screen and (max-width: 640px) {
 				.container { max-width: 100%%; padding: 5px; }
 			}
-			.header { background: linear-gradient(135deg, #28a745 0%%, #20c997 100%%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+			.header { background: #28a745; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
 			.content { background: #f8f9fa; padding: 20px; }
 			.order-details { background: white; padding: 15px; border-radius: 5px; margin: 10px 0; }
 			.table { 
@@ -470,7 +475,7 @@ func sendOrderEmailNotification(order models.Order) {
 				
 				<div style="text-align: center;">
 					<a href="%s" class="button">
-						📋 View Order in Admin Panel
+						View Order in Admin Panel
 					</a>
 					<p style="font-size: 12px; color: #6c757d;">
 						Click the button above to manage this order

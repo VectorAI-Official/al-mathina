@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -147,7 +148,8 @@
 
             .form-group input {
                 padding: 12px;
-                font-size: 16px; /* Prevents zoom on iOS */
+                font-size: 16px;
+                /* Prevents zoom on iOS */
             }
 
             .login-button {
@@ -198,6 +200,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="login-container">
         <div class="logo-section">
@@ -210,28 +213,17 @@
         <form class="login-form" method="POST" action="/admin/login" onsubmit="return handleLogin(event)">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input 
-                    type="text" 
-                    id="username" 
-                    name="username" 
-                    placeholder="Enter admin username"
-                    required
-                    autocomplete="username"
-                >
+                <input type="text" id="username" name="username" placeholder="Enter admin username" required
+                    autocomplete="username">
             </div>
 
             <div class="form-group">
                 <label for="password">Password</label>
-                <input 
-                    type="password" 
-                    id="password" 
-                    name="password" 
-                    placeholder="Enter admin password"
-                    required
-                    autocomplete="current-password"
-                >
+                <input type="password" id="password" name="password" placeholder="Enter admin password" required
+                    autocomplete="current-password">
             </div>
 
+            <input type="hidden" name="next" id="next">
             <button type="submit" class="login-button">
                 Login to Dashboard
             </button>
@@ -258,6 +250,13 @@
             errorDiv.textContent = 'Invalid username or password. Please try again.';
             errorDiv.classList.add('show');
         }
+
+        // Check for next parameter (for deep linking)
+        const nextParam = urlParams.get('next');
+        if (nextParam) {
+            document.getElementById('next').value = nextParam;
+        }
     </script>
 </body>
+
 </html>

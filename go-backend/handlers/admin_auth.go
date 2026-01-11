@@ -41,6 +41,14 @@ func AdminLogin(c *gin.Context) {
 
 		log.Printf("✅ Admin logged in: %s (Session: %s)", username, sessionID)
 
+		// Check for next param
+		next := c.PostForm("next")
+		if next != "" {
+			log.Printf("↪️ Redirecting to original destination: %s", next)
+			c.Redirect(http.StatusSeeOther, next)
+			return
+		}
+
 		// Redirect to dashboard
 		c.Redirect(http.StatusSeeOther, "/admin/dashboard")
 	} else {
@@ -72,7 +80,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		cookie, err := c.Cookie("admin_session")
 		if err != nil {
 			// No cookie, redirect to login
-			c.Redirect(http.StatusSeeOther, "/admin")
+			// No cookie, redirect to login with next param
+			path := c.Request.URL.Path
+			if c.Request.URL.RawQuery != "" {
+				path += "?" + c.Request.URL.RawQuery
+			}
+			// Encode param not strictly necessary with Gin's Redirect but good practice if special chars
+			// using manual concat for simplicity with Gin
+			c.Redirect(http.StatusSeeOther, "/admin?next="+path)
 			c.Abort()
 			return
 		}
@@ -95,7 +110,14 @@ func AuthMiddleware() gin.HandlerFunc {
 
 			// Invalid session, redirect to login
 			c.SetCookie("admin_session", "", -1, "/", "", false, true)
-			c.Redirect(http.StatusSeeOther, "/admin")
+			// Invalid session, redirect to login
+			c.SetCookie("admin_session", "", -1, "/", "", false, true)
+
+			path := c.Request.URL.Path
+			if c.Request.URL.RawQuery != "" {
+				path += "?" + c.Request.URL.RawQuery
+			}
+			c.Redirect(http.StatusSeeOther, "/admin?next="+path)
 			c.Abort()
 			return
 		}

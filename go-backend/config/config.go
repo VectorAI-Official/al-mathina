@@ -145,10 +145,23 @@ func (c *Config) GetBaseURL() string {
 	return "http://localhost:" + c.Port
 }
 
-// Helper function to ensure URL has scheme
+// Helper function to ensure URL has scheme and endpoint
 func fixURL(url string) string {
-	if url != "" && !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		return "https://" + url
+	if url == "" {
+		return ""
 	}
+
+	// Add scheme if missing
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		url = "https://" + url
+	}
+
+	// Add endpoint if missing (Vercel email service specific)
+	if !strings.HasSuffix(url, "/api/send-email") {
+		// Avoid double slash if user added trailing slash
+		url = strings.TrimSuffix(url, "/")
+		url = url + "/api/send-email"
+	}
+
 	return url
 }

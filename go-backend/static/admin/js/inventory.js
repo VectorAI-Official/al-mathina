@@ -727,7 +727,6 @@ async function linkProduct(productId) {
 }
 
 // Unlink product from inventory
-// Unlink product from inventory
 async function unlinkProduct(productId) {
     const inventoryId = document.getElementById('linkInventoryId').value;
 
@@ -767,13 +766,4 @@ async function unlinkProduct(productId) {
         console.error('Error unlinking product:', error);
         showError('Failed to unlink product');
     }
-}
-        } else {
-    const error = await response.json();
-    showError(error.error || 'Failed to unlink product');
-}
-    } catch (error) {
-    console.error('Error unlinking product:', error);
-    showError('Failed to unlink product');
-}
 }

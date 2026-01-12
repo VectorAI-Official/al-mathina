@@ -254,6 +254,20 @@ func CreateInventory(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Inventory item with name '%s' already exists", inventory.InventoryName)})
 		return
 	}
+
+	// Initialize PiecesPerUnit and TotalStock if needed
+	if inventory.PiecesPerUnit < 1 {
+		inventory.PiecesPerUnit = 1
+	}
+	// If TotalStock is not provided (or 0), calculate it from StockQuantity * PPU
+	// Note: We allow TotalStock to be 0 if StockQuantity is 0.
+	if inventory.TotalStock == 0 && inventory.StockQuantity > 0 {
+		inventory.TotalStock = inventory.StockQuantity * inventory.PiecesPerUnit
+	} else if inventory.TotalStock == 0 && inventory.StockQuantity == 0 {
+		inventory.TotalStock = 0
+	}
+	// If it is provided, we trust the frontend
+
 	_, err = inventoryCol.InsertOne(ctx, inventory)
 	if err != nil {
 		log.Printf("❌ Error creating inventory: %v", err)
@@ -315,20 +329,8 @@ func UpdateInventory(c *gin.Context) {
 		return
 	}
 
-	// SYNC: If stock_quantity was updated, sync to linked products
-	if newStock, ok := updates["stock_quantity"]; ok {
-		productsCol := database.GetCollection("products")
-		_, err = productsCol.UpdateMany(
-			ctx,
-			bson.M{"inventory_id": inventoryID},
-			bson.M{"$set": bson.M{"stock": newStock}},
-		)
-		if err != nil {
-			log.Printf("⚠️  Warning: Failed to sync stock to linked products in UpdateInventory: %v", err)
-		} else {
-			log.Printf("✅ Synced stock to linked products for inventory %s (Generic Update)", inventoryID)
-		}
-	}
+	// NO AUTO-SYNC: stock_quantity and total_stock are independent
+	// Admin manually sets both. Flutter reads stock_quantity via product.stock.
 
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Inventory item not found"})
@@ -374,6 +376,16 @@ func UpdateInventoryStock(c *gin.Context) {
 	quantityBefore := inventory.StockQuantity
 	quantityAfter := quantityBefore + update.Quantity
 
+	// Calculate new Total Stock
+	ppu := inventory.PiecesPerUnit
+	if ppu < 1 {
+		ppu = 1
+	}
+	totalBefore := inventory.TotalStock
+	// Change in pieces = Change in units * PPU
+	totalChange := update.Quantity * ppu
+	totalAfter := totalBefore + totalChange
+
 	// Prevent negative stock
 	if quantityAfter < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -384,9 +396,10 @@ func UpdateInventoryStock(c *gin.Context) {
 		return
 	}
 
-	// Update stock quantity
+	// Update stock quantity AND total stock
 	updateFields := bson.M{
 		"stock_quantity": quantityAfter,
+		"total_stock":    totalAfter,
 		"updated_at":     time.Now(),
 	}
 

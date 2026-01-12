@@ -74,6 +74,43 @@ function setupEventListeners() {
 
     document.getElementById('inventoryForm').addEventListener('submit', saveInventory);
     document.getElementById('stockForm').addEventListener('submit', updateStock);
+
+    // Unit Change Listener
+    const unitSelect = document.getElementById('unit');
+    if (unitSelect) {
+        unitSelect.addEventListener('change', togglePiecesInput);
+    }
+
+    // Calculation Listeners
+    document.getElementById('stockQuantity').addEventListener('input', calculateInventoryTotal);
+    document.getElementById('piecesPerStock').addEventListener('input', calculateInventoryTotal);
+}
+
+// Toggle Pieces Input visibility
+function togglePiecesInput() {
+    const unit = document.getElementById('unit').value;
+    const group = document.getElementById('piecesPerStockGroup');
+    const totalDisplay = document.getElementById('totalStockDisplay');
+
+    if (unit === 'pieces') {
+        group.style.display = 'block';
+        totalDisplay.style.display = 'block';
+        calculateInventoryTotal();
+    } else {
+        group.style.display = 'none';
+        totalDisplay.style.display = 'none';
+        // Reset multiplier to 1 when hidden to avoid accidental multiplication
+        document.getElementById('piecesPerStock').value = 1;
+    }
+}
+
+// Calculate Total Stock (auto-update the input)
+function calculateInventoryTotal() {
+    const qty = parseInt(document.getElementById('stockQuantity').value) || 0;
+    const perStock = parseInt(document.getElementById('piecesPerStock').value) || 1;
+    const total = qty * perStock;
+    const input = document.getElementById('totalStockValue');
+    if (input) input.value = total;
 }
 
 // Load inventory items from server
@@ -175,7 +212,8 @@ function showTableLoading(show) {
                     <thead>
                         <tr>
                             <th>Item Name</th>
-                            <th>Stock</th>
+                            <th>Product Stock</th>
+                            <th>Total Inventory</th>
                             <th>Unit</th>
                             <th>Threshold</th>
                             <th>Status</th>
@@ -201,7 +239,8 @@ function showTableLoading(show) {
                     <thead>
                         <tr>
                             <th>Item Name</th>
-                            <th>Stock</th>
+                            <th>Product Stock</th>
+                            <th>Total Inventory</th>
                             <th>Unit</th>
                             <th>Threshold</th>
                             <th>Status</th>
@@ -261,6 +300,7 @@ function renderTableRows(items) {
         <tr>
             <td><strong>${item.inventory_name}</strong></td>
             <td><strong>${item.stock_quantity}</strong></td>
+            <td>${item.unit === 'pieces' ? `<strong>${item.total_stock || 0}</strong> (x${item.pieces_per_unit || 1})` : '-'}</td>
             <td>${item.unit || 'N/A'}</td>
             <td>${item.low_stock_threshold || 10}</td>
             <td>${getStockBadge(item)}</td>
@@ -407,6 +447,11 @@ function openCreateModal() {
     document.getElementById('modalTitle').textContent = 'Add Inventory Item';
     document.getElementById('inventoryForm').reset();
     document.getElementById('inventoryId').value = '';
+
+    // Reset Pieces UI
+    document.getElementById('piecesPerStock').value = 1;
+    togglePiecesInput();
+
     document.getElementById('inventoryModal').classList.add('active');
 }
 
@@ -428,6 +473,18 @@ function openEditModal(inventoryId) {
     if (sectionSelect) sectionSelect.value = item.section || "";
 
     document.getElementById('lowStockThreshold').value = item.low_stock_threshold || 10;
+
+    // Pieces UI for Edit
+    document.getElementById('piecesPerStock').value = item.pieces_per_unit || 1;
+    togglePiecesInput();
+    // If pieces unit, load the stored total_stock (editable)
+    if (item.unit === 'pieces') {
+        const totalInput = document.getElementById('totalStockValue');
+        if (totalInput) {
+            // Use stored total_stock if exists, otherwise calculate
+            totalInput.value = item.total_stock || (item.stock_quantity * (item.pieces_per_unit || 1));
+        }
+    }
 
     document.getElementById('inventoryModal').classList.add('active');
 }
@@ -515,10 +572,27 @@ async function saveInventory(e) {
     e.preventDefault();
 
     const inventoryId = document.getElementById('inventoryId').value;
+
+    // Get values
+    const stockQty = parseInt(document.getElementById('stockQuantity').value) || 0;
+    const unit = document.getElementById('unit').value;
+
+    // Pieces logic
+    let piecesPerUnit = 1;
+    let totalStock = stockQty; // Default for non-pieces units
+
+    if (unit === 'pieces') {
+        piecesPerUnit = parseInt(document.getElementById('piecesPerStock').value) || 1;
+        // Read from editable input (may have been manually adjusted)
+        totalStock = parseInt(document.getElementById('totalStockValue').value) || 0;
+    }
+
     const data = {
         inventory_name: document.getElementById('inventoryName').value,
-        stock_quantity: parseInt(document.getElementById('stockQuantity').value),
-        unit: document.getElementById('unit').value,
+        stock_quantity: stockQty,
+        pieces_per_unit: piecesPerUnit,
+        total_stock: totalStock, // Send the editable total
+        unit: unit,
         low_stock_threshold: parseInt(document.getElementById('lowStockThreshold').value) || 10
     };
 

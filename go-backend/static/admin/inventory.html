@@ -595,9 +595,16 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Stock Quantity *</label>
-                        <input type="number" id="stockQuantity" required min="0" placeholder="e.g., 1000">
+                        <label>Product Stock *</label>
+                        <input type="number" id="stockQuantity" required min="0" placeholder="e.g., 10 (Bundles)">
                     </div>
+
+                    <!-- NEW: Pieces Per Stock Input (Visible only when Unit is Pieces) -->
+                    <div class="form-group" id="piecesPerStockGroup" style="display: none;">
+                        <label>Piece per stock</label>
+                        <input type="number" id="piecesPerStock" min="1" value="1" placeholder="e.g., 12">
+                    </div>
+
                     <div class="form-group">
                         <label>Unit *</label>
                         <select id="unit" required>
@@ -605,17 +612,17 @@
                             <option value="kg">Kilograms (kg)</option>
                             <option value="liters">Liters</option>
                             <option value="pieces">Pieces</option>
-                            <option value="boxes">Boxes</option>
-                            <option value="packets">Packets</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Section *</label>
-                    <select id="section" required>
-                        <option value="" disabled selected>Select Section</option>
-                    </select>
+                <!-- Total Stock UI (Editable) -->
+                <div id="totalStockDisplay" class="form-group"
+                    style="display: none; background: #e0f2f1; padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+                    <label style="color: #00695c; font-weight: 600;">Inventory Total (Pieces)</label>
+                    <input type="number" id="totalStockValue" min="0" value="0"
+                        style="font-weight: bold; font-size: 16px;">
+                    <small style="color: #666;">Auto-calculated, but you can edit manually</small>
                 </div>
 
                 <div class="form-group">

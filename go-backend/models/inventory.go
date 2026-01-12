@@ -7,7 +7,9 @@ import "time"
 type Inventory struct {
 	InventoryID       string    `json:"inventory_id" bson:"inventory_id"`
 	InventoryName     string    `json:"inventory_name" bson:"inventory_name"`
-	StockQuantity     int       `json:"stock_quantity" bson:"stock_quantity"`
+	StockQuantity     int       `json:"stock_quantity" bson:"stock_quantity"`   // Selling Units (e.g., Bundles)
+	TotalStock        int       `json:"total_stock" bson:"total_stock"`         // Physical Total (e.g., Pieces)
+	PiecesPerUnit     int       `json:"pieces_per_unit" bson:"pieces_per_unit"` // Ratio (e.g., 12 pieces per bundle)
 	LowStockThreshold int       `json:"low_stock_threshold" bson:"low_stock_threshold"`
 	Unit              string    `json:"unit" bson:"unit"` // e.g., "kg", "liters", "pieces"
 	Category          string    `json:"category" bson:"category,omitempty"`

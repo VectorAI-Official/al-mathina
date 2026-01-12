@@ -247,8 +247,12 @@ func UpdateOrderStatus(c *gin.Context) {
 	}
 
 	// If order status changed to "delivered", reduce inventory stock
+	log.Printf("🔹 Order Status Update: ID=%s, Old=%s, New=%s", orderID, previousStatus, req.Status)
 	if req.Status == "delivered" && previousStatus != "delivered" {
+		log.Printf("🚀 Triggering inventory reduction for order %s", orderID)
 		go reduceInventoryForOrder(orderID, order)
+	} else {
+		log.Printf("ℹ️ Skipping inventory reduction (Not delivered or already delivered)")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -266,19 +270,30 @@ func reduceInventoryForOrder(orderID string, order bson.M) {
 	inventoryCol := database.GetCollection("inventory")
 	historyCol := database.GetCollection("inventory_history")
 
-	// Get order items
-	items, ok := order["items"].([]interface{})
-	if !ok {
-		log.Printf("⚠️  Order %s has no items", orderID)
+	// Get order items - handle both []interface{} and primitive.A
+	var items []interface{}
+	if rawItems, ok := order["items"].(primitive.A); ok {
+		items = []interface{}(rawItems)
+	} else if rawItems, ok := order["items"].([]interface{}); ok {
+		items = rawItems
+	} else {
+		log.Printf("⚠️  Order %s has no items or unknown type: %T", orderID, order["items"])
 		return
 	}
 
-	log.Printf("📦 Processing inventory reduction for order %s (%d items)", orderID, len(items))
+	log.Printf("📦 Processing inventory reduction for order %s with %d raw items", orderID, len(items))
 
-	for _, item := range items {
+	for i, item := range items {
+		log.Printf("🔎 Inspecting Item %d: %+v", i, item)
 		itemMap, ok := item.(map[string]interface{})
 		if !ok {
-			continue
+			// Try primitive.M if map[string]interface{} fails
+			if pm, ok := item.(primitive.M); ok {
+				itemMap = map[string]interface{}(pm)
+			} else {
+				log.Printf("⚠️  Item %d is not a map: %T", i, item)
+				continue
+			}
 		}
 
 		itemID, _ := itemMap["item_id"].(string)
@@ -329,75 +344,96 @@ func reduceInventoryForOrder(orderID string, order bson.M) {
 			continue
 		}
 
-		// Atomic Update: Decrement stock, but ensure it doesn't go below 0
-		// We use $inc with negative quantity
+		// Retrieve current PiecesPerUnit first to calculate total deduction
+		// We could fetch it, or if it's not in the 'product' doc, we must fetch inventory doc.
+		// Since product might not have it, let's fetch inventory.
+		var invDoc models.Inventory
+		err = inventoryCol.FindOne(ctx, bson.M{"inventory_id": inventoryID}).Decode(&invDoc)
+		if err != nil {
+			log.Printf("⚠️  Checking inventory %s failed: %v", inventoryID, err)
+			continue
+		}
+
+		ppu := invDoc.PiecesPerUnit
+		if ppu < 1 {
+			ppu = 1
+		}
+		piecesDeduction := int(quantity) * ppu
+
+		// Deduct from total_stock (the editable inventory pieces)
 		updateResult, err := inventoryCol.UpdateOne(
 			ctx,
 			bson.M{
-				"inventory_id":   inventoryID,
-				"stock_quantity": bson.M{"$gte": quantity}, // Optimistic check: only update if enough stock
+				"inventory_id": inventoryID,
+				"total_stock":  bson.M{"$gte": piecesDeduction}, // Ensure enough pieces
 			},
 			bson.M{
-				"$inc": bson.M{"stock_quantity": -quantity},
+				"$inc": bson.M{"total_stock": -piecesDeduction},
 				"$set": bson.M{"updated_at": time.Now()},
 			},
 		)
 
-		// If atomic update failed (likely due to insufficient stock), force update to 0 or remaining
+		// Force update if insufficient stock
 		if err != nil || updateResult.MatchedCount == 0 {
-			// Fetch current to log logic
-			var currentInv bson.M
-			inventoryCol.FindOne(ctx, bson.M{"inventory_id": inventoryID}).Decode(&currentInv)
-
-			currentStock := int32(0)
-			if s, ok := currentInv["stock_quantity"].(int32); ok {
-				currentStock = s
-			}
-
-			log.Printf("⚠️  Insufficient stock for %s (Current: %d, Required: %d). Forcing update...", inventoryID, currentStock, quantity)
-
-			// Force update (allow going negative? or clamp to 0?)
-			// User request: "deducted carefully". Let's clamp to 0 to avoid negative stock in UI.
-			/*
-			   DECISION: For now, we will allow it to go negative OR stay at 0 depending on business logic.
-			   Usually, simple systems prefer clamping to 0.
-			   Let's use Safe Decrement: max(0, stock - qty)
-			   This requires a read-write or a pipeline update.
-			*/
-
+			log.Printf("⚠️  Insufficient inventory pieces for %s. Forcing update...", inventoryID)
 			_, err = inventoryCol.UpdateOne(
 				ctx,
 				bson.M{"inventory_id": inventoryID},
-				[]bson.M{
-					{
-						"$set": bson.M{
-							"stock_quantity": bson.M{
-								"$cond": bson.M{
-									"if":   bson.M{"$lt": []interface{}{bson.M{"$subtract": []interface{}{"$stock_quantity", quantity}}, 0}},
-									"then": 0,
-									"else": bson.M{"$subtract": []interface{}{"$stock_quantity", quantity}},
-								},
+				[]bson.M{{
+					"$set": bson.M{
+						"total_stock": bson.M{
+							"$cond": bson.M{
+								"if":   bson.M{"$lt": []interface{}{bson.M{"$subtract": []interface{}{"$total_stock", piecesDeduction}}, 0}},
+								"then": 0,
+								"else": bson.M{"$subtract": []interface{}{"$total_stock", piecesDeduction}},
 							},
-							"updated_at": time.Now(),
 						},
+						"updated_at": time.Now(),
 					},
-				},
+				}},
 			)
 			if err != nil {
 				log.Printf("❌ Failed to force update inventory %s: %v", inventoryID, err)
 				continue
 			}
 		}
+		// Deduct from stock_quantity (selling units) - Independent of total_stock but triggered by order
+		_, err = inventoryCol.UpdateOne(
+			ctx,
+			bson.M{"inventory_id": inventoryID},
+			bson.M{
+				"$inc": bson.M{"stock_quantity": -int(quantity)},
+			},
+		)
+		if err != nil {
+			log.Printf("⚠️  Failed to update stock_quantity for inventory %s: %v", inventoryID, err)
+		}
 
-		// Record history (Async to not block too much, but kept sync here for safety)
-		inventoryName, _ := product["inventory_name"].(string) // Might not be on product, fetch from inv if needed
+		// Update product stock (for the specific item sold)
+		// We use the ID from the found product to ensure we target the correct one
+		targetProductID, _ := product["item_id"].(string)
+		if targetProductID != "" {
+			_, err = productsCol.UpdateOne(
+				ctx,
+				bson.M{"item_id": targetProductID},
+				bson.M{
+					"$inc": bson.M{"stock": -int(quantity)},
+					"$set": bson.M{"updated_at": time.Now()},
+				},
+			)
+			if err != nil {
+				log.Printf("⚠️  Failed to update product stock for item %s: %v", targetProductID, err)
+			} else {
+				log.Printf("✅ Reduced product stock for %s by %d", targetProductID, quantity)
+			}
+		}
 
-		// If name missing, it's fine, history tracks ID mostly.
-
+		// Record history
 		history := bson.M{
 			"inventory_id":     inventoryID,
-			"inventory_name":   inventoryName, // might be empty
+			"inventory_name":   invDoc.InventoryName,
 			"quantity_changed": -int(quantity),
+			"pieces_changed":   -piecesDeduction,
 			"reason":           "order_delivered",
 			"changed_by":       "system",
 			"order_id":         orderID,
@@ -405,9 +441,9 @@ func reduceInventoryForOrder(orderID string, order bson.M) {
 		}
 		historyCol.InsertOne(ctx, history)
 
-		log.Printf("✅ Reduced inventory %s by %d (Order: %s)", inventoryID, quantity, orderID)
+		log.Printf("✅ Reduced inventory %s total_stock by %d pieces (Order: %s, Qty: %d)", inventoryID, piecesDeduction, orderID, quantity)
 
-		// Check low stock alert (Async)
+		// Check low stock alert
 		go checkLowStock(inventoryID)
 	}
 }

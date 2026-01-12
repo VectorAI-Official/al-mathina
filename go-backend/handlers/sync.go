@@ -16,7 +16,7 @@ import (
 // This is a "Plan B" fix for the aggregation failure
 // POST /admin/api/migration/sync-stock
 func SyncStockToProducts(c *gin.Context) {
-	ctx, cancel := database.GetDBContext() // Use long timeout if needed? Default is 5s which might be short
+	_, cancel := database.GetDBContext() // Use long timeout if needed? Default is 5s which might be short
 	// Actually, let's use a longer timeout for this batch operation
 	// But GetDBContext is hardcoded. Let's just create a new context here.
 	cancel() // Cancel the default one immediately

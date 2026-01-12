@@ -243,8 +243,18 @@ func CreateInventory(c *gin.Context) {
 		inventory.LowStockThreshold = 10
 	}
 
+	// Check if inventory name already exists (Unique Constraint)
 	inventoryCol := database.GetCollection("inventory")
-	_, err := inventoryCol.InsertOne(ctx, inventory)
+	count, err := inventoryCol.CountDocuments(ctx, bson.M{"inventory_name": inventory.InventoryName})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check inventory uniqueness"})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Inventory item with name '%s' already exists", inventory.InventoryName)})
+		return
+	}
+	_, err = inventoryCol.InsertOne(ctx, inventory)
 	if err != nil {
 		log.Printf("❌ Error creating inventory: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create inventory"})
@@ -276,6 +286,23 @@ func UpdateInventory(c *gin.Context) {
 	updates["updated_at"] = time.Now()
 
 	inventoryCol := database.GetCollection("inventory")
+
+	// Check for unique name conflict if name is being updated
+	if newName, ok := updates["inventory_name"].(string); ok && newName != "" {
+		// Find any OTHER item with this name
+		count, err := inventoryCol.CountDocuments(ctx, bson.M{
+			"inventory_name": newName,
+			"inventory_id":   bson.M{"$ne": inventoryID}, // Exclude self
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check name uniqueness"})
+			return
+		}
+		if count > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("Inventory item with name '%s' already exists", newName)})
+			return
+		}
+	}
 	result, err := inventoryCol.UpdateOne(
 		ctx,
 		bson.M{"inventory_id": inventoryID},
@@ -286,6 +313,21 @@ func UpdateInventory(c *gin.Context) {
 		log.Printf("❌ Error updating inventory: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update inventory"})
 		return
+	}
+
+	// SYNC: If stock_quantity was updated, sync to linked products
+	if newStock, ok := updates["stock_quantity"]; ok {
+		productsCol := database.GetCollection("products")
+		_, err = productsCol.UpdateMany(
+			ctx,
+			bson.M{"inventory_id": inventoryID},
+			bson.M{"$set": bson.M{"stock": newStock}},
+		)
+		if err != nil {
+			log.Printf("⚠️  Warning: Failed to sync stock to linked products in UpdateInventory: %v", err)
+		} else {
+			log.Printf("✅ Synced stock to linked products for inventory %s (Generic Update)", inventoryID)
+		}
 	}
 
 	if result.MatchedCount == 0 {
@@ -363,6 +405,20 @@ func UpdateInventoryStock(c *gin.Context) {
 		log.Printf("❌ Error updating inventory stock: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stock"})
 		return
+	}
+
+	// SYNC: Update all linked products with new stock quantity
+	productsCol := database.GetCollection("products")
+	_, err = productsCol.UpdateMany(
+		ctx,
+		bson.M{"inventory_id": inventoryID},
+		bson.M{"$set": bson.M{"stock": quantityAfter}},
+	)
+	if err != nil {
+		log.Printf("⚠️  Warning: Failed to sync stock to linked products: %v", err)
+		// Don't fail the request, just log warning
+	} else {
+		log.Printf("✅ Synced stock (%d) to linked products for inventory %s", quantityAfter, inventoryID)
 	}
 
 	// Record history

@@ -273,11 +273,11 @@ func GetProducts(c *gin.Context) {
 	totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
 	skip := (page - 1) * limit
 
-	// Fetch products
+	// Fetch products using Find (returning to simple query)
 	opts := options.Find().
 		SetSkip(int64(skip)).
 		SetLimit(int64(limit)).
-		SetSort(bson.M{"product_name": 1}) // Sort alphabetically
+		SetSort(bson.M{"product_name": 1})
 
 	cursor, err := productsCol.Find(ctx, filter, opts)
 	if err != nil {
@@ -351,7 +351,6 @@ func SearchProducts(c *gin.Context) {
 	log.Printf("🔍 SearchProducts: page=%d, limit=%d", page, limit)
 
 	// Build search filter (case-insensitive regex across multiple fields)
-	// MongoDB $regex for partial matching
 	searchRegex := bson.M{"$regex": query, "$options": "i"}
 	filter := bson.M{
 		"active": true,
@@ -387,7 +386,7 @@ func SearchProducts(c *gin.Context) {
 		countChan <- countResult{count: totalCount, err: err}
 	}()
 
-	// Goroutine 2: Fetch products
+	// Goroutine 2: Fetch products using simple Find
 	go func() {
 		productsCol := database.GetCollection("products")
 		skip := (page - 1) * limit
@@ -619,6 +618,7 @@ func GetProductDetails(c *gin.Context) {
 		return
 	}
 
+	// Parse product using FindOne
 	productsCol := database.GetCollection("products")
 	var product models.Product
 

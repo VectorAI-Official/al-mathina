@@ -1,0 +1,195 @@
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /health                   --> main.main.func3 (5 handlers)
+[GIN-debug] GET    /api/flutter/home         --> al-mathina-backend/handlers.GetHome (5 handlers)
+[GIN-debug] GET    /api/flutter/products     --> al-mathina-backend/handlers.GetProducts (5 handlers)
+[GIN-debug] GET    /api/flutter/product/:item_id --> al-mathina-backend/handlers.GetProductDetails (5 handlers)
+[GIN-debug] GET    /api/flutter/search       --> al-mathina-backend/handlers.SearchProducts (5 handlers)
+[GIN-debug] GET    /api/flutter/main-category/:section/:main_category/subcategories --> al-mathina-backend/handlers.GetSubcategories (5 handlers)
+[GIN-debug] GET    /admin/api/products/all   --> al-mathina-backend/handlers.GetAllProducts (5 handlers)
+[GIN-debug] GET    /admin/api/generate-item-id --> al-mathina-backend/handlers.GenerateItemID (5 handlers)
+[GIN-debug] POST   /admin/api/products/add   --> al-mathina-backend/handlers.AddProduct (5 handlers)
+[GIN-debug] PUT    /admin/api/products/:product_id --> al-mathina-backend/handlers.UpdateProduct (5 handlers)
+[GIN-debug] DELETE /admin/api/products/:product_id --> al-mathina-backend/handlers.DeleteProduct (5 handlers)
+[GIN-debug] POST   /admin/api/products/:product_id/link-inventory --> al-mathina-backend/handlers.LinkProductToInventory (5 handlers)
+[GIN-debug] DELETE /admin/api/products/:product_id/link-inventory --> al-mathina-backend/handlers.UnlinkProductFromInventory (5 handlers)
+[GIN-debug] POST   /admin/api/upload-image   --> al-mathina-backend/handlers.UploadCategoryImage (5 handlers)
+[GIN-debug] POST   /admin/api/upload/image/:product_id --> al-mathina-backend/handlers.UploadProductImage (5 handlers)
+[GIN-debug] GET    /admin/api/categories/all --> al-mathina-backend/handlers.GetAllCategories (5 handlers)
+[GIN-debug] GET    /admin/api/categories/sections --> al-mathina-backend/handlers.GetSections (5 handlers)
+[GIN-debug] GET    /admin/api/categories/main/:section --> al-mathina-backend/handlers.GetMainCategories (5 handlers)
+[GIN-debug] GET    /admin/api/categories/sub/:section/:main_category --> al-mathina-backend/handlers.GetSubcategoriesAdmin (5 handlers)
+[GIN-debug] GET    /admin/api/categories/metadata --> al-mathina-backend/handlers.GetCategoryMetadata (5 handlers)
+[GIN-debug] POST   /admin/api/categories/section --> al-mathina-backend/handlers.CreateSection (5 handlers)
+[GIN-debug] POST   /admin/api/categories/main --> al-mathina-backend/handlers.CreateMainCategory (5 handlers)
+[GIN-debug] PUT    /admin/api/categories/main/:main_category_name --> al-mathina-backend/handlers.UpdateMainCategory (5 handlers)
+[GIN-debug] POST   /admin/api/categories/sub --> al-mathina-backend/handlers.CreateSubcategory (5 handlers)
+[GIN-debug] DELETE /admin/api/categories/section/:section_name --> al-mathina-backend/handlers.DeleteSection (5 handlers)
+[GIN-debug] DELETE /admin/api/categories/main/:section_name/:main_category --> al-mathina-backend/handlers.DeleteMainCategory (5 handlers)
+[GIN-debug] DELETE /admin/api/categories/sub/:section_name/:main_category/:subcategory --> al-mathina-backend/handlers.DeleteSubcategory (5 handlers)
+[GIN-debug] GET    /admin/api/most-bought    --> al-mathina-backend/handlers.GetMostBought (5 handlers)
+[GIN-debug] POST   /admin/api/most-bought    --> al-mathina-backend/handlers.AddMostBought (5 handlers)
+[GIN-debug] DELETE /admin/api/most-bought    --> al-mathina-backend/handlers.RemoveMostBought (5 handlers)
+[GIN-debug] GET    /admin/api/stores/list    --> al-mathina-backend/handlers.GetStoresList (5 handlers)
+[GIN-debug] GET    /admin/api/stores/statistics --> al-mathina-backend/handlers.GetStoresStatistics (5 handlers)
+[GIN-debug] GET    /admin/api/stores/detail/:phone --> al-mathina-backend/handlers.GetStoreDetail (5 handlers)
+[GIN-debug] GET    /admin/api/stores/revenue-summary --> al-mathina-backend/handlers.GetRevenueSummary (5 handlers)
+[GIN-debug] GET    /admin/api/stores/:phone/payment-history --> al-mathina-backend/handlers.GetPaymentHistory (5 handlers)
+[GIN-debug] POST   /admin/api/stores/:phone/payment-history --> al-mathina-backend/handlers.AddPaymentHistory (5 handlers)
+[GIN-debug] DELETE /admin/api/stores/:phone/payment-history/:timestamp --> al-mathina-backend/handlers.RemovePaymentHistory (5 handlers)
+[GIN-debug] PUT    /admin/api/stores/:phone/paid-amount --> al-mathina-backend/handlers.UpdatePaidAmount (5 handlers)
+[GIN-debug] POST   /admin/api/migration/stock-to-inventory --> al-mathina-backend/handlers.MigrateStockToInventory (5 handlers)
+[GIN-debug] POST   /admin/api/migration/deduplicate-inventory --> al-mathina-backend/handlers.DeduplicateInventory (5 handlers)
+[GIN-debug] GET    /api/admin/orders         --> al-mathina-backend/handlers.GetAllOrders (5 handlers)
+[GIN-debug] GET    /api/admin/orders/:order_id --> al-mathina-backend/handlers.GetOrderByID (5 handlers)
+[GIN-debug] PUT    /api/admin/orders/:order_id/status --> al-mathina-backend/handlers.UpdateOrderStatus (5 handlers)
+[GIN-debug] PUT    /api/admin/orders/:order_id/update-items --> al-mathina-backend/handlers.UpdateOrderItems (5 handlers)
+[GIN-debug] DELETE /api/admin/orders/:order_id --> al-mathina-backend/handlers.DeleteOrder (5 handlers)
+[GIN-debug] GET    /api/admin/orders/stats/summary --> al-mathina-backend/handlers.GetOrderStats (5 handlers)
+[GIN-debug] GET    /api/admin/orders/products/search --> al-mathina-backend/handlers.SearchProductsAdmin (5 handlers)
+[GIN-debug] GET    /api/generate-item-id     --> al-mathina-backend/handlers.GenerateItemID (5 handlers)
+[GIN-debug] GET    /admin/api/inventory      --> al-mathina-backend/handlers.GetAllInventory (5 handlers)
+[GIN-debug] GET    /admin/api/inventory/search --> al-mathina-backend/handlers.SearchInventory (5 handlers)
+[GIN-debug] GET    /admin/api/inventory/stats --> al-mathina-backend/handlers.GetInventoryStats (5 handlers)
+[GIN-debug] GET    /admin/api/inventory/alerts --> al-mathina-backend/handlers.GetInventoryAlerts (5 handlers)
+[GIN-debug] GET    /admin/api/inventory/:inventory_id --> al-mathina-backend/handlers.GetInventoryByID (5 handlers)
+[GIN-debug] GET    /admin/api/inventory/:inventory_id/history --> al-mathina-backend/handlers.GetInventoryHistory (5 handlers)
+[GIN-debug] POST   /admin/api/inventory      --> al-mathina-backend/handlers.CreateInventory (5 handlers)
+[GIN-debug] PUT    /admin/api/inventory/:inventory_id --> al-mathina-backend/handlers.UpdateInventory (5 handlers)
+[GIN-debug] POST   /admin/api/inventory/:inventory_id/stock --> al-mathina-backend/handlers.UpdateInventoryStock (5 handlers)
+[GIN-debug] DELETE /admin/api/inventory/:inventory_id --> al-mathina-backend/handlers.DeleteInventory (5 handlers)
+[GIN-debug] POST   /api/fcm-token            --> al-mathina-backend/handlers.SaveFCMToken (5 handlers)
+[GIN-debug] GET    /api/fcm-token/:phone     --> al-mathina-backend/handlers.GetFCMToken (5 handlers)
+[GIN-debug] GET    /api/version              --> al-mathina-backend/handlers.GetAppVersion (5 handlers)
+[GIN-debug] GET    /api/profile/:phone       --> al-mathina-backend/handlers.GetUserProfile (5 handlers)
+[GIN-debug] PUT    /api/profile/:phone       --> al-mathina-backend/handlers.UpdateUserProfile (5 handlers)
+[GIN-debug] DELETE /api/profile/:phone       --> al-mathina-backend/handlers.DeleteUserProfile (5 handlers)
+[GIN-debug] PUT    /api/phone/:old_phone     --> al-mathina-backend/handlers.ChangePhoneNumber (5 handlers)
+[GIN-debug] POST   /api/address/:phone       --> al-mathina-backend/handlers.AddAddress (5 handlers)
+[GIN-debug] PUT    /api/address/:phone/:index --> al-mathina-backend/handlers.UpdateAddress (5 handlers)
+[GIN-debug] DELETE /api/address/:phone/:index --> al-mathina-backend/handlers.DeleteAddress (5 handlers)
+[GIN-debug] GET    /api/orders/:phone        --> al-mathina-backend/handlers.GetUserOrders (5 handlers)
+[GIN-debug] POST   /api/orders               --> al-mathina-backend/handlers.CreateOrder (5 handlers)
+[GIN-debug] GET    /api/orders/:phone/:order_id --> al-mathina-backend/handlers.GetOrderDetails (5 handlers)
+[GIN-debug] GET    /api/store-details/:phone --> al-mathina-backend/handlers.GetStoreDetails (5 handlers)
+[GIN-debug] PUT    /api/store-details/:phone --> al-mathina-backend/handlers.UpdateStoreDetails (5 handlers)
+[GIN-debug] GET    /api/favorites/:phone     --> al-mathina-backend/handlers.GetFavorites (5 handlers)
+[GIN-debug] POST   /api/favorites/:phone     --> al-mathina-backend/handlers.AddFavorite (5 handlers)
+[GIN-debug] DELETE /api/favorites/:phone/:item_id --> al-mathina-backend/handlers.RemoveFavorite (5 handlers)
+[GIN-debug] GET    /api/flutter/user/profile/:phone --> al-mathina-backend/handlers.GetUserProfile (5 handlers)
+[GIN-debug] PUT    /api/flutter/user/profile/:phone --> al-mathina-backend/handlers.UpdateUserProfile (5 handlers)
+[GIN-debug] DELETE /api/flutter/user/profile/:phone --> al-mathina-backend/handlers.DeleteUserProfile (5 handlers)
+[GIN-debug] PUT    /api/flutter/user/phone/:old_phone --> al-mathina-backend/handlers.ChangePhoneNumber (5 handlers)
+[GIN-debug] GET    /api/flutter/user/store-details/:phone --> al-mathina-backend/handlers.GetStoreDetails (5 handlers)
+[GIN-debug] PUT    /api/flutter/user/store-details/:phone --> al-mathina-backend/handlers.UpdateStoreDetails (5 handlers)
+[GIN-debug] GET    /api/flutter/user/favorites/:phone --> al-mathina-backend/handlers.GetFavorites (5 handlers)
+[GIN-debug] POST   /api/flutter/user/favorites/:phone --> al-mathina-backend/handlers.AddFavorite (5 handlers)
+[GIN-debug] DELETE /api/flutter/user/favorites/:phone/:item_id --> al-mathina-backend/handlers.RemoveFavorite (5 handlers)
+[GIN-debug] GET    /api/flutter/user/orders/:phone --> al-mathina-backend/handlers.GetUserOrders (5 handlers)
+[GIN-debug] POST   /api/flutter/user/orders  --> al-mathina-backend/handlers.CreateOrder (5 handlers)
+[GIN-debug] GET    /api/flutter/user/orders/:phone/:order_id --> al-mathina-backend/handlers.GetOrderDetails (5 handlers)
+[GIN-debug] POST   /api/flutter/user/address/:phone --> al-mathina-backend/handlers.AddAddress (5 handlers)
+[GIN-debug] PUT    /api/flutter/user/address/:phone/:index --> al-mathina-backend/handlers.UpdateAddress (5 handlers)
+[GIN-debug] DELETE /api/flutter/user/address/:phone/:index --> al-mathina-backend/handlers.DeleteAddress (5 handlers)
+[GIN-debug] GET    /static/*filepath         --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (5 handlers)
+[GIN-debug] HEAD   /static/*filepath         --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (5 handlers)
+[GIN-debug] GET    /admin                    --> main.main.func4 (5 handlers)
+[GIN-debug] GET    /admin/login              --> main.main.func5 (5 handlers)
+[GIN-debug] POST   /admin/login              --> al-mathina-backend/handlers.AdminLogin (5 handlers)
+[GIN-debug] POST   /admin/logout             --> al-mathina-backend/handlers.AdminLogout (5 handlers)
+[GIN-debug] GET    /admin/dashboard          --> main.main.func6 (6 handlers)
+[GIN-debug] GET    /admin/inventory          --> main.main.func7 (6 handlers)
+[GIN-debug] GET    /admin/orders             --> main.main.func8 (6 handlers)
+[GIN-debug] GET    /admin/revenue            --> main.main.func9 (6 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :9000
+[GIN] 2026/01/11 - 21:54:03 | 200 |      47.412µs |             ::1 | GET      "/health"
+🚀 STARTING INVENTORY DEDUPLICATION
+✨ Cleaned up name for 'அரிசி மாவு ' -> 'அரிசி மாவு'
+✨ Cleaned up name for '32ரூ ஆச்சி மட்டன் மசாலா 1-சரம் ' -> '32ரூ ஆச்சி மட்டன் மசாலா 1-சரம்'
+✨ Cleaned up name for '2ரூ நிஜாம் பை ' -> '2ரூ நிஜாம் பை'
+✨ Cleaned up name for 'கட்டி பெருங்காயம் ' -> 'கட்டி பெருங்காயம்'
+✨ Cleaned up name for '32 ரூ ஆச்சி சிக்கன் 65 மசாலா 2-சரம் ' -> '32 ரூ ஆச்சி சிக்கன் 65 மசாலா 2-சரம்'
+✨ Cleaned up name for 'பாதாம் ' -> 'பாதாம்'
+✨ Cleaned up name for 'கர்நாடக பொன்னி சிப்பம் ' -> 'கர்நாடக பொன்னி சிப்பம்'
+✨ Cleaned up name for 'கண்ணன் உளுந்து ' -> 'கண்ணன் உளுந்து'
+✨ Cleaned up name for 'டாட்டா  கள் உப்பு சிப்பம் ' -> 'டாட்டா  கள் உப்பு சிப்பம்'
+✨ Cleaned up name for '35ரூ Surf Excel சோப்பு ' -> '35ரூ Surf Excel சோப்பு'
+✨ Cleaned up name for '60ரூ இப்பி நூடுல்ஸ் ' -> '60ரூ இப்பி நூடுல்ஸ்'
+✨ Cleaned up name for '10 ரூ சக்தி மீன் குழம்பு மசாலா சரம் ' -> '10 ரூ சக்தி மீன் குழம்பு மசாலா சரம்'
+✨ Cleaned up name for 'வெள்ளை பெரிய கொண்ட கடலை ' -> 'வெள்ளை பெரிய கொண்ட கடலை'
+✨ Cleaned up name for 'அணில் சேமியா பை ' -> 'அணில் சேமியா பை'
+✨ Cleaned up name for '10ரூ ரஸ்க் பெட்டி ' -> '10ரூ ரஸ்க் பெட்டி'
+✨ Cleaned up name for 'பாஸ் பாஸ் பாக்கு பை ' -> 'பாஸ் பாஸ் பாக்கு பை'
+✨ Cleaned up name for '5ரூ பூஸ்ட் சரம் ' -> '5ரூ பூஸ்ட் சரம்'
+✨ Cleaned up name for 'டால்டா சரம் ' -> 'டால்டா சரம்'
+✨ Cleaned up name for '100g சக்தி மஞ்சள் தூள் பாக்கெட் ' -> '100g சக்தி மஞ்சள் தூள் பாக்கெட்'
+✨ Cleaned up name for 'முந்திரி சாதா ' -> 'முந்திரி சாதா'
+✨ Cleaned up name for 'முந்திரி நயம் ' -> 'முந்திரி நயம்'
+✨ Cleaned up name for '10 ரூ சக்தி மீன் வறுவல் சரம் ' -> '10 ரூ சக்தி மீன் வறுவல் சரம்'
+✨ Cleaned up name for '2ரூ சன் ரைஸ் சரம் ' -> '2ரூ சன் ரைஸ் சரம்'
+✨ Cleaned up name for '20ரூ ரின் சோப்பு  பெட்டி ' -> '20ரூ ரின் சோப்பு  பெட்டி'
+✨ Cleaned up name for 'பாதாம் பருப்பு ' -> 'பாதாம் பருப்பு'
+✨ Cleaned up name for '10 ரூ ஆச்சி சிக்கன் 65 மசாலா சரம் ' -> '10 ரூ ஆச்சி சிக்கன் 65 மசாலா சரம்'
+✨ Cleaned up name for '5ரூ குட்டே பட்டர் 1பை ' -> '5ரூ குட்டே பட்டர் 1பை'
+✨ Cleaned up name for '2ரூ Bru பை ' -> '2ரூ Bru பை'
+✨ Cleaned up name for '10 ரூ சேமியா ' -> '10 ரூ சேமியா'
+✨ Cleaned up name for 'கம்பு மாவு  பாக்கெட் ' -> 'கம்பு மாவு  பாக்கெட்'
+✨ Cleaned up name for '10ரூ குட்டே பட்டர் பெட்டி ' -> '10ரூ குட்டே பட்டர் பெட்டி'
+✨ Cleaned up name for '10ரூ Mr- கோல்டு பை ' -> '10ரூ Mr- கோல்டு பை'
+✨ Cleaned up name for '69ரூ மைசூர் சாண்டல் சோப்பு ' -> '69ரூ மைசூர் சாண்டல் சோப்பு'
+✨ Cleaned up name for '10ரூ ரின் பவுடர் மூட்டை ' -> '10ரூ ரின் பவுடர் மூட்டை'
+✨ Cleaned up name for '5ரூ சக்ரா கோல்டு பை ' -> '5ரூ சக்ரா கோல்டு பை'
+✨ Cleaned up name for '10ரூ குட்டே ஆரஞ்சு ' -> '10ரூ குட்டே ஆரஞ்சு'
+✨ Cleaned up name for 'நாட்டு சர்க்கரை லூஸ் ' -> 'நாட்டு சர்க்கரை லூஸ்'
+✨ Cleaned up name for '25 ரூ ஆச்சி சாம்பார் தூள் 2- சரம் ' -> '25 ரூ ஆச்சி சாம்பார் தூள் 2- சரம்'
+✨ Cleaned up name for '5 ரூ மில்க் பிகிஸ் 1 பை ' -> '5 ரூ மில்க் பிகிஸ் 1 பை'
+✨ Cleaned up name for '130ரூ No1 சோப்பு கட்டு ' -> '130ரூ No1 சோப்பு கட்டு'
+✨ Cleaned up name for '10ரூ ரின் சோப்பு ' -> '10ரூ ரின் சோப்பு'
+✨ Cleaned up name for 'மாங்காய் மைதா பை ' -> 'மாங்காய் மைதா பை'
+✨ Cleaned up name for 'டைமன்ட் கல்கண்டு ' -> 'டைமன்ட் கல்கண்டு'
+✨ Cleaned up name for 'தோல் உளுந்து ' -> 'தோல் உளுந்து'
+✨ Cleaned up name for 'மாவு ஜவ்வரிசி ' -> 'மாவு ஜவ்வரிசி'
+✨ Cleaned up name for '26ரூ சக்தி சிக்கன் மசாலா பாக்கெட் ' -> '26ரூ சக்தி சிக்கன் மசாலா பாக்கெட்'
+✨ Cleaned up name for '5ரூ விம் சோப்பு பெட்டி ' -> '5ரூ விம் சோப்பு பெட்டி'
+✨ Cleaned up name for 'டாடா சால்ட் ' -> 'டாடா சால்ட்'
+✨ Cleaned up name for 'சேமியா ' -> 'சேமியா'
+✨ Cleaned up name for '10ரூ ஆண்டாள் சீவல் பை ' -> '10ரூ ஆண்டாள் சீவல் பை'
+✨ Cleaned up name for '48ரூ சக்தி மஞ்சள் தூள் பாக்கெட் ' -> '48ரூ சக்தி மஞ்சள் தூள் பாக்கெட்'
+✨ Cleaned up name for 'கேசரி லெமன் பவுடர் box ' -> 'கேசரி லெமன் பவுடர் box'
+✨ Cleaned up name for '10 ரூ ஆச்சி சாம்பார் தூள் சரம் ' -> '10 ரூ ஆச்சி சாம்பார் தூள் சரம்'
+✨ Cleaned up name for 'பிரியாணி இலை ' -> 'பிரியாணி இலை'
+✨ Cleaned up name for '5ரூ மேரி லைட் பெட்டி ' -> '5ரூ மேரி லைட் பெட்டி'
+✨ Cleaned up name for 'பாஸ் பாஸ் பாக்கு பாக்கெட் ' -> 'பாஸ் பாஸ் பாக்கு பாக்கெட்'
+✨ Cleaned up name for '2ரூ மீரா வெங்காயம் சரம் ' -> '2ரூ மீரா வெங்காயம் சரம்'
+✨ Cleaned up name for '15ரூ விம் லீகுய்ட் ' -> '15ரூ விம் லீகுய்ட்'
+✨ Cleaned up name for 'கிங் பொன்னி வெள்ளை சிப்பம் ' -> 'கிங் பொன்னி வெள்ளை சிப்பம்'
+✨ Cleaned up name for 'சிவப்பு கொண்ட கடலை ' -> 'சிவப்பு கொண்ட கடலை'
+✨ Cleaned up name for '31 ரூ ஆச்சி மீன் வருவல் மசாலா 2-சரம் ' -> '31 ரூ ஆச்சி மீன் வருவல் மசாலா 2-சரம்'
+✨ Cleaned up name for '58 ரூ பாஸ்தா ' -> '58 ரூ பாஸ்தா'
+✨ Cleaned up name for '26ரூ ஆச்சி மீன் குழம்பு மசாலா 1- சரம் ' -> '26ரூ ஆச்சி மீன் குழம்பு மசாலா 1- சரம்'
+✨ Cleaned up name for 'ஆசீர்வாட் ஆட்டா ' -> 'ஆசீர்வாட் ஆட்டா'
+✨ Cleaned up name for 'வெரி நைஸ் துவரம் பருப்பு சிப்பம் ' -> 'வெரி நைஸ் துவரம் பருப்பு சிப்பம்'
+✨ Cleaned up name for 'கேசரி பவுடர் பாக்கெட் ' -> 'கேசரி பவுடர் பாக்கெட்'
+✨ Cleaned up name for '90ரூ சக்தி மிளகு தூள் பாக்கெட் ' -> '90ரூ சக்தி மிளகு தூள் பாக்கெட்'
+✨ Cleaned up name for '4ரூ மீரா சரம் ' -> '4ரூ மீரா சரம்'
+✨ Cleaned up name for 'கர்நாடக ஜினி சிப்பம் ' -> 'கர்நாடக ஜினி சிப்பம்'
+✨ Cleaned up name for 'ஏலக்காய் சிரியது ' -> 'ஏலக்காய் சிரியது'
+✨ Cleaned up name for '26ரூ ஆச்சி சிக்கன் மசாலா 1-சரம் ' -> '26ரூ ஆச்சி சிக்கன் மசாலா 1-சரம்'
+✨ Cleaned up name for '10ரூ நியூட்ரி சாய்ஸ் ' -> '10ரூ நியூட்ரி சாய்ஸ்'
+✨ Cleaned up name for '10ரூ போர்பன் ' -> '10ரூ போர்பன்'
+✨ Cleaned up name for '20ரூ Mr- கோல்டு பை ' -> '20ரூ Mr- கோல்டு பை'
+✨ Cleaned up name for '40ரூ சக்தி கரமசாலா பாக்கெட் ' -> '40ரூ சக்தி கரமசாலா பாக்கெட்'
+✨ Cleaned up name for '40ரூ பவர் லாவண்டர் ' -> '40ரூ பவர் லாவண்டர்'
+✨ Cleaned up name for 'வெந்தயம் ' -> 'வெந்தயம்'
+✨ Cleaned up name for 'உருண்டை வெல்லம் ' -> 'உருண்டை வெல்லம்'
+✨ Cleaned up name for '40ரூ பவர் லைம் ' -> '40ரூ பவர் லைம்'
+✨ Cleaned up name for '32 ரூ ஆச்சி மட்டன் மசாலா 2- சரம் ' -> '32 ரூ ஆச்சி மட்டன் மசாலா 2- சரம்'
+✨ Cleaned up name for 'ஜாதிப்பூ ' -> 'ஜாதிப்பூ'
+✨ Cleaned up name for '10 ரூ சக்தி கறிமசால் தூள் சரம் ' -> '10 ரூ சக்தி கறிமசால் தூள் சரம்'
+✨ Cleaned up name for '15 ரூ மேகி ' -> '15 ரூ மேகி'

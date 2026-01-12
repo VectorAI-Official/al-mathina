@@ -151,6 +151,12 @@ func main() {
 		adminAPI.POST("/stores/:phone/payment-history", handlers.AddPaymentHistory)
 		adminAPI.DELETE("/stores/:phone/payment-history/:timestamp", handlers.RemovePaymentHistory)
 		adminAPI.PUT("/stores/:phone/paid-amount", handlers.UpdatePaidAmount)
+
+		// Migration Routes
+		adminAPI.POST("/migration/stock-to-inventory", handlers.MigrateStockToInventory)
+		adminAPI.POST("/migration/deduplicate-inventory", handlers.DeduplicateInventory)
+		adminAPI.POST("/migration/sync-stock", handlers.SyncStockToProducts)
+		adminAPI.POST("/migration/cleanup", handlers.CleanupGarbageData)
 	}
 
 	// Admin Orders API routes

@@ -1109,6 +1109,77 @@ func AddProduct(c *gin.Context) {
 	delete(data, "category")
 	delete(data, "brand")
 
+	// AUTO-CREATE OR LINK INVENTORY ITEM
+	// 1. Extract stock (default to 0 if missing)
+	var initialStock int32 = 0
+	if val, ok := data["stock"]; ok {
+		switch v := val.(type) {
+		case float64:
+			initialStock = int32(v)
+		case int:
+			initialStock = int32(v)
+		case int32:
+			initialStock = v
+		case int64:
+			initialStock = int32(v)
+		}
+	}
+
+	productName := data["product_name"].(string)
+	inventoryCol := database.GetCollection("inventory")
+
+	// Check if inventory item with this name already exists (exact match)
+	var existingInventory bson.M
+	err := inventoryCol.FindOne(ctx, bson.M{"inventory_name": productName}).Decode(&existingInventory)
+
+	var inventoryID string
+
+	if err == nil {
+		// FOUND EXISTING: Link to it
+		inventoryID = existingInventory["inventory_id"].(string)
+		fmt.Printf("🔗 Linking new product '%s' to EXISTING inventory '%s'\n", productName, inventoryID)
+
+		// Optional: Add initial stock to existing?
+		// User said "remove duplicate names", implying we should just reuse the item.
+		// If the user is adding a variant, they might expect the stock to be shared.
+		// If they provided stock, maybe we should ADD it to the existing pool?
+		// For now, let's just LINK. If they want to add stock, they can do it via inventory management.
+		// To be safe/helpful, if initialStock > 0, we could increase it.
+		if initialStock > 0 {
+			_, _ = inventoryCol.UpdateOne(
+				ctx,
+				bson.M{"inventory_id": inventoryID},
+				bson.M{
+					"$inc": bson.M{"stock_quantity": initialStock},
+					"$set": bson.M{"updated_at": time.Now()},
+				},
+			)
+		}
+
+	} else {
+		// NOT FOUND: Create New
+		inventoryID = uuid.New().String()
+		newInventoryItem := bson.M{
+			"inventory_id":    inventoryID,
+			"inventory_name":  productName,
+			"stock_quantity":  initialStock,
+			"unit":            "units",
+			"min_stock_level": 5,
+			"is_active":       true,
+			"last_updated":    time.Now(),
+		}
+
+		if _, err := inventoryCol.InsertOne(ctx, newInventoryItem); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create associated inventory item"})
+			return
+		}
+		fmt.Printf("✨ Created NEW inventory '%s' for product '%s'\n", inventoryID, productName)
+	}
+
+	// 4. Update Product Data
+	data["inventory_id"] = inventoryID
+	delete(data, "stock") // Remove stock from product document
+
 	productsCol := database.GetCollection("products")
 	result, err := productsCol.InsertOne(ctx, data)
 	if err != nil {
@@ -1158,6 +1229,7 @@ func UpdateProduct(c *gin.Context) {
 
 	// Remove item_id if it's in the data (prevent modification)
 	delete(data, "item_id")
+	delete(data, "stock") // Prevent direct stock updates (managed via inventory)
 
 	productsCol := database.GetCollection("products")
 	result, err := productsCol.UpdateOne(

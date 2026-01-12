@@ -32,20 +32,40 @@ func GetAllProducts(c *gin.Context) {
 	productsCol := database.GetCollection("products")
 
 	// Use bson.D for ordered sort (bson.M doesn't guarantee order)
-	opts := options.Find().SetSort(bson.D{
-		{Key: "category_section", Value: 1},
-		{Key: "category_main", Value: 1},
-		{Key: "category_sub", Value: 1},
-		{Key: "product_name", Value: 1},
-	})
-	cursor, err := productsCol.Find(ctx, bson.M{}, opts)
+	// Use aggregation to lookup inventory details
+	pipeline := []bson.M{
+		{
+			"$lookup": bson.M{
+				"from":         "inventory",
+				"localField":   "inventory_id",
+				"foreignField": "inventory_id",
+				"as":           "inventory_details",
+			},
+		},
+		{
+			"$unwind": bson.M{
+				"path":                       "$inventory_details",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		// Add sorting stage (matches previous Find options)
+		{
+			"$sort": bson.D{
+				{Key: "category_section", Value: 1},
+				{Key: "category_main", Value: 1},
+				{Key: "category_sub", Value: 1},
+				{Key: "product_name", Value: 1},
+			},
+		},
+	}
+
+	cursor, err := productsCol.Aggregate(ctx, pipeline)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch products"})
 		return
 	}
 	defer cursor.Close(ctx)
 
-	// Use bson.M to preserve ALL fields from dashboard (item_id, buying_date, active, etc.)
 	var products []bson.M
 	if err := cursor.All(ctx, &products); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse products"})

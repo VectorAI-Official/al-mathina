@@ -337,6 +337,39 @@ func UpdateInventory(c *gin.Context) {
 		return
 	}
 
+	// AUTO-SYNC: If stock_quantity was updated, sync it to linked products
+	if newQty, ok := updates["stock_quantity"].(float64); ok { // JSON numbers often come as float64
+		go func() {
+			ctx, cancel := database.GetDBContext()
+			defer cancel()
+			_, err := database.GetCollection("products").UpdateMany(
+				ctx,
+				bson.M{"inventory_id": inventoryID},
+				bson.M{"$set": bson.M{"stock": int(newQty), "updated_at": time.Now()}},
+			)
+			if err != nil {
+				log.Printf("⚠️ Failed to auto-sync products for inventory %s: %v", inventoryID, err)
+			} else {
+				log.Printf("✅ Auto-synced products for inventory %s to stock %d", inventoryID, int(newQty))
+			}
+		}()
+	} else if newQty, ok := updates["stock_quantity"].(int32); ok {
+		go func() {
+			ctx, cancel := database.GetDBContext()
+			defer cancel()
+			_, err := database.GetCollection("products").UpdateMany(
+				ctx,
+				bson.M{"inventory_id": inventoryID},
+				bson.M{"$set": bson.M{"stock": int(newQty), "updated_at": time.Now()}},
+			)
+			if err != nil {
+				log.Printf("⚠️ Failed to auto-sync products for inventory %s: %v", inventoryID, err)
+			} else {
+				log.Printf("✅ Auto-synced products for inventory %s to stock %d", inventoryID, int(newQty))
+			}
+		}()
+	}
+
 	log.Printf("✅ Updated inventory: %s", inventoryID)
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Inventory updated successfully",
@@ -415,8 +448,7 @@ func UpdateInventoryStock(c *gin.Context) {
 	)
 
 	if err != nil {
-		log.Printf("❌ Error updating inventory stock: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update stock"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update inventory"})
 		return
 	}
 

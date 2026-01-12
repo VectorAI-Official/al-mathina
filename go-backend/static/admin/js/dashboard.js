@@ -446,7 +446,18 @@ function displayProducts(products, append = false) {
             <td><strong>₹${(product.buying_price ?? 0).toFixed(2)}</strong></td>
             <td><small>${product.buying_date ? new Date(product.buying_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</small></td>
             <td><strong>₹${(product.price ?? 0).toFixed(2)}</strong></td>
-            <td>${product.stock}</td>
+            <td>
+                ${product.stock}
+            </td>
+            <td>
+                ${product.inventory_details ?
+            `<div style="font-size:12px;">
+                        <div><strong>${product.inventory_details.stock_quantity || 0}</strong> <small class="text-muted">Units</small></div>
+                        <div style="color:#666;">${product.inventory_details.total_stock || 0} <small>Pieces</small></div>
+                     </div>` :
+            '<span style="color:#ccc;">-</span>'
+        }
+            </td>
             <td>
                 ${product.inventory_id ?
             `<span class="link-badge link-active" title="Linked to Inventory ID: ${product.inventory_id}">🟢 Linked</span>` :

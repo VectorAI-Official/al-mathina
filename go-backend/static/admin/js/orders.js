@@ -7,6 +7,7 @@
 let allOrders = [];
 let filteredOrders = []; // Currently filtered/displayed orders
 let currentOrder = null;
+let originalOrderItemsSnapshot = [];
 let selectedOrderIds = new Set(); // Track selected order IDs for bulk actions
 let selectedDateFilter = {
     type: 'all', // 'all', 'single', 'range'
@@ -905,6 +906,7 @@ let isEditMode = false;
 
 function toggleEditMode() {
     isEditMode = true;
+    originalOrderItemsSnapshot = getOrderItemsFromTable();
 
     // Show quantity inputs
     document.querySelectorAll('.qty-display').forEach(el => el.style.display = 'none');
@@ -1009,45 +1011,51 @@ function recalculateGrandTotal() {
     const totalEl = document.querySelector('.total-amount');
     if (totalEl) totalEl.textContent = `₹${grandTotal.toFixed(2)}`;
 }
+
+function getOrderItemsFromTable() {
+    return Array.from(document.querySelectorAll('#orderItemsTable tbody tr')).map(row => {
+        const qtyInput = row.querySelector('.qty-input');
+        const priceInput = row.querySelector('.price-input');
+
+        return {
+            item_id: (row.dataset.productId || '').trim(),
+            product_name: (row.querySelector('td:first-child strong')?.textContent || '').trim(),
+            weight: (row.querySelector('td:nth-child(2)')?.textContent || '').trim(),
+            price: parseFloat(priceInput?.value) || 0,
+            quantity: parseInt(qtyInput?.value) || 0
+        };
+    });
+}
+
+function serializeOrderItemsForComparison(items) {
+    const normalized = items.map(item => ({
+        item_id: (item.item_id || '').trim(),
+        product_name: (item.product_name || '').trim(),
+        weight: (item.weight || '').trim(),
+        price: Number(item.price || 0),
+        quantity: Number(item.quantity || 0)
+    }));
+
+    normalized.sort((a, b) => {
+        const keyA = `${a.item_id}||${a.product_name}||${a.weight}`;
+        const keyB = `${b.item_id}||${b.product_name}||${b.weight}`;
+        if (keyA < keyB) return -1;
+        if (keyA > keyB) return 1;
+        if (a.price !== b.price) return a.price - b.price;
+        return a.quantity - b.quantity;
+    });
+
+    return JSON.stringify(normalized);
+}
 async function saveOrderChanges(orderId) {
     if (!confirm('Are you sure you want to save these changes? This will update the order in the database.')) {
         return;
     }
 
-    // Collect updated items
-    const updatedItems = [];
-    let hasChanges = false;
-
-    // Check if number of items changed (products added or deleted)
-    const currentRowCount = document.querySelectorAll('#orderItemsTable tbody tr').length;
-    const originalItemCount = currentOrder.items.length;
-
-    if (currentRowCount !== originalItemCount) {
-        hasChanges = true;
-    }
-
-    document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
-        const qtyInput = row.querySelector('.qty-input');
-        const priceInput = row.querySelector('.price-input');
-
-        const newQuantity = parseInt(qtyInput.value) || 0;
-        const originalQuantity = parseInt(qtyInput.dataset.original);
-
-        const newPrice = parseFloat(priceInput.value) || 0;
-        const originalPrice = parseFloat(priceInput.dataset.original);
-
-        if (newQuantity !== originalQuantity || newPrice !== originalPrice) {
-            hasChanges = true;
-        }
-
-        updatedItems.push({
-            item_id: row.dataset.productId,
-            product_name: row.querySelector('td:first-child strong').textContent,
-            weight: row.querySelector('td:nth-child(2)').textContent,
-            price: newPrice,
-            quantity: newQuantity
-        });
-    });
+    const updatedItems = getOrderItemsFromTable();
+    const hasChanges =
+        serializeOrderItemsForComparison(originalOrderItemsSnapshot) !==
+        serializeOrderItemsForComparison(updatedItems);
 
     if (!hasChanges) {
         alert('No changes were made. Add or remove products, or change quantities.');
@@ -2284,7 +2292,6 @@ function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) 
         if (qtyInputExisting) {
             const currentQty = parseInt(qtyInputExisting.value) || 0;
             qtyInputExisting.value = currentQty + quantity;
-            qtyInputExisting.dataset.original = qtyInputExisting.value;
 
             // Update display
             const qtyDisplay = existingRow.querySelector('.qty-display');

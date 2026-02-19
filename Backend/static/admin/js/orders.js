@@ -1009,33 +1009,33 @@ async function saveOrderChanges(orderId) {
     if (!confirm('Are you sure you want to save these changes? This will update the order in the database.')) {
         return;
     }
-    
+
     // Collect updated items
     const updatedItems = [];
     let hasChanges = false;
-    
+
     // Check if number of items changed (products added or deleted)
     const currentRowCount = document.querySelectorAll('#orderItemsTable tbody tr').length;
     const originalItemCount = currentOrder.items.length;
-    
+
     if (currentRowCount !== originalItemCount) {
         hasChanges = true;
     }
-    
+
     document.querySelectorAll('#orderItemsTable tbody tr').forEach(row => {
         const qtyInput = row.querySelector('.qty-input');
         const priceInput = row.querySelector('.price-input');
-        
+
         const newQuantity = parseInt(qtyInput.value) || 0;
         const originalQuantity = parseInt(qtyInput.dataset.original);
-        
+
         const newPrice = parseFloat(priceInput.value) || 0;
         const originalPrice = parseFloat(priceInput.dataset.original);
-        
+
         if (newQuantity !== originalQuantity || newPrice !== originalPrice) {
             hasChanges = true;
         }
-        
+
         updatedItems.push({
             product_id: row.dataset.productId,
             product_name: row.querySelector('td:first-child strong').textContent,

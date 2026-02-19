@@ -199,7 +199,7 @@ func SendOrderNotification(
 
 	log.Printf("✅ FCM: Notification sent successfully!\n")
 	log.Printf("   Message ID: %s\n", response)
-	log.Println("============================================================\n")
+	log.Println("============================================================")
 
 	return true
 }

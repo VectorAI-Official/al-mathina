@@ -5,7 +5,6 @@ Set-Location -LiteralPath 'C:\Users\faisa\AndroidStudioProjects\AlMathina\flutte
 # LOCAL DEVELOPMENT (Local MongoDB)
 cd "D:\AlMathina\Backend" ; & ".\venv\Scripts\Activate.ps1" ; python -m uvicorn main_local:app --reload --host 127.0.0.1 --port 8000
 
-# PRODUCTION MODE (MongoDB Atlas + Cloudinary)
 cd "c:\Users\faisa\AndroidStudioProjects\AlMathina\Backend" ; & ".\venv\Scripts\Activate.ps1" ; $env:ENVIRONMENT='production' ; python -m uvicorn main_production:app --reload --host 0.0.0.0 --port 8000
 
 cd Backend; python -m uvicorn main_local:app --reload --host 0.0.0.0 --port 8000

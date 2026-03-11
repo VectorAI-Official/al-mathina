@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"al-mathina-backend/config"
@@ -16,6 +19,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// orderCounter ensures unique order IDs even when multiple sections are created
+// at the same nanosecond on fast hardware
+var orderCounter uint64
 
 // ===== USER PROFILE HANDLERS =====
 
@@ -165,7 +172,11 @@ func CreateOrder(c *gin.Context) {
 
 	log.Printf("🔵 CreateOrder: phone=%s, items=%d, total=%.2f", req.UserPhone, len(req.Items), req.TotalAmount)
 
-	ctx, cancel := database.GetDBContext()
+	// Use a generous timeout for order creation: large orders (100-500 items) do N+1
+	// product enrichment queries (up to 2 DB calls per item) + one insert per section.
+	// 500 items × 2 slow Atlas roundtrips = 1000 queries; 15 minutes ensures even the
+	// largest realistic order completes without a spurious context-deadline 500 error.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	// Fetch user name from database if not provided (matching FastAPI)
@@ -192,6 +203,50 @@ func CreateOrder(c *gin.Context) {
 	// Maintain item compatibility, ensure subtotals, and ENRICH with product details
 	productsCol := database.GetCollection("products")
 
+	// ── Batch-fetch all products in ONE query instead of N+1 ──────────────────────
+	// Old approach: up to 2 FindOne calls per item (exact + regex fallback) =
+	// 1000 sequential Atlas roundtrips for a 500-item order → 50-100 s of lag.
+	// New approach: 1 Find($in) → in-memory map lookup (O(1) per item);
+	// regex fallback only fires for items genuinely absent by name (rare).
+	uniqueProdNames := make([]string, 0, len(req.Items))
+	seenNames := make(map[string]bool, len(req.Items))
+	for _, item := range req.Items {
+		name := item.ProductName
+		if name == "" {
+			name = item.Brand
+		}
+		if name != "" && !seenNames[name] {
+			seenNames[name] = true
+			uniqueProdNames = append(uniqueProdNames, name)
+		}
+	}
+
+	// batchExact: exact-case match; batchLower: lowercase match for case differences
+	batchExact := make(map[string]models.Product, len(uniqueProdNames))
+	batchLower := make(map[string]models.Product, len(uniqueProdNames))
+	if len(uniqueProdNames) > 0 {
+		proj := options.Find().SetProjection(bson.M{
+			"item_id": 1, "product_name": 1, "weight": 1,
+			"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
+		})
+		cursor, batchErr := productsCol.Find(ctx, bson.M{"product_name": bson.M{"$in": uniqueProdNames}}, proj)
+		if batchErr != nil {
+			log.Printf("⚠️  CreateOrder: batch product fetch error: %v", batchErr)
+		} else {
+			defer cursor.Close(ctx)
+			var batchResults []models.Product
+			if allErr := cursor.All(ctx, &batchResults); allErr != nil {
+				log.Printf("⚠️  CreateOrder: cursor.All error: %v", allErr)
+			}
+			for _, p := range batchResults {
+				batchExact[p.ProductName] = p
+				batchLower[strings.ToLower(p.ProductName)] = p
+			}
+			log.Printf("📦 CreateOrder: batch-fetched %d/%d unique products in 1 query",
+				len(batchResults), len(uniqueProdNames))
+		}
+	}
+
 	for i := range req.Items {
 		// 1. Map Legacy/Flutter fields if standard fields are empty
 		if req.Items[i].ProductName == "" && req.Items[i].Brand != "" {
@@ -201,22 +256,25 @@ func CreateOrder(c *gin.Context) {
 			req.Items[i].MainCategory = req.Items[i].Category
 		}
 
-		// 2. Enrich with Product Details from DB if missing (Crucial for Weight/Image)
-		// Flutter app sends minimal data (name/price/qty), we need to fill the rest.
+		// 2. Enrich with Product Details — O(1) map lookup, no extra DB call per item
 		if req.Items[i].ProductName != "" {
 			var product models.Product
-			// Try exact match on name
-			err := productsCol.FindOne(ctx, bson.M{"product_name": req.Items[i].ProductName}).Decode(&product)
-
-			// If not found, try case-insensitive regex
-			if err != nil {
+			var found bool
+			// Try exact-case map first (fastest path)
+			product, found = batchExact[req.Items[i].ProductName]
+			if !found {
+				// Try lowercase map (handles case differences without a DB call)
+				product, found = batchLower[strings.ToLower(req.Items[i].ProductName)]
+			}
+			if !found {
+				// True last-resort: regex for names not in the batch (e.g. spelling diff)
 				productsCol.FindOne(ctx, bson.M{
 					"product_name": bson.M{"$regex": primitive.Regex{Pattern: "^" + req.Items[i].ProductName + "$", Options: "i"}},
 				}).Decode(&product)
 			}
 
 			if product.ItemID != "" {
-				// Found product! Fill in missing fields
+				// Found product — fill in missing fields
 				if req.Items[i].ItemID == "" {
 					req.Items[i].ItemID = product.ItemID
 				}
@@ -235,7 +293,8 @@ func CreateOrder(c *gin.Context) {
 				if req.Items[i].Subcategory == "" {
 					req.Items[i].Subcategory = product.Subcategory
 				}
-				log.Printf("✨ Enriched item: %s -> ID: %s, Weight: %s", req.Items[i].ProductName, product.ItemID, product.Weight)
+				log.Printf("✨ Enriched item: %s -> ID: %s, Weight: %s",
+					req.Items[i].ProductName, product.ItemID, product.Weight)
 			}
 		}
 
@@ -279,8 +338,12 @@ func CreateOrder(c *gin.Context) {
 			sectionTotal += item.Subtotal
 		}
 
-		// Generate order ID for this section
-		orderID := fmt.Sprintf("ORD-%d", time.Now().UnixNano()/1000000)
+		// Generate order ID for this section.
+		// Use nanoseconds + atomic counter to guarantee uniqueness across sections
+		// (dividing by 1,000,000 gave millisecond precision which caused duplicate IDs
+		// when multiple sections were inserted within the same millisecond → 500 error).
+		ordering := atomic.AddUint64(&orderCounter, 1)
+		orderID := fmt.Sprintf("ORD-%d-%d", time.Now().UnixNano(), ordering)
 
 		// Create order document for this section
 		order := models.Order{

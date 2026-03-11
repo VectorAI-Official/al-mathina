@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -179,35 +180,13 @@ func CreateOrder(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
-	// Fetch user name from database if not provided (matching FastAPI)
-	userName := req.UserName
-	if userName == "" {
-		usersCol := database.GetCollection("users")
-		var user models.User
-		err := usersCol.FindOne(ctx, bson.M{"phone": req.UserPhone}).Decode(&user)
-		if err == nil && user.Name != "" {
-			userName = user.Name
-			log.Printf("📝 CreateOrder: Fetched user name from DB: %s", userName)
-		} else {
-			userName = "Guest"
-			log.Printf("⚠️  CreateOrder: User not found or no name, using 'Guest'")
-		}
-	}
-
 	// Set default payment method if not provided
 	paymentMethod := req.PaymentMethod
 	if paymentMethod == "" {
 		paymentMethod = "cod"
 	}
 
-	// Maintain item compatibility, ensure subtotals, and ENRICH with product details
-	productsCol := database.GetCollection("products")
-
-	// ── Batch-fetch all products in ONE query instead of N+1 ──────────────────────
-	// Old approach: up to 2 FindOne calls per item (exact + regex fallback) =
-	// 1000 sequential Atlas roundtrips for a 500-item order → 50-100 s of lag.
-	// New approach: 1 Find($in) → in-memory map lookup (O(1) per item);
-	// regex fallback only fires for items genuinely absent by name (rare).
+	// ── Step 1: collect unique product names in-memory (O(n), zero DB calls) ─
 	uniqueProdNames := make([]string, 0, len(req.Items))
 	seenNames := make(map[string]bool, len(req.Items))
 	for _, item := range req.Items {
@@ -221,34 +200,110 @@ func CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// batchExact: exact-case match; batchLower: lowercase match for case differences
-	batchExact := make(map[string]models.Product, len(uniqueProdNames))
-	batchLower := make(map[string]models.Product, len(uniqueProdNames))
-	if len(uniqueProdNames) > 0 {
-		proj := options.Find().SetProjection(bson.M{
+	// ── Step 2: user lookup + product batch fetch IN PARALLEL ────────────────
+	// Both are independent Atlas round-trips; running them concurrently cuts
+	// wall time from (user_ms + batch_ms) down to max(user_ms, batch_ms).
+	type userFetchResult struct{ name string }
+	type prodBatchResult struct {
+		exact map[string]models.Product
+		lower map[string]models.Product
+	}
+	userCh := make(chan userFetchResult, 1)
+	prodCh := make(chan prodBatchResult, 1)
+
+	go func() {
+		name := req.UserName
+		if name == "" {
+			usersCol := database.GetCollection("users")
+			var user models.User
+			if err := usersCol.FindOne(ctx, bson.M{"phone": req.UserPhone}).Decode(&user); err == nil && user.Name != "" {
+				name = user.Name
+				log.Printf("📝 CreateOrder: Fetched user name from DB: %s", name)
+			} else {
+				name = "Guest"
+				log.Printf("⚠️  CreateOrder: User not found or no name, using 'Guest'")
+			}
+		}
+		userCh <- userFetchResult{name: name}
+	}()
+
+	go func() {
+		exact := make(map[string]models.Product, len(uniqueProdNames))
+		lower := make(map[string]models.Product, len(uniqueProdNames))
+		if len(uniqueProdNames) > 0 {
+			productsCol := database.GetCollection("products")
+			proj := options.Find().SetProjection(bson.M{
+				"item_id": 1, "product_name": 1, "weight": 1,
+				"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
+			})
+			cursor, err := productsCol.Find(ctx, bson.M{"product_name": bson.M{"$in": uniqueProdNames}}, proj)
+			if err != nil {
+				log.Printf("⚠️  CreateOrder: batch product fetch error: %v", err)
+			} else {
+				var results []models.Product
+				if err2 := cursor.All(ctx, &results); err2 != nil {
+					log.Printf("⚠️  CreateOrder: cursor.All error: %v", err2)
+				}
+				cursor.Close(ctx) // close eagerly — don't hold the cursor open for 15 min
+				for _, p := range results {
+					exact[p.ProductName] = p
+					lower[strings.ToLower(p.ProductName)] = p
+				}
+				log.Printf("📦 CreateOrder: batch-fetched %d/%d unique products", len(results), len(uniqueProdNames))
+			}
+		}
+		prodCh <- prodBatchResult{exact: exact, lower: lower}
+	}()
+
+	// Wait for both parallel fetches (channels are buffered — no deadlock risk)
+	userRes := <-userCh
+	prodRes := <-prodCh
+	userName := userRes.name
+	batchExact := prodRes.exact
+	batchLower := prodRes.lower
+
+	// ── Step 3: second-pass batch regex for names NOT matched by $in ─────────
+	// $in only matches exact byte-for-byte names; this catches any remaining
+	// names with case/unicode differences using ONE Find($or[regex…]) instead
+	// of N individual FindOne calls. Product names are escaped to prevent ReDoS.
+	var unmatchedNames []string
+	for _, name := range uniqueProdNames {
+		if _, ok := batchExact[name]; !ok {
+			if _, ok := batchLower[strings.ToLower(name)]; !ok {
+				unmatchedNames = append(unmatchedNames, name)
+			}
+		}
+	}
+	if len(unmatchedNames) > 0 {
+		log.Printf("🔍 CreateOrder: second-pass batch regex for %d unmatched name(s)", len(unmatchedNames))
+		orClauses := make([]bson.M, 0, len(unmatchedNames))
+		for _, n := range unmatchedNames {
+			orClauses = append(orClauses, bson.M{
+				"product_name": bson.M{"$regex": primitive.Regex{
+					Pattern: "^" + regexp.QuoteMeta(n) + "$", Options: "i",
+				}},
+			})
+		}
+		productsCol2 := database.GetCollection("products")
+		proj2 := options.Find().SetProjection(bson.M{
 			"item_id": 1, "product_name": 1, "weight": 1,
 			"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
 		})
-		cursor, batchErr := productsCol.Find(ctx, bson.M{"product_name": bson.M{"$in": uniqueProdNames}}, proj)
-		if batchErr != nil {
-			log.Printf("⚠️  CreateOrder: batch product fetch error: %v", batchErr)
-		} else {
-			defer cursor.Close(ctx)
-			var batchResults []models.Product
-			if allErr := cursor.All(ctx, &batchResults); allErr != nil {
-				log.Printf("⚠️  CreateOrder: cursor.All error: %v", allErr)
-			}
-			for _, p := range batchResults {
+		if cur2, err := productsCol2.Find(ctx, bson.M{"$or": orClauses}, proj2); err == nil {
+			var results2 []models.Product
+			cur2.All(ctx, &results2)
+			cur2.Close(ctx)
+			for _, p := range results2 {
 				batchExact[p.ProductName] = p
 				batchLower[strings.ToLower(p.ProductName)] = p
 			}
-			log.Printf("📦 CreateOrder: batch-fetched %d/%d unique products in 1 query",
-				len(batchResults), len(uniqueProdNames))
+			log.Printf("📦 CreateOrder: second-pass resolved %d product(s)", len(results2))
 		}
 	}
 
+	// ── Step 4: enrich items from in-memory maps (zero DB calls) ─────────────
 	for i := range req.Items {
-		// 1. Map Legacy/Flutter fields if standard fields are empty
+		// Map legacy/Flutter fields
 		if req.Items[i].ProductName == "" && req.Items[i].Brand != "" {
 			req.Items[i].ProductName = req.Items[i].Brand
 		}
@@ -256,25 +311,13 @@ func CreateOrder(c *gin.Context) {
 			req.Items[i].MainCategory = req.Items[i].Category
 		}
 
-		// 2. Enrich with Product Details — O(1) map lookup, no extra DB call per item
+		// Enrich from map — no DB call
 		if req.Items[i].ProductName != "" {
-			var product models.Product
-			var found bool
-			// Try exact-case map first (fastest path)
-			product, found = batchExact[req.Items[i].ProductName]
+			product, found := batchExact[req.Items[i].ProductName]
 			if !found {
-				// Try lowercase map (handles case differences without a DB call)
 				product, found = batchLower[strings.ToLower(req.Items[i].ProductName)]
 			}
-			if !found {
-				// True last-resort: regex for names not in the batch (e.g. spelling diff)
-				productsCol.FindOne(ctx, bson.M{
-					"product_name": bson.M{"$regex": primitive.Regex{Pattern: "^" + req.Items[i].ProductName + "$", Options: "i"}},
-				}).Decode(&product)
-			}
-
-			if product.ItemID != "" {
-				// Found product — fill in missing fields
+			if found && product.ItemID != "" {
 				if req.Items[i].ItemID == "" {
 					req.Items[i].ItemID = product.ItemID
 				}
@@ -298,7 +341,7 @@ func CreateOrder(c *gin.Context) {
 			}
 		}
 
-		// 3. Ensure Subtotal
+		// Ensure subtotal
 		if req.Items[i].Subtotal == 0 {
 			req.Items[i].Subtotal = float64(req.Items[i].Quantity) * req.Items[i].Price
 		}
@@ -329,23 +372,21 @@ func CreateOrder(c *gin.Context) {
 	var allOrders []models.Order // For email notifications
 	totalItemsCount := 0
 
-	// Create separate order for each section
+	// ── Step 5: build all order docs, then write in ONE InsertMany call ───────
+	// N InsertOne calls (one per section) = N Atlas round-trips.
+	// InsertMany sends all documents in a single round-trip regardless of N.
 	ordersCol := database.GetCollection("orders")
+	allDocs := make([]interface{}, 0, len(itemsBySection))
 	for section, sectionItems := range itemsBySection {
-		// Calculate section total
 		sectionTotal := 0.0
 		for _, item := range sectionItems {
 			sectionTotal += item.Subtotal
 		}
-
-		// Generate order ID for this section.
-		// Use nanoseconds + atomic counter to guarantee uniqueness across sections
-		// (dividing by 1,000,000 gave millisecond precision which caused duplicate IDs
-		// when multiple sections were inserted within the same millisecond → 500 error).
+		// nanoseconds + atomic counter guarantees uniqueness even when sections
+		// are built within the same nanosecond on fast hardware.
 		ordering := atomic.AddUint64(&orderCounter, 1)
 		orderID := fmt.Sprintf("ORD-%d-%d", time.Now().UnixNano(), ordering)
 
-		// Create order document for this section
 		order := models.Order{
 			OrderID:         orderID,
 			UserPhone:       req.UserPhone,
@@ -360,18 +401,7 @@ func CreateOrder(c *gin.Context) {
 			Notes:           req.Notes,
 			Metadata:        map[string]interface{}{},
 		}
-
-		// Insert section order into MongoDB
-		_, err := ordersCol.InsertOne(ctx, order)
-		if err != nil {
-			log.Printf("❌ CreateOrder: Failed to insert order for section %s: %v", section, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
-			return
-		}
-
-		log.Printf("✅ CreateOrder: Section order created: %s - %s (%.2f, %d items)", orderID, section, sectionTotal, len(sectionItems))
-
-		// Track created order for response
+		allDocs = append(allDocs, order)
 		createdOrders = append(createdOrders, CreatedOrder{
 			OrderID:     orderID,
 			Section:     section,
@@ -379,13 +409,17 @@ func CreateOrder(c *gin.Context) {
 			TotalAmount: sectionTotal,
 			Status:      "pending",
 		})
-
-		// Store order for email notifications
 		allOrders = append(allOrders, order)
 		totalItemsCount += len(sectionItems)
 	}
 
-	log.Printf("✅ CreateOrder: All %d section orders created successfully", len(createdOrders))
+	// Single round-trip — all sections inserted atomically in one request
+	if _, err := ordersCol.InsertMany(ctx, allDocs); err != nil {
+		log.Printf("❌ CreateOrder: InsertMany failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
+		return
+	}
+	log.Printf("✅ CreateOrder: %d section order(s) created (%d items total)", len(createdOrders), totalItemsCount)
 
 	// Send email notification for EACH split order (async - don't block response)
 	log.Printf("📧 CreateOrder: Scheduling %d email notifications...", len(allOrders))

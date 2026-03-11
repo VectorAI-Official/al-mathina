@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -262,10 +260,13 @@ func CreateOrder(c *gin.Context) {
 	batchExact := prodRes.exact
 	batchLower := prodRes.lower
 
-	// ── Step 3: second-pass batch regex for names NOT matched by $in ─────────
-	// $in only matches exact byte-for-byte names; this catches any remaining
-	// names with case/unicode differences using ONE Find($or[regex…]) instead
-	// of N individual FindOne calls. Product names are escaped to prevent ReDoS.
+	// ── Step 3: second-pass case-insensitive $in with collation ─────────────
+	// MongoDB collation (strength=2) matches names case-insensitively without
+	// regex — it stays index-friendly and costs exactly ONE round-trip for any
+	// number of unmatched names.
+	// Old $or[regex…] approach: evaluated each /^name$/i against every document
+	// without index benefit → O(N×collection_size) for N unmatched names.
+	// With 1000-item orders even 100 unmatched names would cause seconds of lag.
 	var unmatchedNames []string
 	for _, name := range uniqueProdNames {
 		if _, ok := batchExact[name]; !ok {
@@ -275,21 +276,16 @@ func CreateOrder(c *gin.Context) {
 		}
 	}
 	if len(unmatchedNames) > 0 {
-		log.Printf("🔍 CreateOrder: second-pass batch regex for %d unmatched name(s)", len(unmatchedNames))
-		orClauses := make([]bson.M, 0, len(unmatchedNames))
-		for _, n := range unmatchedNames {
-			orClauses = append(orClauses, bson.M{
-				"product_name": bson.M{"$regex": primitive.Regex{
-					Pattern: "^" + regexp.QuoteMeta(n) + "$", Options: "i",
-				}},
-			})
-		}
+		log.Printf("🔍 CreateOrder: second-pass collation $in for %d unmatched name(s)", len(unmatchedNames))
 		productsCol2 := database.GetCollection("products")
-		proj2 := options.Find().SetProjection(bson.M{
-			"item_id": 1, "product_name": 1, "weight": 1,
-			"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
-		})
-		if cur2, err := productsCol2.Find(ctx, bson.M{"$or": orClauses}, proj2); err == nil {
+		proj2 := options.Find().
+			SetProjection(bson.M{
+				"item_id": 1, "product_name": 1, "weight": 1,
+				"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
+			}).
+			SetCollation(&options.Collation{Locale: "en", Strength: 2})
+		if cur2, err := productsCol2.Find(ctx,
+			bson.M{"product_name": bson.M{"$in": unmatchedNames}}, proj2); err == nil {
 			var results2 []models.Product
 			cur2.All(ctx, &results2)
 			cur2.Close(ctx)

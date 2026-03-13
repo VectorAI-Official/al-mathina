@@ -389,7 +389,6 @@ func UpdateMainCategory(c *gin.Context) {
 	hierarchyCol := database.GetCollection("category_hierarchy")
 	metadataCol := database.GetCollection("category_metadata")
 	productsCol := database.GetCollection("products")
-
 	// Update main category name in hierarchy if new_name provided
 	if reqBody.NewName != nil && *reqBody.NewName != mainCategoryName {
 		newName := *reqBody.NewName
@@ -1300,6 +1299,7 @@ func DeleteProduct(c *gin.Context) {
 	}
 
 	productsCol := database.GetCollection("products")
+	usersCol := database.GetCollection("users")
 
 	// Get product to check for image
 	var product bson.M
@@ -1341,6 +1341,20 @@ func DeleteProduct(c *gin.Context) {
 	}
 
 	fmt.Printf("   ✓ Product document deleted from database\n")
+	if itemID, ok := product["item_id"].(string); ok && itemID != "" {
+		cleanupResult, cleanupErr := usersCol.UpdateMany(ctx,
+			bson.M{"favorites": itemID},
+			bson.M{
+				"$pull": bson.M{"favorites": itemID},
+				"$set":  bson.M{"updated_at": time.Now()},
+			},
+		)
+		if cleanupErr != nil {
+			log.Printf("⚠️ Failed to remove deleted product %s from user favorites: %v", itemID, cleanupErr)
+		} else if cleanupResult.ModifiedCount > 0 {
+			fmt.Printf("   ✓ Removed item_id %s from %d user favorite list(s)\n", itemID, cleanupResult.ModifiedCount)
+		}
+	}
 	fmt.Printf("✅ PRODUCT DELETION COMPLETE: %v\n", product["product_name"])
 
 	c.JSON(http.StatusOK, gin.H{

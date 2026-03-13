@@ -815,33 +815,59 @@ func GetFavorites(c *gin.Context) {
 
 	log.Printf("🔍 GetFavorites: Found %d favorites for user %s", len(user.Favorites), phone)
 
-	// Parallel batch processing: Fetch all favorite products concurrently
-	type productResult struct {
-		product map[string]interface{}
-		err     error
-	}
-
-	resultChans := make([]chan productResult, len(user.Favorites))
-
-	// Launch goroutines for each favorite
-	for i, itemID := range user.Favorites {
-		resultChans[i] = make(chan productResult, 1)
-		go func(id string, ch chan productResult, index int) {
-			var product map[string]interface{}
-			err := productsCol.FindOne(ctx, bson.M{"item_id": id}).Decode(&product)
-			ch <- productResult{product: product, err: err}
-		}(itemID, resultChans[i], i)
-	}
-
-	// Collect results from all goroutines
+	// Batch-fetch all favorite products in ONE query instead of N goroutines
+	// Old approach: spawn N goroutines → N FindOne calls → risk of context timeout
+	// before slow goroutines complete → "broken pipe" errors.
+	// New approach: single $in query for all favorite IDs → 1 round-trip.
 	favoriteProducts := []map[string]interface{}{}
-	for i, itemID := range user.Favorites {
-		result := <-resultChans[i]
-		if result.err != nil {
-			log.Printf("⚠️ GetFavorites: Product not found: %s", itemID)
+	if len(user.Favorites) == 0 {
+		log.Printf("✅ GetFavorites: User has no favorites")
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"favorites": favoriteProducts,
+		})
+		return
+	}
+
+	// Batch-fetch all products by item_id in single Find call
+	cursor, err := productsCol.Find(ctx, bson.M{"item_id": bson.M{"$in": user.Favorites}})
+	if err != nil {
+		log.Printf("⚠️ GetFavorites: Batch fetch error: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"favorites": []map[string]interface{}{},
+		})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var products []map[string]interface{}
+	if err := cursor.All(ctx, &products); err != nil {
+		log.Printf("⚠️ GetFavorites: Parse error: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"success":   true,
+			"favorites": []map[string]interface{}{},
+		})
+		return
+	}
+
+	// Build lookup map for fast O(1) access by item_id
+	productMap := make(map[string]map[string]interface{}, len(products))
+	for _, p := range products {
+		if itemID, ok := p["item_id"].(string); ok {
+			productMap[itemID] = p
+		}
+	}
+
+	// Reconstruct products in original favorite order (preserve user's ordering intent)
+	missingItemIDs := make([]string, 0)
+	for _, itemID := range user.Favorites {
+		product, ok := productMap[itemID]
+		if !ok {
+			log.Printf("⚠️ GetFavorites: Product not found or missing item_id: %s", itemID)
+			missingItemIDs = append(missingItemIDs, itemID)
 			continue // Skip if product not found
 		}
-		product := result.product
 
 		// Safely convert stock to int (handle int, int32, int64, float64)
 		stock := 0
@@ -890,6 +916,19 @@ func GetFavorites(c *gin.Context) {
 			"category_main":       categoryMain,
 			"category_breadcrumb": categorySection + " > " + categoryMain + " > " + categorySub,
 		})
+	}
+
+	// Self-heal orphaned favorites caused by product deletions that did not
+	// clean up users.favorites at write time.
+	if len(missingItemIDs) > 0 {
+		if _, err := usersCol.UpdateOne(ctx, bson.M{"phone": phone}, bson.M{
+			"$pullAll": bson.M{"favorites": missingItemIDs},
+			"$set":     bson.M{"updated_at": time.Now()},
+		}); err != nil {
+			log.Printf("⚠️ GetFavorites: Failed to prune orphan favorites for %s: %v", phone, err)
+		} else {
+			log.Printf("🧹 GetFavorites: Pruned %d orphan favorite(s) for user %s", len(missingItemIDs), phone)
+		}
 	}
 
 	log.Printf("✅ GetFavorites: Returning %d products for user %s", len(favoriteProducts), phone)

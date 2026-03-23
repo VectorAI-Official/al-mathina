@@ -441,6 +441,9 @@ func GetStoreDetail(c *gin.Context) {
 	if err := cursor.All(ctx, &orders); err != nil {
 		orders = []bson.M{}
 	}
+	if orders == nil {
+		orders = []bson.M{}
+	}
 
 	// Calculate revenue statistics (date-filtered)
 	totalOrders := len(orders)

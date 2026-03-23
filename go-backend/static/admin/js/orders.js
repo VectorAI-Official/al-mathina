@@ -1238,6 +1238,20 @@ function generateInvoiceHTML(order, opts = {}) {
       margin: 6px 0;
       line-height: 1.6;
     }
+
+        .customer-notice {
+            margin: 14px 0 18px 0;
+            padding: ${shareMode ? '12px 14px' : '14px 16px'};
+            border: 2px solid #B71C1C;
+            background: #FFF3F3;
+            color: #B71C1C;
+            font-size: ${shareMode ? '18px' : '22px'};
+            font-weight: 800;
+            line-height: 1.4;
+            text-align: center;
+            border-radius: 8px;
+            letter-spacing: 0.2px;
+        }
     
     .invoice-meta {
       text-align: right;
@@ -1496,6 +1510,9 @@ function generateInvoiceHTML(order, opts = {}) {
         <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
       </div>
     </div>
+
+    <!-- Customer Notice -->
+    <div class="customer-notice">தயவு செய்து பொருளை சரிபார்த்து பெற்றுக்கொள்ளவும் இப்படிக்கு நிர்வாகம்</div>
     
     <!-- Items Table -->
     <table class="items-table">

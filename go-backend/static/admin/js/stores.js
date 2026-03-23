@@ -728,7 +728,9 @@ async function viewStoreDetail(phone) {
 
 // Display store detail in modal
 function displayStoreDetail(data) {
-    const { store, orders, revenue } = data;
+    const store = data?.store || {};
+    const revenue = data?.revenue || {};
+    const orders = Array.isArray(data?.orders) ? data.orders : [];
 
     // Personal information
     document.getElementById('detailStoreName').textContent = store.store_details?.store_name || 'N/A';
@@ -776,8 +778,9 @@ function displayStoreDetail(data) {
 // Display store orders as slim cards
 function displayStoreOrders(orders) {
     const container = document.getElementById('storeOrders');
+    const safeOrders = Array.isArray(orders) ? orders : [];
 
-    if (orders.length === 0) {
+    if (safeOrders.length === 0) {
         container.innerHTML = `
             <div class="empty-orders">
                 <i class="fas fa-inbox"></i>
@@ -787,7 +790,7 @@ function displayStoreOrders(orders) {
         return;
     }
 
-    container.innerHTML = orders.map(order => {
+    container.innerHTML = safeOrders.map(order => {
         const statusClass = getStatusClass(order.status);
         const itemCount = order.items?.length || 0;
 

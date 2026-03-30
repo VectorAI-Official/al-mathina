@@ -176,7 +176,7 @@ func GetUserOrders(c *gin.Context) {
 // CreateOrder creates a new order and sends email notification
 // POST /api/orders
 // Body: {user_phone, user_name, delivery_address, items[], total_amount, notes}
-func  CreateOrder(c *gin.Context) {
+func CreateOrder(c *gin.Context) {
 	var req struct {
 		UserPhone       string                 `json:"user_phone" binding:"required"`
 		UserName        string                 `json:"user_name"` // Optional - will be fetched from DB if not provided

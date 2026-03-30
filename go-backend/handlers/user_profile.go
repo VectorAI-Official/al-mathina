@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -24,6 +26,18 @@ import (
 var orderCounter uint64
 
 // ===== USER PROFILE HANDLERS =====
+
+func isMongoNotFound(err error) bool {
+	return errors.Is(err, mongo.ErrNoDocuments)
+}
+
+func respondMongoUnavailable(c *gin.Context, operation string, err error) {
+	log.Printf("❌ %s: MongoDB unavailable: %v", operation, err)
+	c.JSON(http.StatusServiceUnavailable, gin.H{
+		"error":   "Database temporarily unavailable",
+		"message": "MongoDB is temporarily unable to serve this request. Please retry shortly.",
+	})
+}
 
 // GetUserProfile retrieves user profile by phone number
 // GET /api/profile/:phone
@@ -40,8 +54,13 @@ func GetUserProfile(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetUserProfile", err)
+			return
+		}
+
 		// User not found - auto-create with defaults (matching FastAPI)
-		log.Printf("📝 GetUserProfile: Creating new user for phone=%s", phone)
+		log.Printf("📝 GetUserProfile: No user found, creating default user for phone=%s", phone)
 		newUser := models.User{
 			Phone:     phone,
 			Name:      "",
@@ -672,8 +691,13 @@ func GetStoreDetails(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetStoreDetails", err)
+			return
+		}
+
 		// User not found - auto-create with defaults (matching FastAPI)
-		log.Printf("📝 GetStoreDetails: Creating new user for phone=%s", phone)
+		log.Printf("📝 GetStoreDetails: No user found, creating default user for phone=%s", phone)
 		newUser := models.User{
 			Phone:     phone,
 			Name:      "",
@@ -791,8 +815,13 @@ func GetFavorites(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetFavorites", err)
+			return
+		}
+
 		// User not found - auto-create with defaults (matching FastAPI)
-		log.Printf("📝 GetFavorites: Creating new user for phone=%s", phone)
+		log.Printf("📝 GetFavorites: No user found, creating default user for phone=%s", phone)
 		newUser := bson.M{
 			"phone":      phone,
 			"name":       "",
@@ -972,6 +1001,11 @@ func AddFavorite(c *gin.Context) {
 	err = usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "AddFavorite", err)
+			return
+		}
+
 		// Create user with favorites array
 		newUser := bson.M{
 			"phone":      phone,

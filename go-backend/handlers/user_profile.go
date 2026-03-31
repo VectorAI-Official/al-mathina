@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -24,6 +26,23 @@ import (
 var orderCounter uint64
 
 // ===== USER PROFILE HANDLERS =====
+
+func isMongoNotFound(err error) bool {
+	return errors.Is(err, mongo.ErrNoDocuments)
+}
+
+func respondMongoUnavailable(c *gin.Context, operation string, err error) {
+	log.Printf("❌ %s: MongoDB unavailable: %v", operation, err)
+	c.JSON(http.StatusServiceUnavailable, gin.H{
+		"error":   "Database temporarily unavailable",
+		"message": "MongoDB is temporarily unable to serve this request. Please retry shortly.",
+	})
+}
+
+func respondWriteFailure(c *gin.Context, operation, message string, err error) {
+	log.Printf("❌ %s: %s: %v", operation, message, err)
+	respondMongoUnavailable(c, operation, err)
+}
 
 // GetUserProfile retrieves user profile by phone number
 // GET /api/profile/:phone
@@ -40,8 +59,13 @@ func GetUserProfile(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetUserProfile", err)
+			return
+		}
+
 		// User not found - auto-create with defaults (matching FastAPI)
-		log.Printf("📝 GetUserProfile: Creating new user for phone=%s", phone)
+		log.Printf("📝 GetUserProfile: No user found, creating default user for phone=%s", phone)
 		newUser := models.User{
 			Phone:     phone,
 			Name:      "",
@@ -105,7 +129,7 @@ func UpdateUserProfile(c *gin.Context) {
 
 	_, err := usersCol.UpdateOne(ctx, filter, update, opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		respondWriteFailure(c, "UpdateUserProfile", "failed to update profile", err)
 		return
 	}
 
@@ -127,14 +151,14 @@ func GetUserOrders(c *gin.Context) {
 
 	cursor, err := ordersCol.Find(ctx, bson.M{"user_phone": phone}, opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch orders"})
+		respondMongoUnavailable(c, "GetUserOrders", err)
 		return
 	}
 	defer cursor.Close(ctx)
 
 	var orders []models.Order
 	if err := cursor.All(ctx, &orders); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse orders"})
+		respondMongoUnavailable(c, "GetUserOrders", err)
 		return
 	}
 
@@ -521,7 +545,7 @@ func AddAddress(c *gin.Context) {
 
 	result, err := usersCol.UpdateOne(ctx, bson.M{"phone": phone}, update)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add address"})
+		respondWriteFailure(c, "AddAddress", "failed to add address", err)
 		return
 	}
 
@@ -557,6 +581,10 @@ func UpdateAddress(c *gin.Context) {
 	var user models.User
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "UpdateAddress", err)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -584,7 +612,7 @@ func UpdateAddress(c *gin.Context) {
 
 	result, err := usersCol.UpdateOne(ctx, bson.M{"phone": phone}, update)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update address"})
+		respondWriteFailure(c, "UpdateAddress", "failed to update address", err)
 		return
 	}
 
@@ -618,6 +646,10 @@ func DeleteAddress(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "DeleteAddress", err)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -643,7 +675,7 @@ func DeleteAddress(c *gin.Context) {
 
 	_, err = usersCol.UpdateOne(ctx, bson.M{"phone": phone}, update)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete address"})
+		respondWriteFailure(c, "DeleteAddress", "failed to delete address", err)
 		return
 	}
 
@@ -672,8 +704,13 @@ func GetStoreDetails(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetStoreDetails", err)
+			return
+		}
+
 		// User not found - auto-create with defaults (matching FastAPI)
-		log.Printf("📝 GetStoreDetails: Creating new user for phone=%s", phone)
+		log.Printf("📝 GetStoreDetails: No user found, creating default user for phone=%s", phone)
 		newUser := models.User{
 			Phone:     phone,
 			Name:      "",
@@ -744,6 +781,10 @@ func UpdateStoreDetails(c *gin.Context) {
 	var user models.User
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "UpdateStoreDetails", err)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -758,7 +799,7 @@ func UpdateStoreDetails(c *gin.Context) {
 
 	_, err = usersCol.UpdateOne(ctx, bson.M{"phone": phone}, update)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update store details"})
+		respondWriteFailure(c, "UpdateStoreDetails", "failed to update store details", err)
 		return
 	}
 
@@ -791,8 +832,13 @@ func GetFavorites(c *gin.Context) {
 
 	err := usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetFavorites", err)
+			return
+		}
+
 		// User not found - auto-create with defaults (matching FastAPI)
-		log.Printf("📝 GetFavorites: Creating new user for phone=%s", phone)
+		log.Printf("📝 GetFavorites: No user found, creating default user for phone=%s", phone)
 		newUser := bson.M{
 			"phone":      phone,
 			"name":       "",
@@ -963,6 +1009,10 @@ func AddFavorite(c *gin.Context) {
 	var product models.Product
 	err := productsCol.FindOne(ctx, bson.M{"item_id": req.ItemID}).Decode(&product)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "AddFavorite", err)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
 		return
 	}
@@ -972,6 +1022,11 @@ func AddFavorite(c *gin.Context) {
 	err = usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
 
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "AddFavorite", err)
+			return
+		}
+
 		// Create user with favorites array
 		newUser := bson.M{
 			"phone":      phone,
@@ -981,7 +1036,7 @@ func AddFavorite(c *gin.Context) {
 		}
 		_, err = usersCol.InsertOne(ctx, newUser)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			respondWriteFailure(c, "AddFavorite", "failed to create user", err)
 			return
 		}
 	} else {
@@ -992,7 +1047,7 @@ func AddFavorite(c *gin.Context) {
 		}
 		_, err = usersCol.UpdateOne(ctx, bson.M{"phone": phone}, update)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add favorite"})
+			respondWriteFailure(c, "AddFavorite", "failed to add favorite", err)
 			return
 		}
 	}
@@ -1022,7 +1077,7 @@ func RemoveFavorite(c *gin.Context) {
 
 	result, err := usersCol.UpdateOne(ctx, bson.M{"phone": phone}, update)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove favorite"})
+		respondWriteFailure(c, "RemoveFavorite", "failed to remove favorite", err)
 		return
 	}
 
@@ -1078,11 +1133,19 @@ func ChangePhoneNumber(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Phone number already registered to another user"})
 		return
 	}
+	if err != nil && !isMongoNotFound(err) {
+		respondMongoUnavailable(c, "ChangePhoneNumber", err)
+		return
+	}
 
 	// Get old user data
 	var oldUser models.User
 	err = usersCol.FindOne(ctx, bson.M{"phone": oldPhone}).Decode(&oldUser)
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "ChangePhoneNumber", err)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -1101,7 +1164,7 @@ func ChangePhoneNumber(c *gin.Context) {
 		},
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update phone in users"})
+		respondWriteFailure(c, "ChangePhoneNumber", "failed to update phone in users", err)
 		return
 	}
 
@@ -1140,7 +1203,7 @@ func DeleteUserProfile(c *gin.Context) {
 	// Delete user from MongoDB
 	result, err := usersCol.DeleteOne(ctx, bson.M{"phone": phone})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		respondWriteFailure(c, "DeleteUserProfile", "failed to delete user", err)
 		return
 	}
 
@@ -1179,6 +1242,10 @@ func GetOrderDetails(c *gin.Context) {
 	}).Decode(&order)
 
 	if err != nil {
+		if !isMongoNotFound(err) {
+			respondMongoUnavailable(c, "GetOrderDetails", err)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 		return
 	}
@@ -1186,6 +1253,10 @@ func GetOrderDetails(c *gin.Context) {
 	// Enrich order with user's store details for delivery address
 	var user models.User
 	err = usersCol.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
+	if err != nil && !isMongoNotFound(err) {
+		respondMongoUnavailable(c, "GetOrderDetails", err)
+		return
+	}
 
 	// If delivery_address is not in order or is empty, use store_details
 	// Matching FastAPI logic

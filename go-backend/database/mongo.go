@@ -28,8 +28,12 @@ func ConnectMongoDB(mongoURI string) error {
 	clientOptions := options.Client().
 		ApplyURI(mongoURI).
 		SetMaxPoolSize(100).                       // Max connections in pool (same as Python)
-		SetMinPoolSize(10).                        // Min connections to maintain
+		SetMinPoolSize(0).                         // Avoid forcing idle connections on small Render instances
 		SetMaxConnIdleTime(30 * time.Second).      // Close idle connections after 30s
+		SetConnectTimeout(10 * time.Second).       // Timeout for establishing new TCP/TLS connections
+		SetSocketTimeout(30 * time.Second).        // Timeout for individual socket operations
+		SetRetryReads(true).                       // Retry transient read failures when topology changes
+		SetRetryWrites(true).                      // Retry transient write failures after elections/network blips
 		SetServerSelectionTimeout(5 * time.Second) // Timeout for server selection
 
 	// Connect to MongoDB

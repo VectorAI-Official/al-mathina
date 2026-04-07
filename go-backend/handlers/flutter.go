@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"al-mathina-backend/database"
 	"al-mathina-backend/models"
@@ -24,7 +25,9 @@ import (
 // GET /api/flutter/home
 // Response matches FastAPI exactly: {best_sellers: {...}, sections: [...]}
 func GetHome(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Home payload builds many section/category cards; use a longer timeout than
+	// the global 5s default to avoid context deadline on large catalogs.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	// Use goroutines for parallel batch processing (FastAPI uses async)
@@ -32,8 +35,12 @@ func GetHome(c *gin.Context) {
 		docs []models.MostBought
 		err  error
 	}
+	type hierarchyDoc struct {
+		Section        string              `bson:"section"`
+		MainCategories map[string][]string `bson:"main_categories"`
+	}
 	type sectionsResult struct {
-		data map[string][]models.MainCategory
+		docs []hierarchyDoc
 		err  error
 	}
 
@@ -55,7 +62,7 @@ func GetHome(c *gin.Context) {
 		mostBoughtChan <- mostBoughtResult{docs: docs, err: err}
 	}()
 
-	// Parallel batch 2: Fetch all sections/main_categories from category_hierarchy
+	// Parallel batch 2: Fetch raw section hierarchy docs
 	go func() {
 		hierarchyCol := database.GetCollection("category_hierarchy")
 		cursor, err := hierarchyCol.Find(ctx, bson.M{})
@@ -65,51 +72,13 @@ func GetHome(c *gin.Context) {
 		}
 		defer cursor.Close(ctx)
 
-		// Read all sections from hierarchy (includes sections without products)
-		sectionsMap := make(map[string][]models.MainCategory)
-		for cursor.Next(ctx) {
-			var hierarchyDoc struct {
-				Section        string              `bson:"section"`
-				MainCategories map[string][]string `bson:"main_categories"` // Changed: values are arrays of subcategories
-			}
-			if err := cursor.Decode(&hierarchyDoc); err != nil {
-				log.Printf("Error decoding hierarchy doc: %v", err)
-				continue
-			}
-
-			sectionName := hierarchyDoc.Section
-			// Skip "Most Bought" section (it's handled separately)
-			if sectionName == "" || sectionName == "Most Bought" {
-				continue
-			}
-
-			// Initialize empty array for sections (even if no main categories)
-			mainCats := []models.MainCategory{}
-
-			// Get all main categories from hierarchy if they exist
-			if hierarchyDoc.MainCategories != nil && len(hierarchyDoc.MainCategories) > 0 {
-				// Get sorted keys using Tamil collation for linguistic correctness
-				mainCatNames := make([]string, 0, len(hierarchyDoc.MainCategories))
-				for mainCatName := range hierarchyDoc.MainCategories {
-					mainCatNames = append(mainCatNames, mainCatName)
-				}
-
-				// Create Tamil collator and sort
-				c := collate.New(language.Tamil)
-				c.SortStrings(mainCatNames)
-
-				for _, mainCatName := range mainCatNames {
-					mainCat := buildMainCategoryCard(ctx, sectionName, mainCatName)
-					if mainCat != nil {
-						mainCats = append(mainCats, *mainCat)
-					}
-				}
-			}
-
-			// Store section even if it has no main categories (empty array, not nil)
-			sectionsMap[sectionName] = mainCats
+		var hierarchyDocs []hierarchyDoc
+		if err := cursor.All(ctx, &hierarchyDocs); err != nil {
+			sectionsChan <- sectionsResult{err: err}
+			return
 		}
-		sectionsChan <- sectionsResult{data: sectionsMap, err: nil}
+
+		sectionsChan <- sectionsResult{docs: hierarchyDocs, err: nil}
 	}()
 
 	// Wait for both parallel batches to complete
@@ -125,6 +94,109 @@ func GetHome(c *gin.Context) {
 		return
 	}
 
+	// Batch product counts once (avoid N+1 CountDocuments per main category)
+	productsCol := database.GetCollection("products")
+	countPipeline := []bson.D{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: bson.D{
+				{Key: "section", Value: "$category_section"},
+				{Key: "main", Value: "$category_main"},
+			}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	countCursor, err := productsCol.Aggregate(ctx, countPipeline)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to aggregate product counts"})
+		return
+	}
+	defer countCursor.Close(ctx)
+
+	var countRows []struct {
+		ID struct {
+			Section string `bson:"section"`
+			Main    string `bson:"main"`
+		} `bson:"_id"`
+		Count int32 `bson:"count"`
+	}
+	if err := countCursor.All(ctx, &countRows); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode product counts"})
+		return
+	}
+
+	key := func(section, main string) string { return section + "||" + main }
+	productCounts := make(map[string]int, len(countRows))
+	for _, row := range countRows {
+		productCounts[key(row.ID.Section, row.ID.Main)] = int(row.Count)
+	}
+
+	// Batch metadata once (avoid per-card FindOne calls)
+	metadataCol := database.GetCollection("category_metadata")
+	metaCursor, err := metadataCol.Find(ctx, bson.M{}, options.Find().SetProjection(bson.M{
+		"section": 1, "name": 1, "main_category": 1, "image_url": 1,
+	}))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch category metadata"})
+		return
+	}
+	defer metaCursor.Close(ctx)
+
+	var metaRows []struct {
+		Section      string `bson:"section"`
+		Name         string `bson:"name"`
+		MainCategory string `bson:"main_category"`
+		ImageURL     string `bson:"image_url"`
+	}
+	if err := metaCursor.All(ctx, &metaRows); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode category metadata"})
+		return
+	}
+
+	imageByExact := make(map[string]string, len(metaRows)) // section + name
+	imageByName := make(map[string]string, len(metaRows))
+	imageByLegacyMain := make(map[string]string, len(metaRows))
+	for _, m := range metaRows {
+		if m.ImageURL == "" {
+			continue
+		}
+		if m.Section != "" && m.Name != "" {
+			if _, ok := imageByExact[key(m.Section, m.Name)]; !ok {
+				imageByExact[key(m.Section, m.Name)] = m.ImageURL
+			}
+		}
+		if m.Name != "" {
+			if _, ok := imageByName[m.Name]; !ok {
+				imageByName[m.Name] = m.ImageURL
+			}
+		}
+		if m.MainCategory != "" {
+			if _, ok := imageByLegacyMain[m.MainCategory]; !ok {
+				imageByLegacyMain[m.MainCategory] = m.ImageURL
+			}
+		}
+	}
+
+	buildMainCategoryCard := func(section, mainCategory string) models.MainCategory {
+		imageURL := imageByExact[key(section, mainCategory)]
+		if imageURL == "" {
+			imageURL = imageByName[mainCategory]
+		}
+		if imageURL == "" {
+			imageURL = imageByLegacyMain[mainCategory]
+		}
+		if imageURL == "" {
+			imageURL = "/static/placeholder.png"
+		}
+
+		return models.MainCategory{
+			Name:         mainCategory,
+			ImageURL:     imageURL,
+			ProductCount: productCounts[key(section, mainCategory)],
+			Section:      section,
+			MainCategory: mainCategory,
+		}
+	}
+
 	// Build Most Bought section with title and icon (matching FastAPI)
 	bestSellers := models.BestSellers{
 		Title:          "Most Bought",
@@ -132,15 +204,30 @@ func GetHome(c *gin.Context) {
 		MainCategories: []models.MainCategory{},
 	}
 	for _, mb := range mostBoughtRes.docs {
-		mainCat := buildMainCategoryCard(ctx, mb.Section, mb.MainCategory)
-		if mainCat != nil {
-			bestSellers.MainCategories = append(bestSellers.MainCategories, *mainCat)
-		}
+		bestSellers.MainCategories = append(bestSellers.MainCategories, buildMainCategoryCard(mb.Section, mb.MainCategory))
 	}
 
-	// Convert sections map to array with title, icon, and section_name
+	// Convert hierarchy docs to section array with title/icon/section_name
 	var sections []models.HomeSection
-	for sectionName, mainCategories := range sectionsRes.data {
+	tamilCollator := collate.New(language.Tamil)
+	for _, h := range sectionsRes.docs {
+		sectionName := h.Section
+		if sectionName == "" || sectionName == "Most Bought" {
+			continue
+		}
+
+		mainCategories := []models.MainCategory{}
+		if h.MainCategories != nil && len(h.MainCategories) > 0 {
+			mainCatNames := make([]string, 0, len(h.MainCategories))
+			for mainCatName := range h.MainCategories {
+				mainCatNames = append(mainCatNames, mainCatName)
+			}
+			tamilCollator.SortStrings(mainCatNames)
+			for _, mainCatName := range mainCatNames {
+				mainCategories = append(mainCategories, buildMainCategoryCard(sectionName, mainCatName))
+			}
+		}
+
 		sections = append(sections, models.HomeSection{
 			Title:          sectionName, // Display name (use sectionName for now, can add localization later)
 			Icon:           "📂",         // Default icon (matching FastAPI)
@@ -160,59 +247,6 @@ func GetHome(c *gin.Context) {
 		Sections:    sections,
 	})
 }
-
-// buildMainCategoryCard creates a MainCategory card with metadata (image, product count)
-// Queries category_metadata for image_url, uses "name" field for main categories
-func buildMainCategoryCard(ctx context.Context, section, mainCategory string) *models.MainCategory {
-	// Get product count using correct field names
-	productsCol := database.GetCollection("products")
-	count, err := productsCol.CountDocuments(ctx, bson.M{
-		"category_section": section,
-		"category_main":    mainCategory,
-	})
-	if err != nil {
-		log.Printf("Error counting products for %s/%s: %v", section, mainCategory, err)
-		return nil
-	}
-
-	// Get image URL from category_metadata
-	// CRITICAL: Main category metadata uses "name" field (not "main_category")
-	metadataCol := database.GetCollection("category_metadata")
-	var metadata models.CategoryMetadata
-
-	// Try exact match first: section + name
-	filter := bson.M{
-		"section": section,
-		"name":    mainCategory,
-	}
-	err = metadataCol.FindOne(ctx, filter).Decode(&metadata)
-
-	// Fallback to name only if exact match fails
-	if err != nil {
-		filter = bson.M{"name": mainCategory}
-		err = metadataCol.FindOne(ctx, filter).Decode(&metadata)
-	}
-
-	// Fallback to legacy main_category field if still not found
-	if err != nil {
-		filter = bson.M{"main_category": mainCategory}
-		metadataCol.FindOne(ctx, filter).Decode(&metadata)
-	}
-
-	imageURL := metadata.ImageURL
-	if imageURL == "" {
-		imageURL = "/static/placeholder.png" // Default placeholder
-	}
-
-	return &models.MainCategory{
-		Name:         mainCategory,
-		ImageURL:     imageURL,
-		ProductCount: int(count),
-		Section:      section,
-		MainCategory: mainCategory,
-	}
-}
-
 // GetProducts returns paginated products with optional filters
 // GET /api/flutter/products?user_phone=xxx&subcategory=xxx&page=1&limit=20
 // CRITICAL: Admin users get buying_price field, regular users don't

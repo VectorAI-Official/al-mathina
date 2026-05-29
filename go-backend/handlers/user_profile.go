@@ -367,18 +367,7 @@ func CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// Group items by section (SPLIT ORDER LOGIC)
-	itemsBySection := make(map[string][]models.OrderItem)
-	for _, item := range req.Items {
-		section := item.Section
-		if section == "" {
-			section = "Unknown"
-		}
-		itemsBySection[section] = append(itemsBySection[section], item)
-	}
-
-	log.Printf("📊 CreateOrder: Split into %d section(s): %v", len(itemsBySection), getMapKeys(itemsBySection))
-
+	// Grouping by section removed - consolidated into one order
 	// Track created orders for response
 	type CreatedOrder struct {
 		OrderID     string  `json:"order_id"`
@@ -390,84 +379,66 @@ func CreateOrder(c *gin.Context) {
 
 	var createdOrders []CreatedOrder
 	var allOrders []models.Order // For email notifications
-	totalItemsCount := 0
-
-	// ── Step 5: build all order docs, then write in ONE InsertMany call ───────
-	// N InsertOne calls (one per section) = N Atlas round-trips.
-	// InsertMany sends all documents in a single round-trip regardless of N.
-	ordersCol := database.GetCollection("orders")
-	allDocs := make([]interface{}, 0, len(itemsBySection))
-	for section, sectionItems := range itemsBySection {
-		sectionTotal := 0.0
-		for _, item := range sectionItems {
-			sectionTotal += item.Subtotal
-		}
-		// nanoseconds + atomic counter guarantees uniqueness even when sections
-		// are built within the same nanosecond on fast hardware.
-		ordering := atomic.AddUint64(&orderCounter, 1)
-		orderID := fmt.Sprintf("ORD-%d-%d", time.Now().UnixNano(), ordering)
-
-		order := models.Order{
-			OrderID:         orderID,
-			UserPhone:       req.UserPhone,
-			UserName:        userName,
-			Section:         section,
-			DeliveryAddress: req.DeliveryAddress,
-			Items:           sectionItems,
-			TotalAmount:     sectionTotal,
-			PaymentMethod:   paymentMethod,
-			Status:          "pending",
-			CreatedAt:       time.Now(),
-			Notes:           req.Notes,
-			Metadata:        map[string]interface{}{},
-		}
-		allDocs = append(allDocs, order)
-		createdOrders = append(createdOrders, CreatedOrder{
-			OrderID:     orderID,
-			Section:     section,
-			ItemsCount:  len(sectionItems),
-			TotalAmount: sectionTotal,
-			Status:      "pending",
-		})
-		allOrders = append(allOrders, order)
-		totalItemsCount += len(sectionItems)
+	totalItemsCount := len(req.Items)
+	totalAmount := 0.0
+	for _, item := range req.Items {
+		totalAmount += item.Subtotal
 	}
 
-	// Single round-trip — all sections inserted atomically in one request
-	if _, err := ordersCol.InsertMany(ctx, allDocs); err != nil {
-		log.Printf("❌ CreateOrder: InsertMany failed: %v", err)
+	// ── Step 5: build single order doc and write in ONE InsertOne call ────────
+	ordersCol := database.GetCollection("orders")
+	
+	// nanoseconds + atomic counter guarantees uniqueness
+	ordering := atomic.AddUint64(&orderCounter, 1)
+	orderID := fmt.Sprintf("ORD-%d-%d", time.Now().UnixNano(), ordering)
+
+	order := models.Order{
+		OrderID:         orderID,
+		UserPhone:       req.UserPhone,
+		UserName:        userName,
+		Section:         "Combined", // Set to "Combined" or leave as default
+		DeliveryAddress: req.DeliveryAddress,
+		Items:           req.Items,
+		TotalAmount:     totalAmount,
+		PaymentMethod:   paymentMethod,
+		Status:          "pending",
+		CreatedAt:       time.Now(),
+		Notes:           req.Notes,
+		Metadata:        map[string]interface{}{},
+	}
+
+	if _, err := ordersCol.InsertOne(ctx, order); err != nil {
+		log.Printf("❌ CreateOrder: InsertOne failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
 		return
 	}
-	log.Printf("✅ CreateOrder: %d section order(s) created (%d items total)", len(createdOrders), totalItemsCount)
 
-	// Send email notification for EACH split order (async - don't block response)
-	log.Printf("📧 CreateOrder: Scheduling %d email notifications...", len(allOrders))
-	for i, order := range allOrders {
-		if utils.GlobalEmailService != nil {
-			go utils.GlobalEmailService.SendOrderNotificationToAdmin(order)
-		}
-		log.Printf("   ✓ Email task %d/%d: %s (section: %s)", i+1, len(allOrders), order.OrderID, order.Section)
+	createdOrders = append(createdOrders, CreatedOrder{
+		OrderID:     orderID,
+		Section:     "Combined",
+		ItemsCount:  totalItemsCount,
+		TotalAmount: totalAmount,
+		Status:      "pending",
+	})
+	allOrders = append(allOrders, order)
+
+	log.Printf("✅ CreateOrder: Consolidated order created (%d items total)", totalItemsCount)
+
+	// Send email notification for the order (async - don't block response)
+	log.Printf("📧 CreateOrder: Scheduling email notification...")
+	if utils.GlobalEmailService != nil {
+		go utils.GlobalEmailService.SendOrderNotificationToAdmin(order)
 	}
 
 	// Send single FCM push notification to user for combined order (async)
-	go sendFCMOrderNotification(req.UserPhone, createdOrders[0].OrderID, req.TotalAmount, totalItemsCount, userName)
+	go sendFCMOrderNotification(req.UserPhone, orderID, totalAmount, totalItemsCount, userName)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
-		"message":      fmt.Sprintf("Created %d order(s) - split by section", len(createdOrders)),
+		"message":      "Order created successfully",
 		"orders":       createdOrders,
 		"total_orders": len(createdOrders),
 	})
-}
-
-// Helper function to get map keys for logging
-func getMapKeys(m map[string][]models.OrderItem) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }
 
 // sendOrderEmailNotification sends order notification to admin via Vercel webhook

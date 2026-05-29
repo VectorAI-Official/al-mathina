@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -702,7 +703,8 @@ func GetCategoryMetadata(c *gin.Context) {
 // DeleteSection deletes a section and all its data with Cloudinary cleanup
 // DELETE /admin/api/categories/section/:section_name
 func DeleteSection(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Increase timeout for cascading delete which may involve multiple Cloudinary calls
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	sectionName := c.Param("section_name")
@@ -736,6 +738,8 @@ func DeleteSection(c *gin.Context) {
 				}
 			}
 		}
+	} else if err != context.DeadlineExceeded && err != context.Canceled {
+		fmt.Printf("⚠️  Error finding product images: %v\n", err)
 	}
 	fmt.Printf("   ✓ Product images deleted: %d\n", productImageCount)
 
@@ -757,24 +761,45 @@ func DeleteSection(c *gin.Context) {
 				}
 			}
 		}
+	} else if err != context.DeadlineExceeded && err != context.Canceled {
+		fmt.Printf("⚠️  Error finding metadata images: %v\n", err)
 	}
 	fmt.Printf("   ✓ Category images deleted: %d\n", categoryImageCount)
 
 	// STEP 3: Delete hierarchy document
-	hierarchyResult, _ := hierarchyCol.DeleteOne(ctx, bson.M{"section": sectionName})
-	fmt.Printf("   Hierarchy deleted: %d document(s)\n", hierarchyResult.DeletedCount)
+	hierarchyResult, err := hierarchyCol.DeleteOne(ctx, bson.M{"section": sectionName})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete hierarchy: %v\n", err)
+	} else if hierarchyResult != nil {
+		fmt.Printf("   Hierarchy deleted: %d document(s)\n", hierarchyResult.DeletedCount)
+	}
 
 	// STEP 4: Delete metadata
-	metadataResult, _ := metadataCol.DeleteMany(ctx, bson.M{"section": sectionName})
-	fmt.Printf("   Metadata deleted: %d document(s)\n", metadataResult.DeletedCount)
+	metadataResult, err := metadataCol.DeleteMany(ctx, bson.M{"section": sectionName})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete metadata: %v\n", err)
+	} else if metadataResult != nil {
+		fmt.Printf("   Metadata deleted: %d document(s)\n", metadataResult.DeletedCount)
+	}
 
 	// STEP 5: Delete products
-	productsResult, _ := productsCol.DeleteMany(ctx, bson.M{"category_section": sectionName})
-	fmt.Printf("   Products deleted: %d document(s)\n", productsResult.DeletedCount)
+	productsResult, err := productsCol.DeleteMany(ctx, bson.M{"category_section": sectionName})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete products: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to delete products: %v", err)})
+		return
+	}
+	if productsResult != nil {
+		fmt.Printf("   Products deleted: %d document(s)\n", productsResult.DeletedCount)
+	}
 
 	// STEP 6: Delete most_bought entries
-	mostBoughtResult, _ := mostBoughtCol.DeleteMany(ctx, bson.M{"section": sectionName})
-	fmt.Printf("   Most bought deleted: %d document(s)\n", mostBoughtResult.DeletedCount)
+	mostBoughtResult, err := mostBoughtCol.DeleteMany(ctx, bson.M{"section": sectionName})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete most_bought: %v\n", err)
+	} else if mostBoughtResult != nil {
+		fmt.Printf("   Most bought deleted: %d document(s)\n", mostBoughtResult.DeletedCount)
+	}
 
 	totalImages := productImageCount + categoryImageCount
 	fmt.Printf("✅ Section '%s' deleted with %d images from Cloudinary\n", sectionName, totalImages)
@@ -788,7 +813,8 @@ func DeleteSection(c *gin.Context) {
 // DeleteMainCategory deletes a main category and all subcategories with Cloudinary cleanup
 // DELETE /admin/api/categories/main/:section_name/:main_category
 func DeleteMainCategory(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Increase timeout for cascading delete which may involve multiple Cloudinary calls
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	sectionName := c.Param("section_name")
@@ -824,6 +850,8 @@ func DeleteMainCategory(c *gin.Context) {
 				}
 			}
 		}
+	} else if err != context.DeadlineExceeded && err != context.Canceled {
+		fmt.Printf("⚠️  Error finding product images: %v\n", err)
 	}
 	fmt.Printf("   ✓ Product images deleted: %d\n", productImageCount)
 
@@ -862,40 +890,61 @@ func DeleteMainCategory(c *gin.Context) {
 				}
 			}
 		}
+	} else if err != context.DeadlineExceeded && err != context.Canceled {
+		fmt.Printf("⚠️  Error finding subcategory images: %v\n", err)
 	}
 	fmt.Printf("   ✓ Category images deleted: %d\n", categoryImageCount)
 
 	// STEP 4: Remove from hierarchy (pull main category key)
-	hierarchyCol.UpdateOne(ctx, bson.M{"section": sectionName}, bson.M{
+	_, err = hierarchyCol.UpdateOne(ctx, bson.M{"section": sectionName}, bson.M{
 		"$unset": bson.M{fmt.Sprintf("main_categories.%s", mainCategory): ""},
 	})
+	if err != nil {
+		fmt.Printf("✗ Failed to update hierarchy: %v\n", err)
+	}
 
 	// STEP 5: Delete main category metadata
-	metadataCol.DeleteMany(ctx, bson.M{
+	_, err = metadataCol.DeleteMany(ctx, bson.M{
 		"section": sectionName,
 		"name":    mainCategory,
 		"type":    "main_category",
 	})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete main metadata: %v\n", err)
+	}
 
 	// STEP 6: Delete all subcategory metadata
-	metadataCol.DeleteMany(ctx, bson.M{
+	_, err = metadataCol.DeleteMany(ctx, bson.M{
 		"section":       sectionName,
 		"main_category": mainCategory,
 		"type":          "subcategory",
 	})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete sub metadata: %v\n", err)
+	}
 
 	// STEP 7: Delete all products
-	productsResult, _ := productsCol.DeleteMany(ctx, bson.M{
+	productsResult, err := productsCol.DeleteMany(ctx, bson.M{
 		"category_section": sectionName,
 		"category_main":    mainCategory,
 	})
-	fmt.Printf("   Products deleted: %d document(s)\n", productsResult.DeletedCount)
+	if err != nil {
+		fmt.Printf("✗ Failed to delete products: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to delete products: %v", err)})
+		return
+	}
+	if productsResult != nil {
+		fmt.Printf("   Products deleted: %d document(s)\n", productsResult.DeletedCount)
+	}
 
 	// STEP 8: Delete most_bought entries
-	mostBoughtCol.DeleteMany(ctx, bson.M{
+	_, err = mostBoughtCol.DeleteMany(ctx, bson.M{
 		"section":       sectionName,
 		"main_category": mainCategory,
 	})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete most_bought: %v\n", err)
+	}
 
 	totalImages := productImageCount + categoryImageCount
 	fmt.Printf("✅ Main category '%s' deleted with %d images\n", mainCategory, totalImages)
@@ -909,7 +958,8 @@ func DeleteMainCategory(c *gin.Context) {
 // DeleteSubcategory deletes a subcategory and all its products with Cloudinary cleanup
 // DELETE /admin/api/categories/sub/:section_name/:main_category/:subcategory
 func DeleteSubcategory(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Increase timeout for cascading delete
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	sectionName := c.Param("section_name")
@@ -946,6 +996,8 @@ func DeleteSubcategory(c *gin.Context) {
 				}
 			}
 		}
+	} else if err != context.DeadlineExceeded && err != context.Canceled {
+		fmt.Printf("⚠️  Error finding product images: %v\n", err)
 	}
 	fmt.Printf("   ✓ Product images deleted: %d\n", imageDeleteCount)
 
@@ -966,25 +1018,38 @@ func DeleteSubcategory(c *gin.Context) {
 	}
 
 	// STEP 3: Remove from hierarchy
-	hierarchyCol.UpdateOne(ctx, bson.M{"section": sectionName}, bson.M{
+	_, err = hierarchyCol.UpdateOne(ctx, bson.M{"section": sectionName}, bson.M{
 		"$pull": bson.M{fmt.Sprintf("main_categories.%s", mainCategory): subcategory},
 	})
+	if err != nil {
+		fmt.Printf("✗ Failed to update hierarchy: %v\n", err)
+	}
 
 	// STEP 4: Delete subcategory metadata
-	metadataCol.DeleteMany(ctx, bson.M{
+	_, err = metadataCol.DeleteMany(ctx, bson.M{
 		"section":       sectionName,
 		"main_category": mainCategory,
 		"name":          subcategory,
 		"type":          "subcategory",
 	})
+	if err != nil {
+		fmt.Printf("✗ Failed to delete sub metadata: %v\n", err)
+	}
 
 	// STEP 5: Delete all products
-	productsResult, _ := productsCol.DeleteMany(ctx, bson.M{
+	productsResult, err := productsCol.DeleteMany(ctx, bson.M{
 		"category_section": sectionName,
 		"category_main":    mainCategory,
 		"category_sub":     subcategory,
 	})
-	fmt.Printf("   Products deleted: %d document(s)\n", productsResult.DeletedCount)
+	if err != nil {
+		fmt.Printf("✗ Failed to delete products: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to delete products: %v", err)})
+		return
+	}
+	if productsResult != nil {
+		fmt.Printf("   Products deleted: %d document(s)\n", productsResult.DeletedCount)
+	}
 
 	fmt.Printf("✅ Subcategory '%s' deleted with %d images\n", subcategory, imageDeleteCount)
 

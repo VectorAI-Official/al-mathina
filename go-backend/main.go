@@ -98,6 +98,8 @@ func main() {
 		flutterAPI.GET("/products", handlers.GetProducts)
 		flutterAPI.GET("/product/:item_id", handlers.GetProductDetails)
 		flutterAPI.GET("/search", handlers.SearchProducts)
+		// Compatibility alias for older APK builds that still call /api/flutter/profile/:phone
+		flutterAPI.GET("/profile/:phone", handlers.GetUserProfile)
 		flutterAPI.GET("/main-category/:section/:main_category/subcategories", handlers.GetSubcategories)
 	}
 

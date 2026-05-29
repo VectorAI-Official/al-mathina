@@ -111,6 +111,35 @@ Future<http.Response> _makeRequest(Uri uri, {Map<String, String>? headers, int r
   }
 }
 
+Future<http.Response> _getWithRouteFallbacks(
+  List<Uri> uris, {
+  Map<String, String>? headers,
+}) async {
+  http.Response? last404;
+
+  for (final uri in uris) {
+    try {
+      final response = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+      if (response.statusCode != 404) {
+        return response;
+      }
+      last404 = response;
+    } on SocketException {
+      // Try next candidate URI.
+    } on TimeoutException {
+      // Try next candidate URI.
+    }
+  }
+
+  if (last404 != null) {
+    return last404;
+  }
+
+  throw Exception('Unable to reach profile endpoint');
+}
+
 class MainCategory {
   final String id;
   final String name;
@@ -815,6 +844,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getUserProfile(String phone) async {
     final startTime = DateTime.now();
     final cacheKey = 'user_profile_$phone';
+    final encodedPhone = Uri.encodeComponent(phone);
     
     try {
       print('\n🔍 [PROFILE] Checking cache for: $phone');
@@ -828,7 +858,13 @@ class ApiService {
       
       print('💾 [PROFILE] Cache miss - fetching from server...');
       final fetchStartTime = DateTime.now();
-      final response = await http.get(Uri.parse('$API_BASE/user/profile/$phone'));
+      final response = await _getWithRouteFallbacks([
+        Uri.parse('$API_BASE/user/profile/$encodedPhone'),
+        Uri.parse('$BASE_URL/api/profile/$encodedPhone'),
+        Uri.parse('$BASE_URL/api/flutter/profile/$encodedPhone'),
+        Uri.parse('$FALLBACK_API_BASE/user/profile/$encodedPhone'),
+        Uri.parse('$FALLBACK_URL/api/profile/$encodedPhone'),
+      ]);
       final fetchDuration = DateTime.now().difference(fetchStartTime);
       
       print('🌐 [PROFILE] Network request completed in ${fetchDuration.inMilliseconds}ms');
@@ -1006,6 +1042,7 @@ class ApiService {
   // Store Details APIs
   static Future<Map<String, dynamic>> getStoreDetails(String phone) async {
     try {
+      final encodedPhone = Uri.encodeComponent(phone);
       // Check cache first (60 seconds TTL)
       final cacheKey = 'store_details_$phone';
       final cached = _ApiCache.get<Map<String, dynamic>>(cacheKey);
@@ -1015,7 +1052,13 @@ class ApiService {
       }
       
       print('📡 Fetching fresh store details for: $phone');
-      final response = await http.get(Uri.parse('$API_BASE/user/store-details/$phone'));
+      final response = await _getWithRouteFallbacks([
+        Uri.parse('$API_BASE/user/store-details/$encodedPhone'),
+        Uri.parse('$BASE_URL/api/store-details/$encodedPhone'),
+        Uri.parse('$BASE_URL/api/flutter/user/store-details/$encodedPhone'),
+        Uri.parse('$FALLBACK_API_BASE/user/store-details/$encodedPhone'),
+        Uri.parse('$FALLBACK_URL/api/store-details/$encodedPhone'),
+      ]);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         // Backend returns {"success": true, "store_details": {...}}.

@@ -247,6 +247,7 @@ func GetHome(c *gin.Context) {
 		Sections:    sections,
 	})
 }
+
 // GetProducts returns paginated products with optional filters
 // GET /api/flutter/products?user_phone=xxx&subcategory=xxx&page=1&limit=20
 // CRITICAL: Admin users get buying_price field, regular users don't

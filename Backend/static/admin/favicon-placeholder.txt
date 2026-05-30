@@ -1,4 +1,0 @@
-<!-- Placeholder for favicon.ico -->
-<!-- The actual favicon should be a .ico file, but for now we can add it to HTML -->
-<!-- Add this to the <head> section of admin_dashboard.html -->
-<!-- <link rel="icon" type="image/png" href="/static/admin/favicon.png"> -->

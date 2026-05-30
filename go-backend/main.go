@@ -253,6 +253,9 @@ func main() {
 		legacyAPI.POST("/address/:phone", handlers.AddAddress)
 		legacyAPI.PUT("/address/:phone/:index", handlers.UpdateAddress)
 		legacyAPI.DELETE("/address/:phone/:index", handlers.DeleteAddress)
+
+		// FCM compatibility
+		legacyAPI.POST("/fcm-token", handlers.SaveFCMToken)
 	}
 
 	// Static file serving (matches FastAPI pattern)
@@ -310,6 +313,12 @@ func main() {
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("👋 Shutting down server...")
+}
+
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 

@@ -38,10 +38,6 @@ COPY --from=builder /app/main .
 # Copy static files for admin dashboard
 COPY --from=builder /app/static ./static
 
-# Copy Firebase service account from Backend directory (if needed)
-# Note: This should be provided via environment variable or volume mount in production
-COPY Backend/firebase-service-account.json /app/firebase-service-account.json
-
 # Expose port 9000
 EXPOSE 9000
 

@@ -17,7 +17,7 @@ param(
 )
 
 $RootPath = $PSScriptRoot
-$BackendPath = "$RootPath\Backend"
+$BackendPath = "$RootPath\go-backend"
 $FlutterPath = "$RootPath\flutter_preview"
 
 function Write-Header {
@@ -67,7 +67,7 @@ function Start-Backend {
     # Check if already running
     $running = docker-compose ps --services --filter "status=running" 2>/dev/null
     if ($running) {
-        Write-Success "Backend already running on http://localhost:8000"
+        Write-Success "Backend already running on http://localhost:9000"
         return $true
     }
     
@@ -85,11 +85,11 @@ function Start-Backend {
     
     while ($attempts -lt $maxAttempts) {
         try {
-            $response = curl -s -f "http://localhost:8000/health" 2>/dev/null
+            $response = curl -s -f "http://localhost:9000/health" 2>/dev/null
             if ($response) {
                 Write-Success "Backend is ready! ✨"
-                Write-Info "URL: http://localhost:8000"
-                Write-Info "API Docs: http://localhost:8000/docs"
+                Write-Info "URL: http://localhost:9000"
+                Write-Info "API Docs: http://localhost:9000/docs"
                 return $true
             }
         }
@@ -107,8 +107,8 @@ function Start-Backend {
 function Start-AdminDashboard {
     Write-Header "📊 Opening Admin Dashboard"
     
-    Write-Info "Opening http://localhost:8000/admin in browser..."
-    Start-Process "http://localhost:8000/admin"
+    Write-Info "Opening http://localhost:9000/admin in browser..."
+    Start-Process "http://localhost:9000/admin"
     
     Write-Info "Login credentials:"
     Write-Info "  Username: admin"
@@ -141,19 +141,19 @@ function Show-URLs {
     Write-Header "📌 Important URLs & Commands"
     
     Write-Host "`n  📍 Endpoints:" -ForegroundColor Yellow
-    Write-Host "     Backend:        http://localhost:8000"
-    Write-Host "     Admin Dashboard: http://localhost:8000/admin"
-    Write-Host "     API Docs:        http://localhost:8000/docs"
-    Write-Host "     Health Check:    http://localhost:8000/health"
+    Write-Host "     Backend:        http://localhost:9000"
+    Write-Host "     Admin Dashboard: http://localhost:9000/admin"
+    Write-Host "     API Docs:        http://localhost:9000/docs"
+    Write-Host "     Health Check:    http://localhost:9000/health"
     
     Write-Host "`n  🔐 Admin Login:" -ForegroundColor Yellow
     Write-Host "     Username: admin"
     Write-Host "     Password: admin123"
     
     Write-Host "`n  📝 Useful Commands:" -ForegroundColor Yellow
-    Write-Host "     View logs:       docker-compose -f Backend/docker-compose.yml logs -f"
-    Write-Host "     Stop backend:    docker-compose -f Backend/docker-compose.yml down"
-    Write-Host "     Rebuild:         docker-compose -f Backend/docker-compose.yml build --no-cache"
+    Write-Host "     View logs:       docker-compose -f go-backend/docker-compose.yml logs -f"
+    Write-Host "     Stop backend:    docker-compose -f go-backend/docker-compose.yml down"
+    Write-Host "     Rebuild:         docker-compose -f go-backend/docker-compose.yml build --no-cache"
     
     Write-Host "`n  🐛 Debugging:" -ForegroundColor Yellow
     Write-Host "     Press F12 in browser for DevTools"
@@ -244,9 +244,9 @@ Write-Header "All Systems Ready! 🎉"
 Write-Host ""
 Write-Host "Your development environment is running!" -ForegroundColor Green
 Write-Host ""
-Write-Host "  ✅ Backend (Docker):     http://localhost:8000" -ForegroundColor Green
+Write-Host "  ✅ Backend (Docker):     http://localhost:9000" -ForegroundColor Green
 if ($startAdmin) {
-    Write-Host "  ✅ Admin Dashboard:      http://localhost:8000/admin" -ForegroundColor Green
+    Write-Host "  ✅ Admin Dashboard:      http://localhost:9000/admin" -ForegroundColor Green
 }
 if ($startFlutter) {
     Write-Host "  ✅ Flutter Preview:      Chrome window" -ForegroundColor Green
@@ -254,7 +254,7 @@ if ($startFlutter) {
 
 Write-Host ""
 Write-Host "📖 Next Steps:" -ForegroundColor Yellow
-Write-Host "  1. Open http://localhost:8000/admin and log in"
+Write-Host "  1. Open http://localhost:9000/admin and log in"
 Write-Host "  2. Press F12 to open DevTools and check Console logs"
 Write-Host "  3. Use LOGS_VISUAL_REFERENCE.md to understand the logs"
 Write-Host "  4. Make changes in Admin, watch Flutter app update"

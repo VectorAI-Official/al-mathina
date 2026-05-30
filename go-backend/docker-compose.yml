@@ -24,9 +24,9 @@ services:
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
     env_file:
       - .env
-    volumes:
-      # Mount Firebase service account from Backend directory
-      - ../Backend/firebase-service-account.json:/app/firebase-service-account.json:ro
+    # volumes:
+      # Mount Firebase service account (uncomment and fix path if needed)
+      # - ./firebase-service-account.json:/app/firebase-service-account.json:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health"]

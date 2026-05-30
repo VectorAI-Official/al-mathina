@@ -6,12 +6,12 @@ primary_region = "sin"  # Singapore region (change based on your location)
   dockerfile = "Dockerfile"
 
 [env]
-  PORT = "8080"
+  PORT = "9000"
   HOST = "0.0.0.0"
   MONGO_DB_NAME = "almadhinadb"
 
 [http_service]
-  internal_port = 8080
+  internal_port = 9000
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true

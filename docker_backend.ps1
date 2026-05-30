@@ -8,7 +8,7 @@ param(
     [string]$Action = 'start'
 )
 
-$BackendPath = "$PSScriptRoot\Backend"
+$BackendPath = "$PSScriptRoot\go-backend"
 $ScriptName = "docker_backend.ps1"
 
 function Write-Header {
@@ -64,13 +64,13 @@ function Check-Prerequisites {
         exit 1
     }
     
-    # Check .env.production exists
+    # Check .env exists
     Write-Step "Checking environment configuration..."
-    if (Test-Path "$BackendPath\.env.production") {
-        Write-Success "Environment file found (.env.production)"
+    if (Test-Path "$BackendPath\.env") {
+        Write-Success "Environment file found (.env)"
     }
     else {
-        Write-Error ".env.production not found in Backend folder"
+        Write-Error ".env not found in go-backend folder"
         exit 1
     }
 }
@@ -117,7 +117,7 @@ function Docker-Start {
     $attempts = 0
     while ($attempts -lt $maxAttempts) {
         try {
-            $response = curl -s -f "http://localhost:8000/health" 2>/dev/null
+            $response = curl -s -f "http://localhost:9000/health" 2>/dev/null
             if ($response) {
                 Write-Success "Backend is healthy and running!"
                 break
@@ -138,10 +138,10 @@ function Docker-Start {
     Docker-Status
     
     Write-Header "Backend Ready! 🚀"
-    Write-Info "Backend URL: http://localhost:8000"
-    Write-Info "Admin Dashboard: http://localhost:8000/admin"
-    Write-Info "API Documentation: http://localhost:8000/docs"
-    Write-Info "Health Check: http://localhost:8000/health"
+    Write-Info "Backend URL: http://localhost:9000"
+    Write-Info "Admin Dashboard: http://localhost:9000/admin"
+    Write-Info "API Documentation: http://localhost:9000/docs"
+    Write-Info "Health Check: http://localhost:9000/health"
     Write-Info ""
     Write-Info "View logs: $ScriptName logs"
     Write-Info "Stop backend: $ScriptName stop"
@@ -230,7 +230,7 @@ function Docker-Status {
     Write-Host $ps -ForegroundColor Gray
     
     try {
-        $health = curl -s -f "http://localhost:8000/health" 2>/dev/null
+        $health = curl -s -f "http://localhost:9000/health" 2>/dev/null
         if ($health) {
             Write-Success "Backend health check: OK ✅"
         }

@@ -111,22 +111,14 @@ Create TEST data (won't touch existing products):
 db.products.find({"product_name": /^TEST_/})
 ```
 
-## Migration from Python
-
-The Go backend maintains 100% API compatibility with FastAPI:
-- Same URLs (`/api/flutter/products`, `/admin/api/most-bought`)
-- Same JSON response format
-- Same HTTP methods (GET, POST, PUT, DELETE)
-- Admin dashboard works without changes
-
 ## Performance Comparison
 
-| Metric | FastAPI | Go | Improvement |
-|--------|---------|-----|-------------|
-| RAM Usage (idle) | ~200MB | ~25MB | 8x less |
-| Requests/sec | ~5,000 | ~18,000 | 3.6x faster |
-| Docker Image | ~1GB | ~20MB | 50x smaller |
-| Startup Time | ~3s | ~0.1s | 30x faster |
+| Metric | Al-Madhina Go | FastAPI (Legacy) | Improvement |
+|--------|---------------|------------------|-------------|
+| RAM Usage | ~25MB | ~200MB | 8x less |
+| Requests/sec | ~18,000 | ~5,000 | 3.6x faster |
+| Docker Image | ~20MB | ~1GB | 50x smaller |
+| Startup Time | ~0.1s | ~3s | 30x faster |
 
 ## Environment Variables
 
@@ -142,12 +134,11 @@ Critical variables:
 
 1. Create new Web Service on Render
 2. Connect to this repository
-3. Set Build Command: `go build -o main`
-4. Set Start Command: `./main`
-5. Add environment variables from `.env`
-6. Deploy!
-
-Render will automatically detect Go and build the project.
+3. Use the `render.yaml` blueprint or set manually:
+   - Build Command: `go build -o main`
+   - Start Command: `./main`
+4. Add environment variables from `.env`
+5. Deploy!
 
 ## Troubleshooting
 
@@ -159,18 +150,13 @@ Render will automatically detect Go and build the project.
 - Ensure `firebase-service-account.json` exists
 - Check file path in `FIREBASE_SERVICE_ACCOUNT_PATH`
 
-### "Port already in use"
-- Python backend running on same port
-- Change `PORT=9001` in `.env` or stop Python server
-
 ## Development Workflow
 
-1. Keep Python backend as reference (don't delete yet)
-2. Run Go on port 9000, Python on port 8000
-3. Test each endpoint with curl or Postman
-4. Verify admin dashboard works
-5. Test with Flutter app (change API_BASE temporarily)
-6. Once verified, deploy Go to production
+1. Run Go on port 9000
+2. Test each endpoint with curl or Postman
+3. Verify admin dashboard works
+4. Test with Flutter app
+5. Deploy to Render production
 
 ## Admin Phone Numbers
 

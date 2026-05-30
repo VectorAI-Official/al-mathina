@@ -318,9 +318,3 @@ func main() {
 
 	log.Println("👋 Shutting down server...")
 }
-
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("👋 Shutting down server...")
-}

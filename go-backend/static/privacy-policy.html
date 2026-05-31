@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - AL-Mathina</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #004D40;
+            --primary-light: #00695C;
+            --bg-color: #f8f9fa;
+            --text-color: #333;
+            --text-muted: #666;
+            --card-bg: #ffffff;
+            --header-bg: rgba(255, 255, 255, 0.9);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding-top: 80px;
+        }
+
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background-color: var(--header-bg);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            padding: 0 5%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            z-index: 1000;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-weight: 800;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+        }
+
+        .policy-card {
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section h2 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+            font-weight: 700;
+        }
+
+        .section p {
+            margin-bottom: 15px;
+            color: #444;
+        }
+
+        .section ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .section li {
+            margin-bottom: 10px;
+        }
+
+        .last-updated {
+            margin-top: 40px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        footer {
+            margin-top: 60px;
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.2rem;
+            }
+
+            .policy-card {
+                padding: 30px 20px;
+            }
+
+            header {
+                padding: 0 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">
+            <span style="font-size: 28px;">📦</span> AL-Mathina
+        </a>
+    </header>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Privacy Policy</h1>
+            <p>Your privacy is important to us. Learn how we handle your data.</p>
+        </div>
+
+        <div class="policy-card">
+            <div class="section">
+                <h2>1. Introduction</h2>
+                <p>Welcome to AL-Mathina. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and services. We are committed to protecting your personal data and your right to privacy.</p>
+            </div>
+
+            <div class="section">
+                <h2>2. Information We Collect</h2>
+                <p>We collect information that you provide directly to us when you create an account, place an order, or communicate with us. This may include:</p>
+                <ul>
+                    <li><strong>Account Information:</strong> Name, phone number, and email address.</li>
+                    <li><strong>Order Details:</strong> Items purchased, order history, and delivery instructions.</li>
+                    <li><strong>Delivery Information:</strong> Physical address for delivery of products.</li>
+                    <li><strong>Store Information:</strong> If you are a store owner, we collect store-specific details like store name and location.</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>3. How We Use Your Information</h2>
+                <p>We use the information we collect to:</p>
+                <ul>
+                    <li>Process and fulfill your orders.</li>
+                    <li>Send push notifications regarding order status and updates via FCM.</li>
+                    <li>Manage your user profile and account.</li>
+                    <li>Improve our services and application experience.</li>
+                    <li>Communicate with you about promotions or support.</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>4. Data Storage and Security</h2>
+                <p>We implement appropriate technical and organizational security measures to protect the security of any personal information we process. Your data is stored securely in our databases (MongoDB and Supabase). However, please remember that no method of transmission over the internet is 100% secure.</p>
+            </div>
+
+            <div class="section">
+                <h2>5. Third-Party Services</h2>
+                <p>We may use third-party services to help us operate our business. These include:</p>
+                <ul>
+                    <li><strong>Cloudinary:</strong> For storing and serving product and category images.</li>
+                    <li><strong>Firebase (FCM):</strong> For sending push notifications to your device.</li>
+                    <li><strong>Supabase:</strong> For authentication and session management.</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>6. Your Rights</h2>
+                <p>You have the right to access, update, or delete your personal information. You can do this through the app's profile settings or by contacting our support team. We will respond to your requests within a reasonable timeframe.</p>
+            </div>
+
+            <div class="section">
+                <h2>7. Contact Us</h2>
+                <p>If you have any questions or concerns about this Privacy Policy, please contact us at:</p>
+                <p style="font-weight: 600; color: var(--primary-color);">Email: support@almathina.com</p>
+            </div>
+
+            <div class="last-updated">
+                Last Updated: May 31, 2026
+            </div>
+        </div>
+
+        <footer>
+            &copy; 2026 AL-Mathina. All rights reserved.
+        </footer>
+    </div>
+
+</body>
+</html>

@@ -261,6 +261,11 @@ func main() {
 	// Static file serving (matches FastAPI pattern)
 	router.Static("/static", "./static")
 
+	// Privacy Policy Page
+	router.GET("/privacy-policy", func(c *gin.Context) {
+		c.File("./static/privacy-policy.html")
+	})
+
 	// Admin Authentication Routes
 	router.GET("/admin", func(c *gin.Context) {
 		// Check if already logged in

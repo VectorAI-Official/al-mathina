@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart'; // For ScrollDirection
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,8 @@ import 'services/shared_prefs_service.dart';
 import 'services/fcm_service.dart';
 import 'models/saved_account.dart';
 import 'widgets/voice_search_dialog.dart';
+import 'package:in_app_update/in_app_update.dart';
+import 'utils/weight_utils.dart';
 
 const Color kPrimaryColor = Color(0xFF66BB6A); // Colors.green[400]
 const String kAppName = 'AL-Madhina';
@@ -414,6 +417,7 @@ class CartItem {
   final String productName;
   final String? productNameTa;
   final String weight;
+  final String unit;  // e.g., "kg", "liters", "pieces"
   int quantity;
   final double price;
   final String imageUrl;
@@ -426,12 +430,16 @@ class CartItem {
     required this.productName,
     this.productNameTa,
     required this.weight,
+    this.unit = '',
     this.quantity = 1,
     required this.price,
     required this.imageUrl,
   });
 
-  double get subtotal => quantity * price;
+  double get subtotal {
+    final effectivePrice = calculateEffectivePrice(price, weight, unit);
+    return quantity * effectivePrice;
+  }
   
   String getLocalizedName(String language) {
     if (language == 'ta' && productNameTa != null && productNameTa!.isNotEmpty) {
@@ -547,6 +555,7 @@ class AppProvider with ChangeNotifier {
         productName: product.productName,
         productNameTa: product.productNameTa,
         weight: product.weight,
+        unit: product.unit,
         price: product.price,
         imageUrl: product.imageUrl,
       );
@@ -577,6 +586,14 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure edge-to-edge system UI for Android 15+ (status bar, navigation bar)
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0xFFFCFFFC),
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
 
   // Initialize Firebase Cloud Messaging
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -691,7 +708,9 @@ class _SplashScreenState extends State<SplashScreen> {
     print('║              Backend: $API_BASE');
     print('╚═══════════════════════════════════════════════════════════╝');
     
-    // Start the 2-second splash timer
+    // Kick off update check and splash timer in parallel immediately
+    // (before SharedPreferences await, so they run concurrently)
+    final updateCheck = _checkForUpdate();
     final splashTimer = Future.delayed(const Duration(seconds: 2));
     
     // Get user info and preload data in parallel with splash display
@@ -723,6 +742,9 @@ class _SplashScreenState extends State<SplashScreen> {
     await splashTimer;
     final splashDuration = DateTime.now().difference(splashStartTime);
     
+    // Ensure update check completed before navigating (5s max to avoid hanging)
+    await updateCheck.timeout(const Duration(seconds: 5));
+    
     print('\n🚀 [SPLASH] Timer complete - navigating to ${isOldUser ? "Main Screen" : "Login Screen"}');
     print('╔═══════════════════════════════════════════════════════════╗');
     print('║  SPLASH SCREEN COMPLETED IN ${splashDuration.inMilliseconds}ms');
@@ -734,6 +756,20 @@ class _SplashScreenState extends State<SplashScreen> {
         builder: (_) => isOldUser ? MainScreen(key: mainScreenKey) : const PhoneAuthScreen(),
       ),
     );
+  }
+  
+  Future<void> _checkForUpdate() async {
+    if (!mounted) return;
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (info.updateAvailability == UpdateAvailability.updateAvailable &&
+          info.immediateUpdateAllowed == true) {
+        await InAppUpdate.performImmediateUpdate();
+      }
+    } catch (_) {
+      // Not from Play Store, no network, or Play Core unavailable
+      // Silently continue — never disrupt the user flow
+    }
   }
 
   @override
@@ -1032,77 +1068,80 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver, Si
       ),
       bottomNavigationBar: SlideTransition(
         position: _slideAnimation,
-        child: Container(
-          height: 70,
-          decoration: BoxDecoration(
-            color: Colors.white, // White background
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08), // Top shadow
-                blurRadius: 8,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Home Icon
-              _buildNavItem(
-                icon: Icons.home_outlined,
-                isSelected: currentIndex == 0,
-                onTap: () {
-                  setState(() => currentIndex = 0);
-                },
-              ),
-              // Favorites Icon
-              _buildNavItem(
-                icon: Icons.favorite_border,
-                isSelected: currentIndex == 1,
-                onTap: () {
-                  setState(() => currentIndex = 1);
-                  _favoritesKey.currentState?.refreshFavorites();
-                  _checkProfileCompleteness();
-                },
-              ),
-              // Profile Icon
-              _buildNavItem(
-                icon: Icons.person_outline,
-                isSelected: currentIndex == 2,
-                showBadge: _isProfileIncomplete,
-                onTap: () {
-                  setState(() => currentIndex = 2);
-                  _checkProfileCompleteness();
-                },
-              ),
-              // Cart Icon (Floating)
-              GestureDetector(
-                onTap: () {
-                  setState(() => currentIndex = 3);
-                  _checkProfileCompleteness();
-                },
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: kPrimaryColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: kPrimaryColor.withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.shopping_bag_outlined,
-                    color: Colors.white,
-                    size: 28,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            height: 70,
+            decoration: BoxDecoration(
+              color: Colors.white, // White background
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08), // Top shadow
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                // Home Icon
+                _buildNavItem(
+                  icon: Icons.home_outlined,
+                  isSelected: currentIndex == 0,
+                  onTap: () {
+                    setState(() => currentIndex = 0);
+                  },
+                ),
+                // Favorites Icon
+                _buildNavItem(
+                  icon: Icons.favorite_border,
+                  isSelected: currentIndex == 1,
+                  onTap: () {
+                    setState(() => currentIndex = 1);
+                    _favoritesKey.currentState?.refreshFavorites();
+                    _checkProfileCompleteness();
+                  },
+                ),
+                // Profile Icon
+                _buildNavItem(
+                  icon: Icons.person_outline,
+                  isSelected: currentIndex == 2,
+                  showBadge: _isProfileIncomplete,
+                  onTap: () {
+                    setState(() => currentIndex = 2);
+                    _checkProfileCompleteness();
+                  },
+                ),
+                // Cart Icon (Floating)
+                GestureDetector(
+                  onTap: () {
+                    setState(() => currentIndex = 3);
+                    _checkProfileCompleteness();
+                  },
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: kPrimaryColor,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: kPrimaryColor.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.shopping_bag_outlined,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -3265,7 +3304,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                     ],
                   ),
                   Text(
-                    '₹${(product.price * qty).toStringAsFixed(2)}',
+                    '₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -4078,7 +4117,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'weight': item.weight,
           'quantity': item.quantity,
           'price': item.price,
-          'image_url': item.imageUrl, // Store image URL
+          'image_url': item.imageUrl,
         };
       }).toList();
 
@@ -5946,7 +5985,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   const SizedBox(height: 12),
                                   // Total price display
                                   Text(
-                                    'Total: ₹${(product.price * qty).toStringAsFixed(2)}',
+                                    'Total: ₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
@@ -6505,7 +6544,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       ],
                     ),
                     Text(
-                      '₹${(product.price * qty).toStringAsFixed(2)}',
+                      '₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,

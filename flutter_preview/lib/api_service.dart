@@ -280,6 +280,7 @@ class Product {
   final String productName;
   final String? productNameTa;
   final String weight;
+  final String unit;  // e.g., "kg", "liters", "pieces"
   final double price;
   final double? buyingPrice;  // ⭐ NEW - Admin buying price (nullable)
   final String imageUrl;
@@ -303,6 +304,7 @@ class Product {
     required this.productName,
     this.productNameTa,
     required this.weight,
+    this.unit = '',
     required this.price,
     this.buyingPrice,  // ⭐ NEW - Optional admin field
     required this.imageUrl,
@@ -327,6 +329,7 @@ class Product {
       productName: json['product_name'] ?? 'Unknown Product',
       productNameTa: json['product_name_ta'],
       weight: json['weight'] ?? '',
+      unit: json['unit'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       buyingPrice: json['buying_price'] != null   // ⭐ NEW - Parse buying price
           ? (json['buying_price'] as num).toDouble()

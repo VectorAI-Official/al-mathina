@@ -3,6 +3,89 @@
  * Handles order listing, details view, status updates, and invoice printing
  */
 
+// ============ WEIGHT-BASED PRICE CONVERSION UTILITIES ============
+
+/**
+ * Parses a weight string like "500g", "1.5kg", "500ml", "1L"
+ * Returns {value: number, subUnit: string} or {value: 0, subUnit: ''}
+ */
+function parseWeight(weightStr) {
+    if (!weightStr || typeof weightStr !== 'string') return { value: 0, subUnit: '' };
+    weightStr = weightStr.trim().toLowerCase();
+    if (!weightStr) return { value: 0, subUnit: '' };
+
+    const subUnits = ['kg', 'g', 'ml', 'l', 'ltr', 'liter', 'liters'];
+    for (const su of subUnits) {
+        if (weightStr.endsWith(su)) {
+            const numStr = weightStr.substring(0, weightStr.length - su.length).trim();
+            if (!numStr) return { value: 0, subUnit: '' };
+            const val = parseFloat(numStr);
+            if (isNaN(val)) return { value: 0, subUnit: '' };
+            return { value: val, subUnit: su };
+        }
+    }
+    return { value: 0, subUnit: '' };
+}
+
+/**
+ * Normalizes variant sub-units to canonical base forms.
+ */
+function _normalizeSubUnit(sub) {
+    if (['l', 'ltr', 'liter', 'liters'].includes(sub)) return 'l';
+    return sub;
+}
+
+/**
+ * Normalizes the product's unit field to canonical base forms.
+ */
+function _normalizeBaseUnit(unit) {
+    if (!unit || typeof unit !== 'string') return '';
+    const u = unit.trim().toLowerCase();
+    if (u === 'kg') return 'kg';
+    if (u === 'g') return 'g';
+    if (['liters', 'liter', 'ltr', 'l'].includes(u)) return 'l';
+    if (u === 'ml') return 'ml';
+    if (['pieces', 'piece', 'pcs', 'pc', 'units', 'unit', 'nos'].includes(u)) return 'pieces';
+    return u;
+}
+
+/**
+ * Computes the effective price for a product variant based on its
+ * per-unit price and the actual weight/size.
+ *
+ * Examples:
+ *   calculateEffectivePrice(120, "500g", "kg")    → 60.00
+ *   calculateEffectivePrice(120, "1kg", "kg")     → 120.00
+ *   calculateEffectivePrice(40, "500ml", "liters") → 20.00
+ *   calculateEffectivePrice(10, "", "pieces")       → 10.00
+ */
+function calculateEffectivePrice(pricePerUnit, weight, unit) {
+    if (!pricePerUnit || pricePerUnit <= 0) return pricePerUnit || 0;
+
+    const baseUnit = _normalizeBaseUnit(unit);
+    if (baseUnit === 'pieces' || baseUnit === '') return pricePerUnit;
+
+    const parsed = parseWeight(weight);
+    if (parsed.value <= 0 || !parsed.subUnit) return pricePerUnit;
+
+    const normSub = _normalizeSubUnit(parsed.subUnit);
+    let factor;
+
+    if (baseUnit === 'kg') {
+        if (normSub === 'g') factor = parsed.value / 1000.0;
+        else if (normSub === 'kg') factor = parsed.value;
+        else return pricePerUnit;
+    } else if (baseUnit === 'l') {
+        if (normSub === 'ml') factor = parsed.value / 1000.0;
+        else if (normSub === 'l') factor = parsed.value;
+        else return pricePerUnit;
+    } else {
+        return pricePerUnit;
+    }
+
+    return Math.round(pricePerUnit * factor * 100) / 100;
+}
+
 // Global state
 let allOrders = [];
 let filteredOrders = []; // Currently filtered/displayed orders
@@ -1022,7 +1105,8 @@ function getOrderItemsFromTable() {
             product_name: (row.querySelector('td:first-child strong')?.textContent || '').trim(),
             weight: (row.querySelector('td:nth-child(2)')?.textContent || '').trim(),
             price: parseFloat(priceInput?.value) || 0,
-            quantity: parseInt(qtyInput?.value) || 0
+            quantity: parseInt(qtyInput?.value) || 0,
+            unit: (row.dataset.unit || '').trim()
         };
     });
 }
@@ -2235,7 +2319,8 @@ function displaySearchResults(products) {
                     </div>
                     <div style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 12px;">
                         <span><i class="fas fa-weight-hanging" style="margin-right: 4px;"></i>${product.weight || 'N/A'}</span>
-                        <span><i class="fas fa-rupee-sign" style="margin-right: 4px;"></i>${parseFloat(product.price).toFixed(2)}</span>
+                        <span><i class="fas fa-rupee-sign" style="margin-right: 4px;"></i>${parseFloat(product.price).toFixed(2)}${product.unit ? '/' + product.unit : ''}</span>
+                        ${(() => { const ep = calculateEffectivePrice(parseFloat(product.price), product.weight, product.unit || ''); return ep !== parseFloat(product.price) ? `<span style="color: #2E7D32; font-weight: 600;">→ ₹${ep.toFixed(2)}</span>` : ''; })()}
                         ${product.section ? `<span style="background: #E8F5E9; padding: 2px 8px; border-radius: 12px; color: #2E7D32; font-size: 11px;">${product.section}</span>` : ''}
                     </div>
                 </div>
@@ -2254,7 +2339,7 @@ function displaySearchResults(products) {
                         id="btn-${uniqueId}" 
                         class="btn-add-product"
                         disabled
-                        onclick="addProductToOrderWithQty('${product.item_id}', '${product.product_name.replace(/'/g, "\\'")}', '${product.weight || ''}', ${product.price}, '${uniqueId}')"
+                        onclick="addProductToOrderWithQty('${product.item_id}', '${product.product_name.replace(/'/g, "\\'")}', '${product.weight || ''}', ${product.price}, '${uniqueId}', '${product.unit || ''}')"
                         style="background: #cccccc; color: white; border: none; padding: 8px 12px; border-radius: 50%; cursor: not-allowed; transition: all 0.2s; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
                         <i class="fas fa-plus" style="font-size: 16px;"></i>
                     </button>
@@ -2285,7 +2370,7 @@ function toggleAddButton(uniqueId, qtyValue) {
 }
 
 // Add product to order with specified quantity
-function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) {
+function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId, unit) {
     const qtyInput = document.getElementById(`qty-${uniqueId}`);
     const quantity = parseInt(qtyInput.value) || 1;
 
@@ -2294,6 +2379,8 @@ function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) 
         return;
     }
 
+    // Calculate effective price based on weight
+    const effectivePrice = calculateEffectivePrice(parseFloat(price), weight, unit || '');
     const tbody = document.querySelector('#orderItemsTable tbody');
 
     // Check if product already exists
@@ -2325,17 +2412,18 @@ function addProductToOrderWithQty(itemId, productName, weight, price, uniqueId) 
         const newRow = document.createElement('tr');
         newRow.dataset.itemIndex = newIndex;
         newRow.dataset.productId = itemId;
-        newRow.dataset.price = price;
+        newRow.dataset.price = effectivePrice;
         newRow.dataset.weight = weight;
+        newRow.dataset.unit = unit || '';
 
-        const totalAmount = (parseFloat(price) * quantity).toFixed(2);
+        const totalAmount = (effectivePrice * quantity).toFixed(2);
 
         newRow.innerHTML = `
             <td><strong>${productName}</strong></td>
             <td>${weight || '-'}</td>
             <td class="price-cell">
-                <span class="price-display" style="display: none;">₹${parseFloat(price).toFixed(2)}</span>
-                <input type="number" class="price-input" value="${price}" min="0" step="0.01" style="display: inline; width: 80px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="${price}">
+                <span class="price-display" style="display: none;">₹${effectivePrice.toFixed(2)}</span>
+                <input type="number" class="price-input" value="${effectivePrice}" min="0" step="0.01" style="display: inline; width: 80px; padding: 4px; text-align: center; border: 2px solid #4CAF50;" data-original="${effectivePrice}">
             </td>
             <td class="qty-cell">
                 <span class="qty-display" style="display: none;">×${quantity}</span>

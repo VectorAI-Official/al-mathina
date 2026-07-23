@@ -255,7 +255,7 @@ func CreateOrder(c *gin.Context) {
 		if len(uniqueProdNames) > 0 {
 			productsCol := database.GetCollection("products")
 			proj := options.Find().SetProjection(bson.M{
-				"item_id": 1, "product_name": 1, "weight": 1,
+				"item_id": 1, "product_name": 1, "weight": 1, "unit": 1,
 				"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
 			})
 			cursor, err := productsCol.Find(ctx, bson.M{"product_name": bson.M{"$in": uniqueProdNames}}, proj)
@@ -304,7 +304,7 @@ func CreateOrder(c *gin.Context) {
 		productsCol2 := database.GetCollection("products")
 		proj2 := options.Find().
 			SetProjection(bson.M{
-				"item_id": 1, "product_name": 1, "weight": 1,
+				"item_id": 1, "product_name": 1, "weight": 1, "unit": 1,
 				"image_url": 1, "category_section": 1, "category_main": 1, "category_sub": 1,
 			}).
 			SetCollation(&options.Collation{Locale: "en", Strength: 2})
@@ -356,8 +356,11 @@ func CreateOrder(c *gin.Context) {
 				if req.Items[i].Subcategory == "" {
 					req.Items[i].Subcategory = product.Subcategory
 				}
-				log.Printf("✨ Enriched item: %s -> ID: %s, Weight: %s",
-					req.Items[i].ProductName, product.ItemID, product.Weight)
+				// Apply weight-based price conversion
+				effectivePrice := utils.CalculateEffectivePrice(req.Items[i].Price, req.Items[i].Weight, product.Unit)
+				req.Items[i].Price = effectivePrice
+				log.Printf("✨ Enriched item: %s -> ID: %s, Weight: %s, Unit: %s, EffectivePrice: %.2f",
+					req.Items[i].ProductName, product.ItemID, req.Items[i].Weight, product.Unit, effectivePrice)
 			}
 		}
 

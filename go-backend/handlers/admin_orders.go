@@ -3,6 +3,7 @@ package handlers
 import (
 	"al-mathina-backend/database"
 	"al-mathina-backend/models"
+	"al-mathina-backend/utils"
 	"fmt"
 	"log"
 	"net/http"
@@ -160,6 +161,10 @@ func GetOrderByID(c *gin.Context) {
 					if weight, ok := product["weight"]; ok {
 						item["weight"] = weight
 					}
+					// Add unit from product
+					if unit, ok := product["unit"]; ok {
+						item["unit"] = unit
+					}
 					// Add current stock
 					if stock, ok := product["stock"]; ok {
 						item["current_stock"] = stock
@@ -175,6 +180,7 @@ func GetOrderByID(c *gin.Context) {
 					if _, hasWeight := item["weight"]; !hasWeight {
 						item["weight"] = ""
 					}
+					item["unit"] = ""
 					item["current_stock"] = 0
 					item["image_url"] = ""
 				}
@@ -491,6 +497,37 @@ func UpdateOrderItems(c *gin.Context) {
 	ctx, cancel := database.GetDBContext()
 	defer cancel()
 	collection := database.GetCollection("orders")
+	productsCol := database.GetCollection("products")
+
+	// Apply weight-based price conversion for each item
+	for i := range req.Items {
+		item := &req.Items[i]
+		if item.ItemID != "" {
+			var product bson.M
+			err := productsCol.FindOne(ctx, bson.M{"item_id": item.ItemID}).Decode(&product)
+			if err == nil {
+				unit := ""
+				if u, ok := product["unit"].(string); ok {
+					unit = u
+				}
+				effectivePrice := utils.CalculateEffectivePrice(item.Price, item.Weight, unit)
+				item.Price = effectivePrice
+			}
+		} else if item.ProductName != "" {
+			// Fallback: lookup by product name
+			var product bson.M
+			err := productsCol.FindOne(ctx, bson.M{"product_name": item.ProductName}).Decode(&product)
+			if err == nil {
+				unit := ""
+				if u, ok := product["unit"].(string); ok {
+					unit = u
+				}
+				effectivePrice := utils.CalculateEffectivePrice(item.Price, item.Weight, unit)
+				item.Price = effectivePrice
+			}
+		}
+		item.Subtotal = item.Price * float64(item.Quantity)
+	}
 
 	// Recalculate totals
 	var totalAmount float64

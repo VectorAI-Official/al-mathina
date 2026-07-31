@@ -92,6 +92,11 @@ let filteredOrders = []; // Currently filtered/displayed orders
 let currentOrder = null;
 let originalOrderItemsSnapshot = [];
 let selectedOrderIds = new Set(); // Track selected order IDs for bulk actions
+
+// Return Items editing state (namespaced to keep separate from Order Items)
+let originalReturnItemsSnapshot = [];
+let returnIsEditMode = false;
+let returnSectionExpanded = false;
 let selectedDateFilter = {
     type: 'all', // 'all', 'single', 'range'
     singleDate: null,
@@ -623,6 +628,92 @@ function renderOrderDetails(order) {
                             <i class="fas fa-save"></i> Save Changes
                         </button>
                         <button class="btn btn-secondary" onclick="cancelEditMode()">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Return Items -->
+                <div class="detail-section" style="border-left: 4px solid #F57C00;">
+                    <h3>
+                        <i class="fas fa-undo-alt" style="color: #F57C00;"></i> <span style="color: #E65100;">Return Items</span>
+                        ${order.return_items && order.return_items.length > 0 ? `
+                            <button class="btn-edit-return-items" onclick="toggleReturnEditMode()" title="Edit Return Quantities"
+                                style="background: #F57C00; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        ` : `
+                            <button class="btn-add-return-items" onclick="openReturnItemsEditor()" title="Add Return Items"
+                                style="background: #F57C00; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                                <i class="fas fa-plus-circle"></i> Add Return Items
+                            </button>
+                        `}
+                    </h3>
+                    <!-- Add Return Product Search (hidden by default, shown in return edit mode) -->
+                    <div id="returnAddProductContainer" style="display: none; margin-bottom: 20px; padding: 15px; background: #FFF8F0; border-radius: 8px; border: 1px solid #F57C00;">
+                        <h4 style="margin: 0 0 10px 0; color: #E65100;"><i class="fas fa-plus-circle"></i> Add Product to Return</h4>
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <div style="flex: 1; position: relative;">
+                                <input type="text" id="returnProductSearchInput" placeholder="Search product by name..."
+                                    style="width: 100%; padding: 10px; border: 2px solid #F57C00; border-radius: 6px; font-size: 14px;"
+                                    onkeyup="searchReturnProducts(this.value)">
+                                <div id="returnProductSearchResults" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"></div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="clearReturnProductSearch()" style="padding: 10px 20px;">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div id="returnItemsTableContainer" style="${order.return_items && order.return_items.length > 0 ? '' : 'display: none;'}">
+                        <div class="items-table">
+                            <table id="returnItemsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Weight</th>
+                                        <th>Price</th>
+                                        <th>Qty</th>
+                                        <th>Total</th>
+                                        <th style="display: none;" class="return-edit-only-column">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${(order.return_items || []).map((item, index) => `
+                                        <tr data-item-index="${index}" data-product-id="${item.item_id || ''}" data-price="${item.price}" data-weight="${item.weight || ''}" data-unit="${item.unit || ''}">
+                                            <td><strong>${item.product_name}</strong></td>
+                                            <td>${item.weight || '-'}</td>
+                                            <td class="return-price-cell">
+                                                <span class="return-price-display">₹${parseFloat(item.price).toFixed(2)}</span>
+                                                <input type="number" class="return-price-input" value="${item.price}" min="0" step="0.01" style="display: none;" data-original="${item.price}">
+                                            </td>
+                                            <td class="return-qty-cell">
+                                                <span class="return-qty-display">×${item.quantity}</span>
+                                                <input type="number" class="return-qty-input" value="${item.quantity}" min="1" style="display: none;" data-original="${item.quantity}">
+                                            </td>
+                                            <td class="return-item-total"><strong>₹${(item.price * item.quantity).toFixed(2)}</strong></td>
+                                            <td style="display: none;" class="return-edit-only-column">
+                                                <button class="btn-delete-return-item" onclick="removeReturnItem(this)" style="display: none; background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" title="Remove item">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="4" style="text-align: right;"><strong style="color: #E65100;">Return Items Total:</strong></td>
+                                        <td><strong class="return-total-amount" style="color: #E65100;">₹${parseFloat(order.return_total || 0).toFixed(2)}</strong></td>
+                                        <td style="display: none;" class="return-edit-only-column"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="returnSaveButtonContainer" style="display: none; margin-top: 15px; text-align: right;">
+                        <button class="btn btn-primary" onclick="saveReturnItemsChanges('${order.order_id}')" style="margin-right: 10px; background: #F57C00; border-color: #F57C00;">
+                            <i class="fas fa-save"></i> Save Return Items
+                        </button>
+                        <button class="btn btn-secondary" onclick="cancelReturnEditMode()">
                             <i class="fas fa-times"></i> Cancel
                         </button>
                     </div>
@@ -1323,20 +1414,6 @@ function generateInvoiceHTML(order, opts = {}) {
       line-height: 1.6;
     }
 
-        .customer-notice {
-            margin: 14px 0 18px 0;
-            padding: ${shareMode ? '12px 14px' : '14px 16px'};
-            border: 2px solid #B71C1C;
-            background: #FFF3F3;
-            color: #B71C1C;
-            font-size: ${shareMode ? '18px' : '22px'};
-            font-weight: 800;
-            line-height: 1.4;
-            text-align: center;
-            border-radius: 8px;
-            letter-spacing: 0.2px;
-        }
-    
     .invoice-meta {
       text-align: right;
     }
@@ -1449,6 +1526,45 @@ function generateInvoiceHTML(order, opts = {}) {
     }
     
     .total-section .total-label {
+      font-size: ${shareMode ? '13px' : '16px'};
+      color: #555555;
+      margin-right: 15px;
+    }
+    
+    /* Invoice section headings (Ordered Items / Return Items) */
+    .invoice-section-heading {
+      font-size: ${shareMode ? '14px' : '17px'};
+      color: #004D40;
+      font-weight: 700;
+      margin: 25px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .invoice-section-heading.return-section-heading {
+      color: #F57C00;
+    }
+    
+    /* Return Items Total Section */
+    .return-total-section {
+      margin-top: 20px;
+      padding: 16px;
+      background: #FFF3E0;
+      border: 2px solid #F57C00;
+      border-radius: 8px;
+      text-align: right;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .return-total-section .return-grand-total {
+      font-size: ${shareMode ? '18px' : '24px'};
+      color: #F57C00;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    
+    .return-total-section .total-label {
       font-size: ${shareMode ? '13px' : '16px'};
       color: #555555;
       margin-right: 15px;
@@ -1595,10 +1711,8 @@ function generateInvoiceHTML(order, opts = {}) {
       </div>
     </div>
 
-    <!-- Customer Notice -->
-    <div class="customer-notice">தயவு செய்து பொருளை சரிபார்த்து பெற்றுக்கொள்ளவும் இப்படிக்கு நிர்வாகம்</div>
-    
-    <!-- Items Table -->
+    <!-- Ordered Items -->
+    <h2 class="invoice-section-heading">Ordered Items</h2>
     <table class="items-table">
       <thead>
         <tr>
@@ -1626,9 +1740,44 @@ function generateInvoiceHTML(order, opts = {}) {
     
     <!-- Total -->
     <div class="total-section">
-      <span class="total-label">GRAND TOTAL:</span>
+      <span class="total-label">ORDER TOTAL:</span>
       <span class="grand-total">₹${parseFloat(order.total_amount).toFixed(2)}</span>
     </div>
+    
+    ${order.return_items && order.return_items.length > 0 ? `
+    <!-- Return Items -->
+    <h2 class="invoice-section-heading return-section-heading">Return Items</h2>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product Name</th>
+          <th>Weight</th>
+          <th>Price</th>
+          <th>Qty</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${order.return_items.map((item, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${item.product_name}</td>
+            <td>${item.weight || '-'}</td>
+            <td>₹${parseFloat(item.price).toFixed(2)}</td>
+            <td>${item.quantity}</td>
+            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    
+    <!-- Return Items Total -->
+    <div class="return-total-section">
+      <span class="total-label">RETURN ITEMS TOTAL:</span>
+      <span class="return-grand-total">₹${parseFloat(order.return_total || 0).toFixed(2)}</span>
+    </div>
+    ` : ''}
     
     <!-- Footer - Empty white space for page padding -->
     <div class="invoice-footer"></div>
@@ -2470,6 +2619,440 @@ function removeOrderItem(button) {
     showToast(`${productName} removed from order`, 'info');
 }
 
+// ============ RETURN ITEMS EDITING FUNCTIONS ============
+// Namespaced (Return*) mirror of the Order Items edit UX, operating on a
+// separate #returnItemsTable and the /update-return-items endpoint. Returns
+// never touch inventory or the real order amount.
+
+// Open the return items editor (used when the order has no return items yet)
+function openReturnItemsEditor() {
+    returnSectionExpanded = true;
+    returnIsEditMode = true;
+    originalReturnItemsSnapshot = getReturnItemsFromTable();
+
+    const tableContainer = document.getElementById('returnItemsTableContainer');
+    if (tableContainer) tableContainer.style.display = 'block';
+
+    const addProductContainer = document.getElementById('returnAddProductContainer');
+    if (addProductContainer) addProductContainer.style.display = 'block';
+
+    const saveContainer = document.getElementById('returnSaveButtonContainer');
+    if (saveContainer) saveContainer.style.display = 'block';
+
+    const addBtn = document.querySelector('.btn-add-return-items');
+    if (addBtn) addBtn.style.display = 'none';
+
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; });
+}
+
+// Toggle edit mode for return quantities
+function toggleReturnEditMode() {
+    returnIsEditMode = true;
+    originalReturnItemsSnapshot = getReturnItemsFromTable();
+
+    // Show quantity inputs
+    document.querySelectorAll('.return-qty-display').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.return-qty-input').forEach(el => {
+        el.style.display = 'inline';
+        el.style.width = '60px';
+        el.style.padding = '4px';
+        el.style.textAlign = 'center';
+        el.style.border = '2px solid #F57C00';
+    });
+
+    // Show price inputs
+    document.querySelectorAll('.return-price-display').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.return-price-input').forEach(el => {
+        el.style.display = 'inline';
+        el.style.width = '80px';
+        el.style.padding = '4px';
+        el.style.textAlign = 'center';
+        el.style.border = '2px solid #F57C00';
+    });
+
+    // Show add return product container
+    const addProductContainer = document.getElementById('returnAddProductContainer');
+    if (addProductContainer) addProductContainer.style.display = 'block';
+
+    // Show delete buttons and action column
+    document.querySelectorAll('.return-edit-only-column').forEach(el => el.style.display = 'table-cell');
+    document.querySelectorAll('.btn-delete-return-item').forEach(btn => btn.style.display = 'inline-block');
+
+    // Add event listeners
+    document.querySelectorAll('.return-qty-input').forEach(input => input.addEventListener('input', updateReturnItemTotal));
+    document.querySelectorAll('.return-price-input').forEach(input => input.addEventListener('input', updateReturnItemTotal));
+
+    const saveContainer = document.getElementById('returnSaveButtonContainer');
+    if (saveContainer) saveContainer.style.display = 'block';
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; });
+    const editBtn = document.querySelector('.btn-edit-return-items');
+    if (editBtn) editBtn.style.display = 'none';
+}
+
+function cancelReturnEditMode() {
+    returnIsEditMode = false;
+
+    // Reset quantity inputs
+    document.querySelectorAll('.return-qty-input').forEach(input => { input.value = input.dataset.original; input.style.display = 'none'; });
+    document.querySelectorAll('.return-qty-display').forEach(el => el.style.display = 'inline');
+
+    // Reset price inputs
+    document.querySelectorAll('.return-price-input').forEach(input => { input.value = input.dataset.original; input.style.display = 'none'; });
+    document.querySelectorAll('.return-price-display').forEach(el => el.style.display = 'inline');
+
+    // Hide add return product container
+    const addProductContainer = document.getElementById('returnAddProductContainer');
+    if (addProductContainer) addProductContainer.style.display = 'none';
+    clearReturnProductSearch();
+
+    // Hide delete buttons and action column
+    document.querySelectorAll('.return-edit-only-column').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.btn-delete-return-item').forEach(btn => btn.style.display = 'none');
+
+    const saveContainer = document.getElementById('returnSaveButtonContainer');
+    if (saveContainer) saveContainer.style.display = 'none';
+    document.querySelectorAll('.action-btn').forEach(btn => { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; });
+
+    // If no return items remain and we were in expanded state, collapse back
+    const rows = document.querySelectorAll('#returnItemsTable tbody tr');
+    const tableContainer = document.getElementById('returnItemsTableContainer');
+    if (rows.length === 0 && tableContainer && returnSectionExpanded) {
+        returnSectionExpanded = false;
+        tableContainer.style.display = 'none';
+        const addBtn = document.querySelector('.btn-add-return-items');
+        if (addBtn) addBtn.style.display = 'inline-block';
+    } else {
+        const editBtn = document.querySelector('.btn-edit-return-items');
+        if (editBtn) editBtn.style.display = 'inline-block';
+    }
+
+    recalculateReturnGrandTotal();
+}
+
+function updateReturnItemTotal(event) {
+    const input = event.target;
+    const row = input.closest('tr');
+
+    const priceInput = row.querySelector('.return-price-input');
+    const price = priceInput ? parseFloat(priceInput.value) || 0 : parseFloat(row.dataset.price);
+
+    const qtyInput = row.querySelector('.return-qty-input');
+    const quantity = parseInt(qtyInput.value) || 0;
+
+    const itemTotal = price * quantity;
+    const totalCell = row.querySelector('.return-item-total strong');
+    if (totalCell) totalCell.textContent = `₹${itemTotal.toFixed(2)}`;
+
+    recalculateReturnGrandTotal();
+}
+
+function recalculateReturnGrandTotal() {
+    let grandTotal = 0;
+    document.querySelectorAll('#returnItemsTable tbody tr').forEach(row => {
+        const priceInput = row.querySelector('.return-price-input');
+        const price = priceInput ? (parseFloat(priceInput.value) || parseFloat(priceInput.dataset.original)) : parseFloat(row.dataset.price);
+
+        const qtyInput = row.querySelector('.return-qty-input');
+        const quantity = parseInt(qtyInput?.value) || parseInt(qtyInput?.dataset.original) || 0;
+
+        grandTotal += price * quantity;
+    });
+    const totalEl = document.querySelector('.return-total-amount');
+    if (totalEl) totalEl.textContent = `₹${grandTotal.toFixed(2)}`;
+}
+
+function getReturnItemsFromTable() {
+    return Array.from(document.querySelectorAll('#returnItemsTable tbody tr')).map(row => {
+        const qtyInput = row.querySelector('.return-qty-input');
+        const priceInput = row.querySelector('.return-price-input');
+        const weightText = (row.querySelector('td:nth-child(2)')?.textContent || '').trim();
+
+        return {
+            item_id: (row.dataset.productId || '').trim(),
+            product_name: (row.querySelector('td:first-child strong')?.textContent || '').trim(),
+            weight: weightText === '-' ? '' : weightText,
+            price: parseFloat(priceInput?.value) || 0,
+            quantity: parseInt(qtyInput?.value) || 0,
+            unit: (row.dataset.unit || '').trim()
+        };
+    });
+}
+
+async function saveReturnItemsChanges(orderId) {
+    if (!confirm('Are you sure you want to save these return items? This will update the return record for the order.')) {
+        return;
+    }
+
+    const updatedItems = getReturnItemsFromTable();
+
+    if (updatedItems.length === 0) {
+        alert('Return items list is empty. Add at least one product or cancel.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/admin/orders/${orderId}/update-return-items`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                items: updatedItems
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Return items updated successfully!');
+
+            // Update current order data with response from server
+            currentOrder.return_items = data.return_items || updatedItems;
+            currentOrder.return_total = data.return_total || updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            // Re-render the order details with new data
+            renderOrderDetails(currentOrder);
+
+            // Exit return edit mode
+            cancelReturnEditMode();
+
+            // Refresh main order list in background
+            loadOrders();
+        } else {
+            throw new Error(data.error || 'Failed to update return items');
+        }
+    } catch (error) {
+        console.error('Error updating return items:', error);
+        alert('Error updating return items: ' + error.message);
+    }
+}
+
+// Search return products from backend (namespaced for #returnProductSearchResults)
+async function searchReturnProducts(query) {
+    clearTimeout(searchTimeout);
+
+    if (query.trim().length < 2) {
+        document.getElementById('returnProductSearchResults').style.display = 'none';
+        return;
+    }
+
+    // Show loading indicator
+    const resultsContainer = document.getElementById('returnProductSearchResults');
+    resultsContainer.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Searching...</div>';
+    resultsContainer.style.display = 'block';
+
+    searchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/admin/orders/products/search?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+
+            if (data.success && data.products.length > 0) {
+                displayReturnSearchResults(data.products);
+            } else {
+                resultsContainer.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <i class="fas fa-search" style="font-size: 32px; color: #ccc; margin-bottom: 8px;"></i>
+                        <div style="font-size: 14px;">No products found for "${query}"</div>
+                        <div style="font-size: 12px; color: #999; margin-top: 4px;">Try a different search term</div>
+                    </div>
+                `;
+                resultsContainer.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error searching return products:', error);
+            resultsContainer.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #f44336;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 8px;"></i>
+                    <div style="font-size: 14px;">Error loading products</div>
+                    <div style="font-size: 12px; color: #999; margin-top: 4px;">${error.message}</div>
+                </div>
+            `;
+            resultsContainer.style.display = 'block';
+        }
+    }, 300);
+}
+
+// Display return search results
+function displayReturnSearchResults(products) {
+    const resultsContainer = document.getElementById('returnProductSearchResults');
+
+    resultsContainer.innerHTML = products.map((product, index) => {
+        const tamilName = product.product_name_tamil || '';
+        const displayName = tamilName ? `${product.product_name} / ${tamilName}` : product.product_name;
+        const uniqueId = `return-product-${product.item_id}-${index}`;
+
+        return `
+            <div class="product-search-item"
+                style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; background: white;">
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 4px;">
+                        <strong style="color: #E65100; font-size: 14px;">${product.product_name}</strong>
+                        ${tamilName ? `<span style="color: #666; font-size: 13px; margin-left: 6px;">/ ${tamilName}</span>` : ''}
+                    </div>
+                    <div style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 12px;">
+                        <span><i class="fas fa-weight-hanging" style="margin-right: 4px;"></i>${product.weight || 'N/A'}</span>
+                        <span><i class="fas fa-rupee-sign" style="margin-right: 4px;"></i>${parseFloat(product.price).toFixed(2)}${product.unit ? '/' + product.unit : ''}</span>
+                        ${(() => { const ep = calculateEffectivePrice(parseFloat(product.price), product.weight, product.unit || ''); return ep !== parseFloat(product.price) ? `<span style="color: #2E7D32; font-weight: 600;">→ ₹${ep.toFixed(2)}</span>` : ''; })()}
+                        ${product.section ? `<span style="background: #FFF3E0; padding: 2px 8px; border-radius: 12px; color: #E65100; font-size: 11px;">${product.section}</span>` : ''}
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="number"
+                        id="qty-${uniqueId}"
+                        class="product-qty-input"
+                        placeholder="Qty"
+                        min="1"
+                        value=""
+                        style="width: 70px; padding: 6px 8px; text-align: center; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                        oninput="toggleReturnAddButton('${uniqueId}', this.value)"
+                        onfocus="this.style.borderColor='#F57C00'"
+                        onblur="this.style.borderColor='#e0e0e0'">
+                    <button
+                        id="btn-${uniqueId}"
+                        class="btn-add-product"
+                        disabled
+                        onclick="addReturnProductToOrderWithQty('${product.item_id}', '${product.product_name.replace(/'/g, "\\'")}', '${product.weight || ''}', ${product.price}, '${uniqueId}', '${product.unit || ''}')"
+                        style="background: #cccccc; color: white; border: none; padding: 8px 12px; border-radius: 50%; cursor: not-allowed; transition: all 0.2s; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-plus" style="font-size: 16px;"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    resultsContainer.style.display = 'block';
+}
+
+// Toggle return add button based on quantity input
+function toggleReturnAddButton(uniqueId, qtyValue) {
+    const button = document.getElementById(`btn-${uniqueId}`);
+    const qty = parseInt(qtyValue);
+
+    if (qty && qty > 0) {
+        button.disabled = false;
+        button.style.background = '#F57C00';
+        button.style.cursor = 'pointer';
+        button.style.boxShadow = '0 2px 4px rgba(245, 124, 0, 0.3)';
+    } else {
+        button.disabled = true;
+        button.style.background = '#cccccc';
+        button.style.cursor = 'not-allowed';
+        button.style.boxShadow = 'none';
+    }
+}
+
+// Add product to return with specified quantity
+function addReturnProductToOrderWithQty(itemId, productName, weight, price, uniqueId, unit) {
+    const qtyInput = document.getElementById(`qty-${uniqueId}`);
+    const quantity = parseInt(qtyInput.value) || 1;
+
+    if (quantity <= 0) {
+        showToast('Please enter a valid quantity', 'error');
+        return;
+    }
+
+    // Calculate effective price based on weight
+    const effectivePrice = calculateEffectivePrice(parseFloat(price), weight, unit || '');
+    const tbody = document.querySelector('#returnItemsTable tbody');
+
+    // Check if product already exists
+    const existingRow = Array.from(tbody.querySelectorAll('tr')).find(row => {
+        const existingName = row.querySelector('td:first-child strong')?.textContent;
+        const existingWeight = row.dataset.weight;
+        return existingName === productName && existingWeight === weight;
+    });
+
+    if (existingRow) {
+        // Increment quantity if product already exists
+        const qtyInputExisting = existingRow.querySelector('.return-qty-input');
+        if (qtyInputExisting) {
+            const currentQty = parseInt(qtyInputExisting.value) || 0;
+            qtyInputExisting.value = currentQty + quantity;
+
+            // Update display
+            const qtyDisplay = existingRow.querySelector('.return-qty-display');
+            if (qtyDisplay) qtyDisplay.textContent = `×${qtyInputExisting.value}`;
+
+            // Recalculate totals
+            updateReturnItemTotal({ target: qtyInputExisting });
+        }
+
+        showToast(`Quantity increased for ${productName} (+${quantity})`, 'success');
+    } else {
+        // Add new row
+        const newIndex = tbody.children.length;
+        const newRow = document.createElement('tr');
+        newRow.dataset.itemIndex = newIndex;
+        newRow.dataset.productId = itemId;
+        newRow.dataset.price = effectivePrice;
+        newRow.dataset.weight = weight;
+        newRow.dataset.unit = unit || '';
+
+        const totalAmount = (effectivePrice * quantity).toFixed(2);
+
+        newRow.innerHTML = `
+            <td><strong>${productName}</strong></td>
+            <td>${weight || '-'}</td>
+            <td class="return-price-cell">
+                <span class="return-price-display" style="display: none;">₹${effectivePrice.toFixed(2)}</span>
+                <input type="number" class="return-price-input" value="${effectivePrice}" min="0" step="0.01" style="display: inline; width: 80px; padding: 4px; text-align: center; border: 2px solid #F57C00;" data-original="${effectivePrice}">
+            </td>
+            <td class="return-qty-cell">
+                <span class="return-qty-display" style="display: none;">×${quantity}</span>
+                <input type="number" class="return-qty-input" value="${quantity}" min="1" style="display: inline; width: 60px; padding: 4px; text-align: center; border: 2px solid #F57C00;" data-original="${quantity}">
+            </td>
+            <td class="return-item-total"><strong>₹${totalAmount}</strong></td>
+            <td style="display: table-cell;" class="return-edit-only-column">
+                <button class="btn-delete-return-item" onclick="removeReturnItem(this)" style="display: inline-block; background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;" title="Remove item">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(newRow);
+
+        // Add event listeners to new inputs
+        const priceInput = newRow.querySelector('.return-price-input');
+        const qtyInputNew = newRow.querySelector('.return-qty-input');
+        if (priceInput) priceInput.addEventListener('input', updateReturnItemTotal);
+        if (qtyInputNew) qtyInputNew.addEventListener('input', updateReturnItemTotal);
+
+        showToast(`${productName} (×${quantity}) added to return`, 'success');
+    }
+
+    // Clear search
+    clearReturnProductSearch();
+
+    // Recalculate return grand total
+    recalculateReturnGrandTotal();
+}
+
+// Remove item from return
+function removeReturnItem(button) {
+    if (!confirm('Are you sure you want to remove this item?')) {
+        return;
+    }
+
+    const row = button.closest('tr');
+    const productName = row.querySelector('td:first-child strong')?.textContent || 'Product';
+
+    row.remove();
+    recalculateReturnGrandTotal();
+
+    showToast(`${productName} removed from return`, 'info');
+}
+
+// Clear return product search
+function clearReturnProductSearch() {
+    const input = document.getElementById('returnProductSearchInput');
+    const results = document.getElementById('returnProductSearchResults');
+    if (input) input.value = '';
+    if (results) {
+        results.style.display = 'none';
+        results.innerHTML = '';
+    }
+}
+
 // ============ BULK ORDER SELECTION FUNCTIONS ============
 
 // Toggle order selection
@@ -2629,5 +3212,14 @@ document.addEventListener('click', function (event) {
         !searchInput.contains(event.target) &&
         !searchResults.contains(event.target)) {
         searchResults.style.display = 'none';
+    }
+
+    const returnSearchInput = document.getElementById('returnProductSearchInput');
+    const returnSearchResults = document.getElementById('returnProductSearchResults');
+
+    if (returnSearchInput && returnSearchResults &&
+        !returnSearchInput.contains(event.target) &&
+        !returnSearchResults.contains(event.target)) {
+        returnSearchResults.style.display = 'none';
     }
 });

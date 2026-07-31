@@ -565,6 +565,95 @@ func UpdateOrderItems(c *gin.Context) {
 	})
 }
 
+// UpdateOrderReturnItems - PUT /api/admin/orders/:order_id/update-return-items
+//
+// Same pattern as UpdateOrderItems: binds []OrderItem, applies weight-based
+// price conversion via the products collection, computes return_total, and
+// $sets return_items + return_total + updated_at on the order document.
+//
+// IMPORTANT: does NOT call reduceInventoryForOrder — returns never touch
+// inventory or the real order amount.
+func UpdateOrderReturnItems(c *gin.Context) {
+	orderID := c.Param("order_id")
+
+	var req struct {
+		Items []models.OrderItem `json:"items" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	collection := database.GetCollection("orders")
+	productsCol := database.GetCollection("products")
+
+	// Apply weight-based price conversion for each item
+	for i := range req.Items {
+		item := &req.Items[i]
+		if item.ItemID != "" {
+			var product bson.M
+			err := productsCol.FindOne(ctx, bson.M{"item_id": item.ItemID}).Decode(&product)
+			if err == nil {
+				unit := ""
+				if u, ok := product["unit"].(string); ok {
+					unit = u
+				}
+				effectivePrice := utils.CalculateEffectivePrice(item.Price, item.Weight, unit)
+				item.Price = effectivePrice
+			}
+		} else if item.ProductName != "" {
+			// Fallback: lookup by product name
+			var product bson.M
+			err := productsCol.FindOne(ctx, bson.M{"product_name": item.ProductName}).Decode(&product)
+			if err == nil {
+				unit := ""
+				if u, ok := product["unit"].(string); ok {
+					unit = u
+				}
+				effectivePrice := utils.CalculateEffectivePrice(item.Price, item.Weight, unit)
+				item.Price = effectivePrice
+			}
+		}
+		item.Subtotal = item.Price * float64(item.Quantity)
+	}
+
+	// Recalculate return total (informational only)
+	var returnTotal float64
+	for _, item := range req.Items {
+		returnTotal += item.Price * float64(item.Quantity)
+	}
+
+	result, err := collection.UpdateOne(
+		ctx,
+		bson.M{"order_id": orderID},
+		bson.M{"$set": bson.M{
+			"return_items": req.Items,
+			"return_total": returnTotal,
+			"updated_at":   time.Now(),
+		}},
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update return items"})
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"message":      "Return items updated successfully",
+		"return_items": req.Items,
+		"return_total": returnTotal,
+	})
+}
+
 // DeleteOrder - DELETE /api/admin/orders/:order_id
 func DeleteOrder(c *gin.Context) {
 	orderID := c.Param("order_id")

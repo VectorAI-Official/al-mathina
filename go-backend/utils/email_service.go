@@ -316,3 +316,223 @@ func (s *EmailService) buildItemsHTML(items []models.OrderItem) string {
 	}
 	return buffer.String()
 }
+
+// SendReturnRequestNotification sends a return request notification to admin
+// via the same webhook mechanism as SendOrderNotificationToAdmin, reusing
+// AdminEmails. Orange header to visually distinguish from order emails.
+func (s *EmailService) SendReturnRequestNotification(user models.User, items []models.OrderItem, totalAmount float64) bool {
+	if !s.Enabled {
+		log.Println("⚠️ EMAIL: Service disabled - skipping return request notification")
+		return false
+	}
+
+	log.Println("\n============================================================")
+	log.Println("🔄 EMAIL: Sending return request notification via webhook")
+	log.Printf("🔄 EMAIL: Phone: %s", user.Phone)
+	log.Printf("🔄 EMAIL: Items: %d", len(items))
+	log.Printf("🔄 EMAIL: Total: ₹%.2f", totalAmount)
+	log.Println("============================================================")
+
+	subject := fmt.Sprintf("🔄 Return Item Request - %s", user.Phone)
+
+	// Build Address HTML from store_details
+	addressHtml := "Not provided"
+	if user.StoreDetails != nil {
+		var parts []string
+		if user.StoreDetails.Street != "" {
+			parts = append(parts, user.StoreDetails.Street)
+		}
+		if user.StoreDetails.City != "" {
+			parts = append(parts, user.StoreDetails.City)
+		}
+		if user.StoreDetails.State != "" {
+			parts = append(parts, user.StoreDetails.State)
+		}
+		if user.StoreDetails.Pincode != "" {
+			parts = append(parts, fmt.Sprintf("PIN: %s", user.StoreDetails.Pincode))
+		}
+		if user.StoreDetails.Landmark != "" {
+			parts = append(parts, fmt.Sprintf("Landmark: %s", user.StoreDetails.Landmark))
+		}
+		if len(parts) > 0 {
+			addressHtml = strings.Join(parts, "<br>")
+		}
+	}
+
+	// Build Items HTML
+	itemsHtml := s.buildItemsHTML(items)
+
+	// Shop / Customer Info with fallbacks
+	storeName := "Not provided"
+	if user.StoreDetails != nil && user.StoreDetails.StoreName != "" {
+		storeName = user.StoreDetails.StoreName
+	}
+	ownerName := "Not provided"
+	if user.Name != "" {
+		ownerName = user.Name
+	}
+	email := "Not provided"
+	if user.Email != "" {
+		email = user.Email
+	}
+
+	htmlBody := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<style>
+			body { 
+				font-family: Arial, 'Noto Sans Tamil', 'Lohit Tamil', sans-serif; 
+				line-height: 1.6; 
+				color: #333; 
+				margin: 0; 
+				padding: 0; 
+			}
+			.container { max-width: 600px; margin: 0 auto; padding: 10px; }
+			@media screen and (max-width: 640px) {
+				.container { max-width: 100%%; padding: 5px; }
+			}
+			.header { background: #F57C00; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+			.content { background: #f8f9fa; padding: 20px; }
+			.order-details { background: white; padding: 15px; border-radius: 5px; margin: 10px 0; }
+			.table { 
+				width: 100%%; 
+				border-collapse: collapse; 
+				table-layout: fixed; 
+				font-family: Arial, 'Noto Sans Tamil', sans-serif;
+			}
+			.table th { 
+				background: #F57C00; 
+				color: white; 
+				padding: 8px 4px; 
+				text-align: left; 
+				font-size: 12px; 
+				font-weight: 600;
+			}
+			.table td { 
+				padding: 8px 4px; 
+				border-bottom: 1px solid #ddd; 
+				font-size: 13px; 
+				word-wrap: break-word; 
+				overflow-wrap: break-word;
+				min-width: 0;
+			}
+			@media screen and (max-width: 640px) {
+				.table th, .table td { 
+					padding: 6px 2px; 
+					font-size: 11px; 
+				}
+				.order-details { padding: 10px; }
+			}
+			.total { font-size: 18px; font-weight: bold; color: #F57C00; text-align: right; padding: 10px 0; }
+			.note { background: #FFF3E0; border-left: 4px solid #F57C00; padding: 12px 14px; border-radius: 4px; font-size: 13px; color: #795548; margin-top: 15px; }
+			.footer { background: #e9ecef; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1 style="margin: 0;">🔄 Return Item Request</h1>
+				<p style="margin: 5px 0 0 0;">Phone: <strong>%s</strong></p>
+			</div>
+			
+			<div class="content">
+				<div class="order-details">
+					<h2 style="color: #F57C00; margin-top: 0;">Shop / Customer Information</h2>
+					<p><strong>Shop Name:</strong> %s</p>
+					<p><strong>Shop Owner:</strong> %s</p>
+					<p><strong>Phone:</strong> %s</p>
+					<p><strong>Email:</strong> %s</p>
+				</div>
+				
+				<div class="order-details">
+					<h2 style="color: #F57C00; margin-top: 0;">Shop Address</h2>
+					<p>%s</p>
+				</div>
+				
+				<div class="order-details">
+					<h2 style="color: #F57C00; margin-top: 0;">Return Items</h2>
+					<table class="table">
+						<thead>
+							<tr>
+								<th style="width: 6%%;">#</th>
+								<th style="width: 42%%;">Item</th>
+								<th style="width: 13%%; text-align: center;">Qty</th>
+								<th style="width: 19%%; text-align: right;">Price</th>
+								<th style="width: 20%%; text-align: right;">Total</th>
+							</tr>
+						</thead>
+						<tbody>
+							%s
+						</tbody>
+					</table>
+					<div class="total">
+						Total Return Value: ₹%.2f
+					</div>
+				</div>
+				
+				<div class="note">
+					<strong>Note:</strong> This is a customer-initiated return request. No order or inventory changes have been made automatically — please handle manually.
+				</div>
+			</div>
+			
+			<div class="footer">
+				<p>AL-Madhina Wholesale Management System</p>
+				<p>This is an automated notification. Please do not reply to this email.</p>
+			</div>
+		</div>
+	</body>
+	</html>
+	`,
+		user.Phone,
+		storeName,
+		ownerName,
+		user.Phone,
+		email,
+		addressHtml,
+		itemsHtml,
+		totalAmount,
+	)
+
+	// Prepare payload
+	payload := map[string]interface{}{
+		"to":      s.AdminEmails,
+		"subject": subject,
+		"html":    htmlBody,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("❌ EMAIL: Failed to marshal return request payload: %v", err)
+		return false
+	}
+
+	// Send Request
+	req, err := http.NewRequest(http.MethodPost, s.WebhookURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ EMAIL: Failed to create return request: %v", err)
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if s.WebhookSecret != "" {
+		req.Header.Set("x-api-key", s.WebhookSecret)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("❌ EMAIL: Return request webhook failed: %v", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		log.Printf("✅ EMAIL: Return request sent successfully to %d recipients", len(s.AdminEmails))
+		return true
+	}
+
+	log.Printf("❌ EMAIL: Return request webhook failed with status %d", resp.StatusCode)
+	return false
+}

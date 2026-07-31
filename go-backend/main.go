@@ -168,6 +168,7 @@ func main() {
 		ordersAPI.GET("/orders/:order_id", handlers.GetOrderByID)
 		ordersAPI.PUT("/orders/:order_id/status", handlers.UpdateOrderStatus)
 		ordersAPI.PUT("/orders/:order_id/update-items", handlers.UpdateOrderItems)
+		ordersAPI.PUT("/orders/:order_id/update-return-items", handlers.UpdateOrderReturnItems)
 		ordersAPI.DELETE("/orders/:order_id", handlers.DeleteOrder)
 		ordersAPI.GET("/orders/stats/summary", handlers.GetOrderStats)
 		ordersAPI.GET("/orders/products/search", handlers.SearchProductsAdmin)
@@ -219,6 +220,9 @@ func main() {
 		userAPI.GET("/orders/:phone", handlers.GetUserOrders)
 		userAPI.POST("/orders", handlers.CreateOrder)
 		userAPI.GET("/orders/:phone/:order_id", handlers.GetOrderDetails)
+
+		// Return request (customer-initiated, notify-and-forget)
+		userAPI.POST("/returns/notify", handlers.SubmitReturnRequest)
 
 		// Store details
 		userAPI.GET("/store-details/:phone", handlers.GetStoreDetails)

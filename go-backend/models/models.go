@@ -66,6 +66,8 @@ type Order struct {
 	DeliveryAddress   DeliveryAddress        `bson:"delivery_address" json:"delivery_address"`
 	Items             []OrderItem            `bson:"items" json:"items"`
 	TotalAmount       float64                `bson:"total_amount" json:"total_amount"`
+	ReturnItems       []OrderItem            `bson:"return_items,omitempty" json:"return_items,omitempty"` // Admin-managed return items (not a new collection)
+	ReturnTotal       float64                `bson:"return_total,omitempty" json:"return_total,omitempty"` // Informational total for return_items
 	Status            string                 `bson:"status" json:"status"` // "pending", "confirmed", "delivered"
 	PaymentMethod     string                 `bson:"payment_method,omitempty" json:"payment_method,omitempty"`
 	CreatedAt         time.Time              `bson:"created_at" json:"created_at"`

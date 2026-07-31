@@ -2767,15 +2767,16 @@ function getReturnItemsFromTable() {
 }
 
 async function saveReturnItemsChanges(orderId) {
-    if (!confirm('Are you sure you want to save these return items? This will update the return record for the order.')) {
-        return;
-    }
-
     const updatedItems = getReturnItemsFromTable();
 
     if (updatedItems.length === 0) {
-        alert('Return items list is empty. Add at least one product or cancel.');
-        return;
+        if (!confirm('No return items — this will clear the return record for this order. Continue?')) {
+            return;
+        }
+    } else {
+        if (!confirm('Are you sure you want to save these return items? This will update the return record for the order.')) {
+            return;
+        }
     }
 
     try {

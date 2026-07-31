@@ -577,12 +577,18 @@ func UpdateOrderReturnItems(c *gin.Context) {
 	orderID := c.Param("order_id")
 
 	var req struct {
-		Items []models.OrderItem `json:"items" binding:"required"`
+		Items []models.OrderItem `json:"items"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Allow saving an empty return list — this clears the order's return record.
+	// Normalize a missing/null items field to an empty array so we never store null.
+	if req.Items == nil {
+		req.Items = []models.OrderItem{}
 	}
 
 	ctx, cancel := database.GetDBContext()

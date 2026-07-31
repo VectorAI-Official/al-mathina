@@ -790,62 +790,209 @@ async function updateOrderStatus(orderId, newStatus) {
     }
 }
 
-// Print invoice
-function printInvoice(orderId) {
+// Print invoice - generates a clean PDF via html2canvas + jsPDF (no browser print URL header)
+async function printInvoice(orderId) {
     const order = currentOrder;
     if (!order) return;
 
-    const invoiceHTML = generateInvoiceHTML(order, { printMode: true });
-
-    // Hide the modal to prevent it from being printed
+    // Hide the modal while the PDF is generated
     const modal = document.getElementById('orderDetailsModal');
     const modalWasVisible = modal && modal.style.display !== 'none';
     if (modalWasVisible) {
         modal.style.display = 'none';
     }
 
-    // Small delay to ensure modal is hidden before creating iframe
-    setTimeout(() => {
-        // Use hidden iframe to avoid popup blockers & stuck preview
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.left = '-9999px';
-        iframe.style.top = '-9999px';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
-        iframe.style.visibility = 'hidden';
-        document.body.appendChild(iframe);
+    try {
+        const pdf = await generateInvoicePdf(order);
 
-        const iframeDoc = iframe.contentWindow.document;
-        iframeDoc.open();
-        iframeDoc.write(invoiceHTML);
-        iframeDoc.close();
-
-        // Wait for content to load before printing
-        iframe.onload = () => {
+        // Auto-print the clean PDF in a new tab (no URL header/footer)
+        pdf.autoPrint();
+        const printWindow = window.open(pdf.output('bloburl'), '_blank');
+        if (!printWindow) {
+            // Popup blocked - fall back to downloading the PDF
+            pdf.save(`Invoice_${order.order_id}.pdf`);
+            showToast('Print window was blocked - PDF downloaded instead', 'warning');
+        }
+    } catch (error) {
+        console.error('❌ Print PDF generation error:', error);
+        showToast('Failed to generate invoice PDF', 'error');
+    } finally {
+        // Restore modal visibility after a short delay
+        if (modalWasVisible && modal) {
             setTimeout(() => {
-                try {
-                    iframe.contentWindow.focus();
-                    iframe.contentWindow.print();
-                } catch (e) {
-                    console.error('Print failed:', e);
-                    alert('Print failed. Please try again.');
-                }
-
-                // Clean up after printing
-                setTimeout(() => {
-                    if (iframe.parentNode) {
-                        document.body.removeChild(iframe);
-                    }
-                    // Restore modal visibility
-                    if (modalWasVisible && modal) {
-                        modal.style.display = 'block';
-                    }
-                }, 1000);
+                modal.style.display = 'block';
             }, 500);
-        };
-    }, 100);
+        }
+    }
+}
+
+// Generate a clean multi-page invoice PDF using html2canvas + jsPDF.
+// Avoids the browser's native print header/footer (which shows the page URL).
+// Returns a Promise resolving to the jsPDF instance.
+async function generateInvoicePdf(order) {
+    // Generate invoice HTML - shareMode sizing (A4 width) for canvas capture
+    const invoiceHTML = generateInvoiceHTML(order, { shareMode: true, printMode: false });
+
+    // Create hidden iframe - SAME APPROACH AS PRINT/WHATSAPP SHARE
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '-9999px';
+    iframe.style.width = '210mm'; // A4 width
+    iframe.style.height = '297mm'; // A4 height
+    iframe.style.border = 'none';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(invoiceHTML);
+    iframeDoc.close();
+
+    // Wait for content to fully render
+    await new Promise(resolve => {
+        iframe.onload = () => setTimeout(resolve, 500);
+    });
+
+    // Get the invoice container from iframe
+    const invoiceElement = iframe.contentWindow.document.querySelector('.invoice-container');
+    if (!invoiceElement) {
+        document.body.removeChild(iframe);
+        throw new Error('Invoice element not found');
+    }
+
+    console.log('📸 Capturing invoice as image...');
+
+    // Capture with html2canvas
+    const canvas = await html2canvas(invoiceElement, {
+        scale: 2, // High quality
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: iframe.contentWindow.document.documentElement.scrollWidth,
+        windowHeight: iframe.contentWindow.document.documentElement.scrollHeight,
+        foreignObjectRendering: false,
+        imageTimeout: 0
+    });
+
+    // Clean up iframe
+    document.body.removeChild(iframe);
+
+    console.log('📄 Converting to PDF...');
+
+    // Create PDF - Simple approach matching print quality
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+    });
+
+    // Get PDF dimensions
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    // Define page margins - First page minimal, subsequent pages with safety buffers
+    const topMargin = 0; // No top margin on first page
+    const bottomMarginFirstPage = 10; // 10mm bottom margin on first page only (minimal)
+    const bottomMargin = 20; // 20mm bottom margin on subsequent pages (increased buffer)
+    const topMarginSubsequent = 25; // 25mm top margin on pages 2+ (increased buffer)
+    const safetyBuffer = 5; // 5mm extra safety buffer on subsequent pages to avoid row splits
+
+    // Calculate usable heights - First page gets more space, subsequent pages more conservative
+    const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage; // First page with minimal bottom margin
+    const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffers
+
+    // Calculate scaled image dimensions
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    // Convert canvas to high-quality image
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    console.log(`📐 PDF Dimensions: ${pdfWidth}mm x ${pdfHeight}mm`);
+    console.log(`📐 Image Height: ${imgHeight}mm`);
+    console.log(`📐 First Page Usable: ${firstPageUsableHeight}mm`);
+    console.log(`📐 Subsequent Usable: ${subsequentPageUsableHeight}mm`);
+
+    // Add image to PDF with intelligent pagination
+    if (imgHeight <= firstPageUsableHeight) {
+        // Single page - fits perfectly
+        pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight);
+        console.log('📄 Single page layout');
+    } else {
+        // Multi-page pagination with proper breaks
+        let remainingHeight = imgHeight;
+        let sourceY = 0; // Y position in source image (in mm)
+        let pageNumber = 1;
+
+        // First page
+        const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
+
+        // Calculate source dimensions in canvas pixels for clipping
+        const canvasHeight = canvas.height;
+        const canvasWidth = canvas.width;
+        const pixelsPerMm = canvasHeight / imgHeight; // Conversion factor
+
+        // First page: clip from top of canvas
+        const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
+
+        // Create canvas for first page
+        const page1Canvas = document.createElement('canvas');
+        page1Canvas.width = canvasWidth;
+        page1Canvas.height = firstPageCanvasHeight;
+        const page1Ctx = page1Canvas.getContext('2d');
+
+        page1Ctx.drawImage(
+            canvas,
+            0, 0, canvasWidth, firstPageCanvasHeight, // Source clip
+            0, 0, canvasWidth, firstPageCanvasHeight  // Destination
+        );
+
+        const page1Data = page1Canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(page1Data, 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
+
+        sourceY += firstPageHeight;
+        remainingHeight -= firstPageHeight;
+
+        console.log(`📄 Page 1: ${firstPageHeight}mm (source 0 → ${firstPageHeight}mm)`);
+
+        // Subsequent pages
+        while (remainingHeight > 0) {
+            pdf.addPage();
+            pageNumber++;
+
+            const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
+            const pageCanvasHeight = pageHeight * pixelsPerMm;
+            const sourceCanvasY = sourceY * pixelsPerMm;
+
+            // Create canvas for this page
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvasWidth;
+            pageCanvas.height = pageCanvasHeight;
+            const pageCtx = pageCanvas.getContext('2d');
+
+            pageCtx.drawImage(
+                canvas,
+                0, sourceCanvasY, canvasWidth, pageCanvasHeight, // Source clip
+                0, 0, canvasWidth, pageCanvasHeight              // Destination
+            );
+
+            const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(pageData, 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
+
+            console.log(`📄 Page ${pageNumber}: ${pageHeight}mm (source ${sourceY}mm → ${sourceY + pageHeight}mm)`);
+
+            sourceY += pageHeight;
+            remainingHeight -= pageHeight;
+        }
+
+        console.log(`✅ Generated ${pageNumber} pages with intelligent pagination`);
+    }
+
+    return pdf;
 }
 
 // Share invoice on WhatsApp (generates PDF) - Uses same logic as Print Invoice
@@ -856,166 +1003,7 @@ async function shareInvoiceWhatsApp(orderId) {
     try {
         console.log('📄 Generating PDF invoice for WhatsApp share...');
 
-        // Generate invoice HTML - same as print but with shareMode for sizing
-        const invoiceHTML = generateInvoiceHTML(order, { shareMode: true, printMode: false });
-
-        // Create hidden iframe - SAME APPROACH AS PRINT INVOICE
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.left = '-9999px';
-        iframe.style.top = '-9999px';
-        iframe.style.width = '210mm'; // A4 width
-        iframe.style.height = '297mm'; // A4 height
-        iframe.style.border = 'none';
-        iframe.style.visibility = 'hidden';
-        document.body.appendChild(iframe);
-
-        const iframeDoc = iframe.contentWindow.document;
-        iframeDoc.open();
-        iframeDoc.write(invoiceHTML);
-        iframeDoc.close();
-
-        // Wait for content to fully render (same delay as print)
-        await new Promise(resolve => {
-            iframe.onload = () => setTimeout(resolve, 500);
-        });
-
-        // Get the invoice container from iframe
-        const invoiceElement = iframe.contentWindow.document.querySelector('.invoice-container');
-        if (!invoiceElement) {
-            throw new Error('Invoice element not found');
-        }
-
-        console.log('📸 Capturing invoice as image...');
-
-        // Capture with html2canvas
-        const canvas = await html2canvas(invoiceElement, {
-            scale: 2, // High quality
-            useCORS: true,
-            allowTaint: false,
-            backgroundColor: '#ffffff',
-            logging: false,
-            windowWidth: iframe.contentWindow.document.documentElement.scrollWidth,
-            windowHeight: iframe.contentWindow.document.documentElement.scrollHeight,
-            foreignObjectRendering: false,
-            imageTimeout: 0
-        });
-
-        // Clean up iframe
-        document.body.removeChild(iframe);
-
-        console.log('📄 Converting to PDF...');
-
-        // Create PDF - Simple approach matching print quality
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-            compress: true
-        });
-
-        // Get PDF dimensions
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-
-        // Define page margins - First page minimal, subsequent pages with safety buffers
-        const topMargin = 0; // No top margin on first page
-        const bottomMarginFirstPage = 10; // 10mm bottom margin on first page only (minimal)
-        const bottomMargin = 20; // 20mm bottom margin on subsequent pages (increased buffer)
-        const topMarginSubsequent = 25; // 25mm top margin on pages 2+ (increased buffer)
-        const safetyBuffer = 5; // 5mm extra safety buffer on subsequent pages to avoid row splits
-
-        // Calculate usable heights - First page gets more space, subsequent pages more conservative
-        const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage; // First page with minimal bottom margin
-        const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffers
-
-        // Calculate scaled image dimensions
-        const imgWidth = pdfWidth;
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-        // Convert canvas to high-quality image
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-
-        console.log(`📐 PDF Dimensions: ${pdfWidth}mm x ${pdfHeight}mm`);
-        console.log(`📐 Image Height: ${imgHeight}mm`);
-        console.log(`📐 First Page Usable: ${firstPageUsableHeight}mm`);
-        console.log(`📐 Subsequent Usable: ${subsequentPageUsableHeight}mm`);
-
-        // Add image to PDF with intelligent pagination
-        if (imgHeight <= firstPageUsableHeight) {
-            // Single page - fits perfectly
-            pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight);
-            console.log('📄 Single page layout');
-        } else {
-            // Multi-page pagination with proper breaks
-            let remainingHeight = imgHeight;
-            let sourceY = 0; // Y position in source image (in mm)
-            let pageNumber = 1;
-
-            // First page
-            const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
-
-            // Calculate source dimensions in canvas pixels for clipping
-            const canvasHeight = canvas.height;
-            const canvasWidth = canvas.width;
-            const pixelsPerMm = canvasHeight / imgHeight; // Conversion factor
-
-            // First page: clip from top of canvas
-            const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
-
-            // Create canvas for first page
-            const page1Canvas = document.createElement('canvas');
-            page1Canvas.width = canvasWidth;
-            page1Canvas.height = firstPageCanvasHeight;
-            const page1Ctx = page1Canvas.getContext('2d');
-
-            page1Ctx.drawImage(
-                canvas,
-                0, 0, canvasWidth, firstPageCanvasHeight, // Source clip
-                0, 0, canvasWidth, firstPageCanvasHeight  // Destination
-            );
-
-            const page1Data = page1Canvas.toDataURL('image/jpeg', 0.95);
-            pdf.addImage(page1Data, 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
-
-            sourceY += firstPageHeight;
-            remainingHeight -= firstPageHeight;
-
-            console.log(`📄 Page 1: ${firstPageHeight}mm (source 0 → ${firstPageHeight}mm)`);
-
-            // Subsequent pages
-            while (remainingHeight > 0) {
-                pdf.addPage();
-                pageNumber++;
-
-                const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
-                const pageCanvasHeight = pageHeight * pixelsPerMm;
-                const sourceCanvasY = sourceY * pixelsPerMm;
-
-                // Create canvas for this page
-                const pageCanvas = document.createElement('canvas');
-                pageCanvas.width = canvasWidth;
-                pageCanvas.height = pageCanvasHeight;
-                const pageCtx = pageCanvas.getContext('2d');
-
-                pageCtx.drawImage(
-                    canvas,
-                    0, sourceCanvasY, canvasWidth, pageCanvasHeight, // Source clip
-                    0, 0, canvasWidth, pageCanvasHeight              // Destination
-                );
-
-                const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
-                pdf.addImage(pageData, 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
-
-                console.log(`📄 Page ${pageNumber}: ${pageHeight}mm (source ${sourceY}mm → ${sourceY + pageHeight}mm)`);
-
-                sourceY += pageHeight;
-                remainingHeight -= pageHeight;
-            }
-
-            console.log(`✅ Generated ${pageNumber} pages with intelligent pagination`);
-        }
+        const pdf = await generateInvoicePdf(order);
 
         // Generate PDF file
         const pdfBlob = pdf.output('blob');
@@ -1711,39 +1699,6 @@ function generateInvoiceHTML(order, opts = {}) {
       </div>
     </div>
 
-    <!-- Ordered Items -->
-    <h2 class="invoice-section-heading">Ordered Items</h2>
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Product Name</th>
-          <th>Weight</th>
-          <th>Price</th>
-          <th>Qty</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${order.items.map((item, index) => `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${item.product_name}</td>
-            <td>${item.weight || '-'}</td>
-            <td>₹${parseFloat(item.price).toFixed(2)}</td>
-            <td>${item.quantity}</td>
-            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-    
-    <!-- Total -->
-    <div class="total-section">
-      <span class="total-label">ORDER TOTAL:</span>
-      <span class="grand-total">₹${parseFloat(order.total_amount).toFixed(2)}</span>
-    </div>
-    
     ${order.return_items && order.return_items.length > 0 ? `
     <!-- Return Items -->
     <h2 class="invoice-section-heading return-section-heading">Return Items</h2>
@@ -1778,6 +1733,39 @@ function generateInvoiceHTML(order, opts = {}) {
       <span class="return-grand-total">₹${parseFloat(order.return_total || 0).toFixed(2)}</span>
     </div>
     ` : ''}
+    
+    <!-- Ordered Items -->
+    <h2 class="invoice-section-heading">Ordered Items</h2>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product Name</th>
+          <th>Weight</th>
+          <th>Price</th>
+          <th>Qty</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${order.items.map((item, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${item.product_name}</td>
+            <td>${item.weight || '-'}</td>
+            <td>₹${parseFloat(item.price).toFixed(2)}</td>
+            <td>${item.quantity}</td>
+            <td>₹${(item.price * item.quantity).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    
+    <!-- Total -->
+    <div class="total-section">
+      <span class="total-label">ORDER TOTAL:</span>
+      <span class="grand-total">₹${parseFloat(order.total_amount).toFixed(2)}</span>
+    </div>
     
     <!-- Footer - Empty white space for page padding -->
     <div class="invoice-footer"></div>

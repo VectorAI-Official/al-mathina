@@ -16,6 +16,8 @@ import 'services/shared_prefs_service.dart';
 import 'services/fcm_service.dart';
 import 'models/saved_account.dart';
 import 'widgets/voice_search_dialog.dart';
+import 'providers/return_cart_provider.dart';
+import 'screens/return_item_search_screen.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'utils/weight_utils.dart';
 
@@ -205,6 +207,23 @@ const Map<String, Map<String, String>> translations = {
     'no_orders': 'No Orders Yet!',
     'no_orders_message': 'You haven\'t placed any orders yet.\nStart shopping to see your orders here.',
     'checkout': 'Checkout',
+
+    // Return Item
+    'return_item': 'Return Item',
+    'return_item_subtitle': 'Request a return for your items',
+    'return_item_action': 'Return Item',
+    'return_added': 'added to return cart',
+    'return_cart_title': 'Return Cart',
+    'empty_return_cart': 'Your return cart is empty!',
+    'proceed_to_return': 'Proceed to Return',
+    'confirm_return_title': 'Submit Return Request',
+    'confirm_return_body': 'Are you sure you want to submit this return request?',
+    'yes': 'Yes',
+    'no': 'No',
+    'return_success': 'Return request sent to admin!',
+    'return_failed': 'Failed to send return request',
+    'store_details_required_for_return': 'Please complete your store details before requesting a return — this is required so we know where to collect/verify the item and who to contact',
+    'fill_store_details': 'Fill Store Details',
   },
   'ta': {
     // Bottom Navigation
@@ -380,11 +399,28 @@ const Map<String, Map<String, String>> translations = {
     'no_orders': 'இன்னும் ஆர்டர்கள் இல்லை!',
     'no_orders_message': 'நீங்கள் இன்னும் எந்த ஆர்டரும் செய்யவில்லை.\nஉங்கள் ஆர்டர்களை இங்கே பார்க்க ஷாப்பிங் தொடங்குங்கள்.',
     'checkout': 'செக்அவுட்',
-    
+
     // Profile Completeness
     'complete_profile_first': 'தொடர உங்கள் சுயவிவரத்தை முடிக்கவும்',
     'complete_name_first': 'தொடர உங்கள் பெயரை சேர்க்கவும்',
     'complete_store_first': 'தொடர கடை விவரங்களை சேர்க்கவும்',
+
+    // Return Item
+    'return_item': 'பொருள் திருப்பி அனுப்பு',
+    'return_item_subtitle': 'உங்கள் பொருட்களை திருப்பி அனுப்ப கோரிக்கை',
+    'return_item_action': 'திருப்பி அனுப்பு',
+    'return_added': 'திருப்பி அனுப்பும் வண்டியில் சேர்க்கப்பட்டது',
+    'return_cart_title': 'திருப்பி அனுப்பும் வண்டி',
+    'empty_return_cart': 'உங்கள் திருப்பி அனுப்பும் வண்டி காலியாக உள்ளது!',
+    'proceed_to_return': 'திருப்பி அனுப்ப தொடரவும்',
+    'confirm_return_title': 'திருப்பி அனுப்பும் கோரிக்கையை சமர்ப்பிக்கவும்',
+    'confirm_return_body': 'நீங்கள் இந்தப் பொருட்களைத் திரும்ப அனுப்ப விரும்புகிறீர்களா?',
+    'yes': 'ஆம்',
+    'no': 'இல்லை',
+    'return_success': 'திருப்பி அனுப்பும் கோரிக்கை நிர்வாகத்திற்கு அனுப்பப்பட்டது!',
+    'return_failed': 'திருப்பி அனுப்பும் கோரிக்கையை அனுப்ப முடியவில்லை',
+    'store_details_required_for_return': 'பொருளை திருப்பி அனுப்புவதற்கு முன் உங்கள் கடை விவரங்களை முடிக்கவும் — பொருளை எங்கு பெறவும் சரிபார்க்கவும், யாரை தொடர்பு கொள்ளவும் இது அவசியம்',
+    'fill_store_details': 'கடை விவரங்களை நிரப்பவும்',
   }
 };
 
@@ -604,8 +640,15 @@ void main() async {
   await appProvider.loadLanguage();
   
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => appProvider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => appProvider,
+        ),
+        ChangeNotifierProvider(
+          create: (context) => ReturnCartProvider(),
+        ),
+      ],
       child: const MyApp(),
     ),
   );
@@ -6842,7 +6885,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             
             const Divider(height: 1),
-            
+
+            // Return Item
+            _buildProfileOption(
+              context,
+              icon: Icons.assignment_return_outlined,
+              title: provider.text('return_item'),
+              subtitle: provider.text('return_item_subtitle'),
+              showWarning: _isStoreIncomplete,
+              onTap: () => _openReturnItemFlow(context, userPhone),
+            ),
+
+            const Divider(height: 1),
+
             // Store Details
             _buildProfileOption(
               context,
@@ -6979,6 +7034,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,
+    );
+  }
+
+  Future<void> _openReturnItemFlow(BuildContext context, String userPhone) async {
+    final provider = Provider.of<AppProvider>(context, listen: false);
+
+    // If store details are incomplete, block with an actionable dialog that
+    // routes straight into StoreDetailsScreen (instead of a dead-end SnackBar).
+    if (_isStoreIncomplete) {
+      final fillStore = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            provider.text('return_item'),
+            style: const TextStyle(color: kPrimaryColor),
+          ),
+          content: Text(provider.text('store_details_required_for_return')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(provider.text('cancel')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                provider.text('fill_store_details'),
+                style: const TextStyle(
+                    color: kPrimaryColor, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (fillStore == true && mounted) {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StoreDetailsScreen(userPhone: userPhone),
+          ),
+        );
+        if (result == true) {
+          _loadUserProfile();
+        }
+      }
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ReturnItemSearchScreen()),
     );
   }
 

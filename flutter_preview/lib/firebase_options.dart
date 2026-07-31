@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '779452748415',
     projectId: 'al-mathina-f75c0',
     storageBucket: 'al-mathina-f75c0.firebasestorage.app',
-    iosBundleId: 'com.example.flutterPreview',
+    iosBundleId: 'com.almathina.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '779452748415',
     projectId: 'al-mathina-f75c0',
     storageBucket: 'al-mathina-f75c0.firebasestorage.app',
-    iosBundleId: 'com.example.flutterPreview',
+    iosBundleId: 'com.almathina.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

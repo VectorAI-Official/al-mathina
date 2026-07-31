@@ -1028,6 +1028,39 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> submitReturnRequest({
+    required String userPhone,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    try {
+      final payload = {
+        'user_phone': userPhone,
+        'items': items,
+      };
+
+      final url = '$BASE_URL/api/returns/notify';
+      print('📤 [RETURN] POST URL: $url');
+      print('📤 [RETURN] Items count: ${items.length}');
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(payload),
+      );
+
+      print('📡 [RETURN] Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to submit return request: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ [RETURN] Error: $e');
+      throw Exception('Error submitting return request: $e');
+    }
+  }
+
   // Get order details
   static Future<Map<String, dynamic>> getOrderDetails(String phone, String orderId) async {
     try {

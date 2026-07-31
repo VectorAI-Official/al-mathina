@@ -1,4 +1,4 @@
-package com.vectorai.almadhina
+package com.almathina.app
 
 import io.flutter.embedding.android.FlutterActivity
 

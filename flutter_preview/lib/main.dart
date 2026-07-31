@@ -15,6 +15,7 @@ import 'screens/account_switcher_page.dart';
 import 'services/shared_prefs_service.dart';
 import 'services/fcm_service.dart';
 import 'models/saved_account.dart';
+import 'widgets/quantity_stepper_with_input.dart';
 import 'widgets/voice_search_dialog.dart';
 import 'providers/return_cart_provider.dart';
 import 'screens/return_item_search_screen.dart';
@@ -3030,13 +3031,19 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                             ],
                           ),
                         )
-                      : ListView.builder(
+                      : GridView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), // Added bottom padding for floating button
                           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.5,
+                          ),
                           itemCount: _results.length,
                           itemBuilder: (context, index) {
                             final product = _results[index];
-                            return _buildProductCard(product, provider);
+                            return _buildGridProductCard(product, provider);
                           },
                         ),
           
@@ -3047,318 +3054,225 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     );
   }
 
-  Widget _buildProductCard(Product product, AppProvider provider) {
-    print('\n🃏 [CARD] Building card for: ${product.productName}');
-    print('🃏 [CARD] _isAdmin state: $_isAdmin');
-    print('🃏 [CARD] Product buyingPrice: ${product.buyingPrice}');
-    print('🃏 [CARD] Product price: ${product.price}');
-    
-    final String productId = product.itemId ?? 
-        '${product.productName}_${product.weight}'.replaceAll(' ', '_').toLowerCase();
+  Widget _buildGridProductCard(Product product, AppProvider provider) {
+    final String productId = product.itemId ??
+        '${product.productName}_${product.weight}'
+            .replaceAll(' ', '_')
+            .toLowerCase();
     final bool isFavorited = provider.isFavorite(productId);
-    
-    // Horizontal card layout matching Cart page and Favorites style
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.zero,
       color: Colors.white,
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: IntrinsicHeight(  // ⭐ Allow card to expand based on content
-        child: Padding(
-          padding: const EdgeInsets.all(18.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,  // ⭐ Stretch to fill height
-            children: [
-              // Product Image (Left) - Fixed size like Cart page
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ProductDetailsPage(product: product)),
-                  );
-                },
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: product.imageUrl.isNotEmpty
-                          ? Image.network(
-                              ApiService.getImageUrl(product.imageUrl),
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stack) => Container(
-                                width: 80,
-                                height: 80,
-                                color: Colors.grey[200],
-                                child: Icon(Icons.inventory_2, color: Colors.grey[400]),
-                              ),
-                            )
-                          : Container(
-                              width: 80,
-                              height: 80,
-                              color: Colors.grey[200],
-                              child: Icon(Icons.inventory_2, color: Colors.grey[400]),
-                            ),
-                    ),
-                    // Heart Icon (top right of image)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          final phone = prefs.getString('userPhone');
-                          if (phone != null && phone.isNotEmpty) {
-                            await provider.toggleFavorite(phone, productId);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            isFavorited ? Icons.favorite : Icons.favorite_border,
-                            color: isFavorited ? Colors.red : Colors.grey[600],
-                            size: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Product Image (Top)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProductDetailsPage(product: product),
                 ),
-              ),
-              const SizedBox(width: 14),
-              // Product Info (Middle) - Expanded
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      product.getLocalizedName(provider.currentLanguage),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+              );
+            },
+            child: Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: product.imageUrl.isNotEmpty
+                      ? Image.network(
+                          ApiService.getImageUrl(product.imageUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stack) => Container(
+                            color: Colors.grey[200],
+                            child: Icon(Icons.inventory_2,
+                                color: Colors.grey[400]),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey[200],
+                          child: Icon(Icons.inventory_2,
+                              color: Colors.grey[400]),
+                        ),
+                ),
+                // Heart Icon (top right of image)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      final phone = prefs.getString('userPhone');
+                      if (phone != null && phone.isNotEmpty) {
+                        await provider.toggleFavorite(phone, productId);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        isFavorited ? Icons.favorite : Icons.favorite_border,
+                        color: isFavorited ? Colors.red : Colors.grey[600],
+                        size: 14,
                       ),
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.getLocalizedName(provider.currentLanguage),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    product.weight,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '₹${product.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                  if (_isAdmin) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      product.weight,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '₹${product.price.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: kPrimaryColor,
-                      ),
-                    ),
-                    
-                    // ⭐ ADMIN BUYING PRICE & PROFIT (Tamil text)
-                    if (_isAdmin) ...[
-                      if (product.buyingPrice != null && product.buyingPrice! > 0) ...[
-                        const SizedBox(height: 4),
-                        // Buying price with icon (Tamil: விலை)
-                        Row(
-                          children: [
-                            Icon(Icons.shopping_cart_outlined, size: 11, color: Colors.orange[700]),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.orange[700],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        // Profit with icon (Tamil: இலாபம்)
-                        Row(
-                          children: [
-                            Icon(Icons.trending_up, size: 11, color: Colors.green[700]),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green[50],
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.green[200]!, width: 1),
-                                ),
-                                child: Text(
-                                  'இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.green[700],
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else ...[
-                        // Show message for products without buying price
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 10, color: Colors.grey[600]),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.grey[300]!, width: 1),
-                                ),
-                                child: Text(
-                                  'Cost not set',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey[600],
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ],
-                ),
-              ),
-              // Bottom Control Section (Right) - Add to cart or +/- controls
-              Builder(builder: (context) {
-                final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
-                final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
-                final int qty = cartItem?.quantity ?? 0;
-
-                // Show "Add to cart" button when qty is 0
-                if (qty == 0) {
-                  return SizedBox(
-                    width: 100,
-                    child: ElevatedButton.icon(
-                      onPressed: product.inStock
-                          ? () {
-                              provider.addToCart(product);
-                            }
-                          : null,
-                      icon: const Icon(Icons.shopping_bag_outlined, size: 16),
-                      label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                // Show quantity controls when qty > 0 (matching Cart page style)
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,  // ⭐ Center vertically
-                  children: [
                     Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          color: kPrimaryColor,
-                          iconSize: 20,
-                          padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () {
-                          provider.updateCartQuantity(cartItem!, qty - 1);
-                        },
-                      ),
-                      // Quantity input field
-                      Container(
-                        width: 42,
-                        height: 28,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!, width: 1),
-                          borderRadius: BorderRadius.circular(6),
-                          color: Colors.white,
-                        ),
-                        alignment: Alignment.center,
-                        child: TextField(
-                          textAlign: TextAlign.center,
-                          textAlignVertical: TextAlignVertical.center,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.0),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 6),
-                            isDense: true,
+                        Icon(Icons.shopping_cart_outlined,
+                            size: 10, color: Colors.orange[700]),
+                        const SizedBox(width: 3),
+                        if (product.buyingPrice != null &&
+                            product.buyingPrice! > 0) ...[
+                          Flexible(
+                            child: Text(
+                              'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)} · இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          controller: TextEditingController(text: '$qty')..selection = TextSelection.fromPosition(TextPosition(offset: '$qty'.length)),
-                          onChanged: (value) {
-                            final newQty = int.tryParse(value);
-                            if (newQty != null && newQty >= 0) {
-                              provider.updateCartQuantity(cartItem!, newQty);
-                            }
+                        ] else ...[
+                          Flexible(
+                            child: Text(
+                              'Cost not set',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                  const Spacer(),
+                  // Bottom control: Add or quantity stepper
+                  Builder(builder: (context) {
+                    final existing = provider.cartItems
+                        .where((c) =>
+                            c.productName == product.productName &&
+                            c.weight == product.weight)
+                        .toList();
+                    final CartItem? cartItem =
+                        existing.isNotEmpty ? existing.first : null;
+                    final int qty = cartItem?.quantity ?? 0;
+
+                    if (qty == 0) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: product.inStock
+                              ? () {
+                                  provider.addToCart(product);
+                                }
+                              : null,
+                          icon: const Icon(Icons.shopping_bag_outlined,
+                              size: 16),
+                          label: const Text('Add',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4CAF50),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 8),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      children: [
+                        QuantityStepperWithInput(
+                          value: qty,
+                          min: 1,
+                          canIncrement: product.inStock,
+                          accentColor: kPrimaryColor,
+                          onChanged: (newQty) {
+                            provider.updateCartQuantity(cartItem!, newQty);
                           },
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        color: kPrimaryColor,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: product.inStock
-                            ? () {
-                                provider.addToCart(product);
-                              }
-                            : null,
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
                 ],
-              );
-            }),
-            ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -5770,8 +5684,13 @@ class _SubcategoryProductsScreenState extends State<SubcategoryProductsScreen> {
 // Full page product details route (push navigation)
 class ProductDetailsPage extends StatefulWidget {
   final Product product;
+  final bool isReturnMode;
 
-  const ProductDetailsPage({super.key, required this.product});
+  const ProductDetailsPage({
+    super.key,
+    required this.product,
+    this.isReturnMode = false,
+  });
 
   @override
   State<ProductDetailsPage> createState() => _ProductDetailsPageState();
@@ -5907,8 +5826,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                             Text(product.description!, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                             const SizedBox(height: 16),
                           ],
-                          // Add to cart button or quantity controls
+                          // Action button or quantity controls
                           Builder(builder: (context) {
+                            if (widget.isReturnMode) {
+                              return _buildReturnAction(product, provider);
+                            }
+
                             final existing = provider.cartItems.where((c) => c.productName == product.productName && c.weight == product.weight).toList();
                             final CartItem? cartItem = existing.isNotEmpty ? existing.first : null;
                             final int qty = cartItem?.quantity ?? 0;
@@ -6046,6 +5969,82 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     // Floating cart button moved to MainScreen
                   ],
                 ),
+    );
+  }
+
+  Widget _buildReturnAction(Product product, AppProvider provider) {
+    final returnProvider = Provider.of<ReturnCartProvider>(context);
+    final String productId = product.itemId ??
+        '${product.productName}_${product.weight}'
+            .replaceAll(' ', '_')
+            .toLowerCase();
+    final int qty = returnProvider.quantityOf(productId);
+
+    if (qty == 0) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          onPressed: product.inStock
+              ? () {
+                  returnProvider.addToReturnCart(product);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '${product.getLocalizedName(provider.currentLanguage)} ${provider.text('return_added')}',
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              : null,
+          icon: const Icon(Icons.assignment_return, size: 20),
+          label: Text(
+            product.inStock
+                ? provider.text('return_item_action')
+                : provider.text('out_of_stock'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepOrange,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 2,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.deepOrange.withOpacity(0.3), width: 2),
+      ),
+      child: Column(
+        children: [
+          QuantityStepperWithInput(
+            value: qty,
+            min: 1,
+            canIncrement: product.inStock,
+            accentColor: Colors.deepOrange,
+            onChanged: (newQty) {
+              returnProvider.updateReturnQuantity(productId, newQty);
+            },
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Total: ₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.deepOrange,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

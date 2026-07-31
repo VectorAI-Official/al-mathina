@@ -102,14 +102,21 @@ class _ReturnSearchResultsScreenState extends State<ReturnSearchResultsScreen> {
                             ],
                           ),
                         )
-                      : ListView.builder(
+                      : GridView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
                           physics: const BouncingScrollPhysics(
                               parent: AlwaysScrollableScrollPhysics()),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.5,
+                          ),
                           itemCount: _results.length,
                           itemBuilder: (context, index) {
                             final product = _results[index];
-                            return _buildProductCard(product, provider);
+                            return _buildGridProductCard(product, provider);
                           },
                         ),
 
@@ -119,251 +126,193 @@ class _ReturnSearchResultsScreenState extends State<ReturnSearchResultsScreen> {
     );
   }
 
-  Widget _buildProductCard(Product product, AppProvider provider) {
+  Widget _buildGridProductCard(Product product, AppProvider provider) {
     final String productId = product.itemId ??
         '${product.productName}_${product.weight}'
             .replaceAll(' ', '_')
             .toLowerCase();
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.zero,
       color: Colors.white,
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: IntrinsicHeight(
-        child: Padding(
-          padding: const EdgeInsets.all(18.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Product Image (Left)
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProductDetailsPage(product: product),
-                    ),
-                  );
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: product.imageUrl.isNotEmpty
-                      ? Image.network(
-                          ApiService.getImageUrl(product.imageUrl),
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) => Container(
-                            width: 80,
-                            height: 80,
-                            color: Colors.grey[200],
-                            child: Icon(Icons.inventory_2,
-                                color: Colors.grey[400]),
-                          ),
-                        )
-                      : Container(
-                          width: 80,
-                          height: 80,
-                          color: Colors.grey[200],
-                          child: Icon(Icons.inventory_2,
-                              color: Colors.grey[400]),
-                        ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Product Image (Top)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProductDetailsPage(
+                    product: product,
+                    isReturnMode: true,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              // Product Info (Middle)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      product.getLocalizedName(provider.currentLanguage),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+              );
+            },
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: product.imageUrl.isNotEmpty
+                  ? Image.network(
+                      ApiService.getImageUrl(product.imageUrl),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) => Container(
+                        color: Colors.grey[200],
+                        child: Icon(Icons.inventory_2, color: Colors.grey[400]),
                       ),
+                    )
+                  : Container(
+                      color: Colors.grey[200],
+                      child: Icon(Icons.inventory_2, color: Colors.grey[400]),
                     ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.getLocalizedName(provider.currentLanguage),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    product.weight,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '₹${product.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                  if (_isAdmin) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      product.weight,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    Row(
+                      children: [
+                        Icon(Icons.shopping_cart_outlined,
+                            size: 10, color: Colors.orange[700]),
+                        const SizedBox(width: 3),
+                        if (product.buyingPrice != null &&
+                            product.buyingPrice! > 0) ...[
+                          Flexible(
+                            child: Text(
+                              'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)} · இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ] else ...[
+                          Flexible(
+                            child: Text(
+                              'Cost not set',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '₹${product.price.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: kPrimaryColor,
-                      ),
-                    ),
-                    if (_isAdmin) ...[
-                      if (product.buyingPrice != null &&
-                          product.buyingPrice! > 0) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.shopping_cart_outlined,
-                                size: 11, color: Colors.orange[700]),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                'விலை: ₹${product.buyingPrice!.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.orange[700],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  ],
+                  const Spacer(),
+                  // Bottom control: Return Item or quantity stepper
+                  Builder(builder: (context) {
+                    final returnProvider =
+                        Provider.of<ReturnCartProvider>(context);
+                    final qty = returnProvider.quantityOf(productId);
+
+                    if (qty == 0) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: product.inStock
+                              ? () {
+                                  returnProvider.addToReturnCart(product);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${product.getLocalizedName(provider.currentLanguage)} ${provider.text('return_added')}',
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              : null,
+                          icon: const Icon(Icons.assignment_return, size: 16),
+                          label: Text(
+                            provider.text('return_item_action'),
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepOrange,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 8),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Icon(Icons.trending_up,
-                                size: 11, color: Colors.green[700]),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green[50],
-                                  borderRadius: BorderRadius.circular(4),
-                                  border:
-                                      Border.all(color: Colors.green[200]!,
-                                          width: 1),
-                                ),
-                                child: Text(
-                                  'இலாபம்: ₹${(product.price - product.buyingPrice!).toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.green[700],
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
+                      );
+                    }
+
+                    return Column(
+                      children: [
+                        QuantityStepperWithInput(
+                          value: qty,
+                          min: 1,
+                          canIncrement: product.inStock,
+                          accentColor: Colors.deepOrange,
+                          onChanged: (newQty) {
+                            returnProvider.updateReturnQuantity(productId,
+                                newQty);
+                          },
                         ),
-                      ] else ...[
                         const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                size: 10, color: Colors.grey[600]),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(4),
-                                  border:
-                                      Border.all(color: Colors.grey[300]!,
-                                          width: 1),
-                                ),
-                                child: const Text(
-                                  'Cost not set',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          '₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
-                    ],
-                  ],
-                ),
+                    );
+                  }),
+                ],
               ),
-              // Bottom Control Section (Right) - Return Item or +/− controls
-              Builder(builder: (context) {
-                final returnProvider =
-                    Provider.of<ReturnCartProvider>(context);
-                final qty = returnProvider.quantityOf(productId);
-
-                if (qty == 0) {
-                  return SizedBox(
-                    width: 100,
-                    child: ElevatedButton.icon(
-                      onPressed: product.inStock
-                          ? () {
-                              returnProvider.addToReturnCart(product);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${product.getLocalizedName(provider.currentLanguage)} ${provider.text('return_added')}',
-                                  ),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          : null,
-                      icon: const Icon(Icons.assignment_return, size: 16),
-                      label: Text(
-                        provider.text('return_item_action'),
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepOrange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 8),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                // Show quantity controls when qty > 0
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    QuantityStepperWithInput(
-                      value: qty,
-                      min: 1,
-                      canIncrement: product.inStock,
-                      accentColor: Colors.deepOrange,
-                      onChanged: (newQty) {
-                        returnProvider.updateReturnQuantity(productId, newQty);
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '₹${(calculateEffectivePrice(product.price, product.weight, product.unit) * qty).toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -1558,6 +1558,53 @@ function generateInvoiceHTML(order, opts = {}) {
       margin-right: 15px;
     }
     
+    /* Balance Section (shown above Return/Ordered items on the invoice) */
+    .balance-section {
+      margin-top: 20px;
+      padding: 18px;
+      background: #E8F5E9;
+      border: 2px solid #2E7D32;
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .balance-section .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: ${shareMode ? '13px' : '15px'};
+      padding: 4px 0;
+      color: #333333;
+    }
+    
+    .balance-section .balance-row.grand {
+      border-top: 2px solid #2E7D32;
+      margin-top: 6px;
+      padding-top: 8px;
+      font-weight: 700;
+      font-size: ${shareMode ? '15px' : '18px'};
+      color: #2E7D32;
+    }
+    
+    .balance-section .balance-label {
+      font-weight: 600;
+      color: #555555;
+    }
+    
+    .balance-section .balance-value {
+      font-weight: 700;
+    }
+    
+    .balance-section-heading {
+      font-size: ${shareMode ? '14px' : '17px'};
+      color: #2E7D32;
+      font-weight: 700;
+      margin: 25px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
     /* Footer - Acts as white space at bottom of each page */
     .invoice-footer {
       margin-top: 50px;
@@ -1698,6 +1745,25 @@ function generateInvoiceHTML(order, opts = {}) {
         <p><strong>Payment:</strong> ${order.payment_method || 'COD'}</p>
       </div>
     </div>
+
+    <!-- Balance Summary -->
+    ${order.is_store_order ? `
+    <h2 class="balance-section-heading">Balance Summary</h2>
+    <div class="balance-section">
+      <div class="balance-row">
+        <span class="balance-label">Balance Before This Order</span>
+        <span class="balance-value">₹${formatInvoiceCurrency(order.balance_before)}</span>
+      </div>
+      <div class="balance-row">
+        <span class="balance-label">This Order Amount</span>
+        <span class="balance-value">₹${formatInvoiceCurrency(order.order_amount != null ? order.order_amount : order.total_amount)}</span>
+      </div>
+      <div class="balance-row grand">
+        <span class="balance-label">Total Outstanding</span>
+        <span class="balance-value">₹${formatInvoiceCurrency(order.balance_total)}</span>
+      </div>
+    </div>
+    ` : ''}
 
     ${order.return_items && order.return_items.length > 0 ? `
     <!-- Return Items -->
@@ -2053,6 +2119,12 @@ function formatDateTime(dateString) {
         hour12: true
     };
     return date.toLocaleString('en-US', options);
+}
+
+// Format a number as a currency amount string (2 decimal places)
+function formatInvoiceCurrency(amount) {
+    const value = parseFloat(amount);
+    return isNaN(value) ? '0.00' : value.toFixed(2);
 }
 
 // Show loading state

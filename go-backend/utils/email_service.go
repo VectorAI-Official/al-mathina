@@ -2,6 +2,7 @@ package utils
 
 import (
 	"al-mathina-backend/config"
+	"al-mathina-backend/database"
 	"al-mathina-backend/models"
 	"bytes"
 	"encoding/json"
@@ -10,6 +11,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // EmailService represents the email notification service
@@ -117,6 +121,22 @@ func (s *EmailService) SendOrderNotificationToAdmin(order models.Order) bool {
 		storeName = order.UserName // Fallback
 	}
 
+	// Compute the store's balance BEFORE this order was placed (for the invoice balance section)
+	balanceBefore, orderAmount, balanceTotal, isStoreOrder := computeOrderBalanceForEmail(order)
+
+	// Build balance summary HTML (shown above the ordered items)
+	balanceHtml := ""
+	if isStoreOrder {
+		balanceHtml = fmt.Sprintf(`
+				<div class="order-details" style="border: 2px solid #28a745;">
+					<h2 style="color: #28a745; margin-top: 0;">Balance Summary</h2>
+					<p style="margin: 4px 0;"><strong>Balance Before This Order:</strong> ₹%.2f</p>
+					<p style="margin: 4px 0;"><strong>This Order Amount:</strong> ₹%.2f</p>
+					<p style="margin: 4px 0; font-size: 16px; border-top: 1px solid #ddd; padding-top: 6px;"><strong>Total Outstanding:</strong> ₹%.2f</p>
+				</div>
+				`, balanceBefore, orderAmount, balanceTotal)
+	}
+
 	// HTML Body
 	htmlBody := fmt.Sprintf(`
 	<!DOCTYPE html>
@@ -193,6 +213,8 @@ func (s *EmailService) SendOrderNotificationToAdmin(order models.Order) bool {
 					<p>%s</p>
 				</div>
 				
+				%s
+				
 				<div class="order-details">
 					<h2 style="color: #28a745; margin-top: 0;">Order Items</h2>
 					<table class="table">
@@ -237,6 +259,7 @@ func (s *EmailService) SendOrderNotificationToAdmin(order models.Order) bool {
 		order.UserPhone,
 		paymentMethod,
 		addressHtml,
+		balanceHtml,
 		itemsHtml,
 		order.TotalAmount,
 		orderLink,
@@ -281,6 +304,91 @@ func (s *EmailService) SendOrderNotificationToAdmin(order models.Order) bool {
 
 	log.Printf("❌ EMAIL: Webhook failed with status %d", resp.StatusCode)
 	return false
+}
+
+// computeOrderBalanceForEmail calculates the store's outstanding balance BEFORE a
+// given order was placed, along with the order amount and the resulting total.
+// Returns (balanceBefore, orderAmount, balanceTotal, isStoreOrder).
+func computeOrderBalanceForEmail(order models.Order) (float64, float64, float64, bool) {
+	if order.UserPhone == "" {
+		return 0, order.TotalAmount, order.TotalAmount, false
+	}
+
+	ctx, cancel := database.GetDBContext()
+	defer cancel()
+	ordersCollection := database.GetCollection("orders")
+	usersCollection := database.GetCollection("users")
+
+	var user bson.M
+	if err := usersCollection.FindOne(ctx, bson.M{"phone": order.UserPhone}).Decode(&user); err != nil {
+		return 0, order.TotalAmount, order.TotalAmount, false
+	}
+
+	// Only registered stores with store_details get a balance summary
+	if sd, ok := user["store_details"].(bson.M); !ok || len(sd) == 0 {
+		return 0, order.TotalAmount, order.TotalAmount, false
+	}
+
+	// Sum prior orders' total_amount (before this order was created).
+	// If created_at is missing, fall back to excluding this order by order_id
+	// so the current order is never self-included in its own "before" balance.
+	var dueBefore float64
+	dueQuery := bson.M{"user_phone": order.UserPhone}
+	if !order.CreatedAt.IsZero() {
+		dueQuery["created_at"] = bson.M{"$lt": order.CreatedAt}
+	} else if order.OrderID != "" {
+		dueQuery["order_id"] = bson.M{"$ne": order.OrderID}
+	}
+	dueCursor, err := ordersCollection.Aggregate(ctx, []bson.D{
+		{{Key: "$match", Value: dueQuery}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "due", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
+		}}},
+	})
+	if err == nil {
+		var dueResults []struct {
+			Due float64 `bson:"due"`
+		}
+		if err := dueCursor.All(ctx, &dueResults); err == nil && len(dueResults) > 0 {
+			dueBefore = dueResults[0].Due
+		}
+		dueCursor.Close(ctx)
+	}
+
+	// Sum payments made before this order was created.
+	// Payments without a parseable timestamp are counted as made before the
+	// order (safest for legacy data) so we never overstate the outstanding balance.
+	var paidBefore float64
+	if ph, ok := user["payment_history"].(primitive.A); ok {
+		for _, entry := range ph {
+			e, ok := entry.(bson.M)
+			if !ok {
+				continue
+			}
+			if !order.CreatedAt.IsZero() {
+				var payTime *time.Time
+				if ts, ok := e["timestamp"].(primitive.DateTime); ok {
+					t := ts.Time()
+					payTime = &t
+				} else if ts, ok := e["timestamp"].(time.Time); ok {
+					t := ts
+					payTime = &t
+				}
+				// No timestamp -> assume it was paid before this order.
+				if payTime != nil && !payTime.Before(order.CreatedAt) {
+					continue
+				}
+			}
+			if amount, ok := e["amount"].(float64); ok {
+				paidBefore += amount
+			} else if amount, ok := e["amount"].(int32); ok {
+				paidBefore += float64(amount)
+			}
+		}
+	}
+
+	return dueBefore - paidBefore, order.TotalAmount, dueBefore - paidBefore + order.TotalAmount, true
 }
 
 func (s *EmailService) buildItemsHTML(items []models.OrderItem) string {

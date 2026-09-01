@@ -4,6 +4,7 @@ import (
 	"al-mathina-backend/database"
 	"al-mathina-backend/models"
 	"al-mathina-backend/utils"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -191,11 +192,132 @@ func GetOrderByID(c *gin.Context) {
 		orderDoc["items"] = enrichedItems
 	}
 
+	// Compute balance-before-order for store orders (used on the invoice)
+	balanceBefore, isStoreOrder := computeOrderBalance(ctx, ordersCollection, usersCollection, orderDoc)
+
+	orderDoc["balance_before"] = balanceBefore
+	orderDoc["order_amount"] = orderDoc["total_amount"]
+	orderDoc["balance_total"] = balanceBefore + toFloat(orderDoc["total_amount"])
+	orderDoc["is_store_order"] = isStoreOrder
+
 	// Return response matching JavaScript expectations: {"success": true, "order": {...}}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"order":   orderDoc,
 	})
+}
+
+// computeOrderBalance calculates the store's outstanding balance BEFORE a given
+// order was placed, plus whether the order belongs to a registered store.
+//
+// balance_before = (sum of prior orders' total_amount) - (sum of payments made before this order)
+func computeOrderBalance(ctx context.Context, ordersCollection, usersCollection *mongo.Collection, orderDoc bson.M) (float64, bool) {
+	userPhone, _ := orderDoc["user_phone"].(string)
+	if userPhone == "" {
+		return 0, false
+	}
+
+	orderID, _ := orderDoc["order_id"].(string)
+
+	var createdBefore *time.Time
+	if ct, ok := orderDoc["created_at"].(primitive.DateTime); ok {
+		t := ct.Time()
+		createdBefore = &t
+	} else if ct, ok := orderDoc["created_at"].(time.Time); ok {
+		t := ct
+		createdBefore = &t
+	}
+
+	// Determine whether this user is a registered store (has store_details)
+	var user bson.M
+	isStore := false
+	if err := usersCollection.FindOne(ctx, bson.M{"phone": userPhone}).Decode(&user); err == nil {
+		if sd, ok := user["store_details"].(bson.M); ok && len(sd) > 0 {
+			isStore = true
+		}
+	}
+
+	if !isStore {
+		return 0, false
+	}
+
+	// Sum prior orders' total_amount (before this order was created).
+	// If created_at is missing, fall back to excluding this order by order_id
+	// so the current order is never self-included in its own "before" balance.
+	dueQuery := bson.M{"user_phone": userPhone}
+	if createdBefore != nil {
+		dueQuery["created_at"] = bson.M{"$lt": *createdBefore}
+	} else if orderID != "" {
+		dueQuery["order_id"] = bson.M{"$ne": orderID}
+	}
+	var dueBefore float64
+	dueCursor, err := ordersCollection.Aggregate(ctx, []bson.D{
+		{{Key: "$match", Value: dueQuery}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "due", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
+		}}},
+	})
+	if err == nil {
+		var dueResults []struct {
+			Due float64 `bson:"due"`
+		}
+		if err := dueCursor.All(ctx, &dueResults); err == nil && len(dueResults) > 0 {
+			dueBefore = dueResults[0].Due
+		}
+		dueCursor.Close(ctx)
+	}
+
+	// Sum payments made before this order was created.
+	// Payments without a parseable timestamp are counted as made before the
+	// order (safest for legacy data) so we never overstate the outstanding balance.
+	var paidBefore float64
+	if ph, ok := user["payment_history"].(primitive.A); ok {
+		for _, entry := range ph {
+			e, ok := entry.(bson.M)
+			if !ok {
+				continue
+			}
+			if createdBefore != nil {
+				var payTime *time.Time
+				if ts, ok := e["timestamp"].(primitive.DateTime); ok {
+					t := ts.Time()
+					payTime = &t
+				} else if ts, ok := e["timestamp"].(time.Time); ok {
+					t := ts
+					payTime = &t
+				}
+				// No timestamp -> assume it was paid before this order.
+				if payTime != nil && !payTime.Before(*createdBefore) {
+					continue
+				}
+			}
+			if amount, ok := e["amount"].(float64); ok {
+				paidBefore += amount
+			} else if amount, ok := e["amount"].(int32); ok {
+				paidBefore += float64(amount)
+			}
+		}
+	}
+
+	return dueBefore - paidBefore, true
+}
+
+// toFloat converts a bson value to float64.
+func toFloat(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int32:
+		return float64(val)
+	case int64:
+		return float64(val)
+	}
+	return 0
 }
 
 // UpdateOrderStatus - PUT /api/admin/orders/:order_id/status

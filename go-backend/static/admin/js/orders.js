@@ -557,6 +557,25 @@ function renderOrderDetails(order) {
                     </div>
                 ` : ''}
                 
+                <!-- Balance Summary -->
+                ${order.is_store_order ? `
+                    <div class="detail-section balance-summary">
+                        <h3><i class="fas fa-wallet"></i> Balance Summary</h3>
+                        <div class="balance-row">
+                            <span class="balance-label">Balance Before This Order</span>
+                            <span class="balance-value">₹${formatInvoiceCurrency(order.balance_before)}</span>
+                        </div>
+                        <div class="balance-row">
+                            <span class="balance-label">This Order Amount</span>
+                            <span class="balance-value">₹${formatInvoiceCurrency(order.order_amount != null ? order.order_amount : order.total_amount)}</span>
+                        </div>
+                        <div class="balance-row grand">
+                            <span class="balance-label">Total Outstanding</span>
+                            <span class="balance-value">₹${formatInvoiceCurrency(order.balance_total)}</span>
+                        </div>
+                    </div>
+                ` : ''}
+                
                 <!-- Order Items -->
                 <div class="detail-section">
                     <h3>
@@ -1283,6 +1302,9 @@ function generateInvoiceHTML(order, opts = {}) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=794, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Invoice - Order #${order.order_id}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
     * { 
       margin: 0; 
@@ -1567,6 +1589,7 @@ function generateInvoiceHTML(order, opts = {}) {
       border-radius: 8px;
       width: 100%;
       box-sizing: border-box;
+      font-family: 'Noto Sans Tamil', 'Arial', 'Helvetica', sans-serif;
     }
     
     .balance-section .balance-row {
@@ -1576,6 +1599,7 @@ function generateInvoiceHTML(order, opts = {}) {
       font-size: ${shareMode ? '13px' : '15px'};
       padding: 4px 0;
       color: #333333;
+      font-family: 'Noto Sans Tamil', 'Arial', 'Helvetica', sans-serif;
     }
     
     .balance-section .balance-row.grand {
@@ -1603,6 +1627,7 @@ function generateInvoiceHTML(order, opts = {}) {
       margin: 25px 0 8px 0;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      font-family: 'Noto Sans Tamil', 'Arial', 'Helvetica', sans-serif;
     }
     
     /* Footer - Acts as white space at bottom of each page */

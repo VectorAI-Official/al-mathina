@@ -725,6 +725,51 @@ body {
     font-size: 22px;
 }
 
+/* Balance Summary box (order popup) - mirrors the invoice balance section */
+.balance-summary {
+    background: #E8F5E9;
+    border: 2px solid #2E7D32;
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-family: 'Noto Sans Tamil', Arial, sans-serif;
+}
+.balance-summary h3 {
+    font-family: 'Noto Sans Tamil', Arial, sans-serif;
+    color: #2E7D32;
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.balance-summary h3 i {
+    font-size: 18px;
+}
+.balance-summary .balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 15px;
+    color: #333333;
+}
+.balance-summary .balance-row.grand {
+    border-top: 2px solid #2E7D32;
+    margin-top: 6px;
+    padding-top: 10px;
+    font-weight: 700;
+    font-size: 17px;
+    color: #2E7D32;
+}
+.balance-summary .balance-label {
+    font-weight: 600;
+    color: #555555;
+}
+.balance-summary .balance-value {
+    font-weight: 700;
+}
+
 .detail-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

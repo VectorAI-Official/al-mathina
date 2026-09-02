@@ -499,6 +499,15 @@ function showOrderDetailsModal(order) {
     modal.style.display = 'block';
 }
 
+// Balance summary labels shown in Tamil on the order details modal and the
+// generated invoice PDF. Kept in one place so both renderers stay in sync.
+const balanceLabels = {
+    heading: 'இருப்பு சுருக்கம்',
+    beforeOrder: 'இந்த ஆர்டருக்கு முன் இருப்பு',
+    orderAmount: 'இந்த ஆர்டர் தொகை',
+    totalOutstanding: 'மொத்த நிலுவை',
+};
+
 // Render order details content (extracted for re-use)
 function renderOrderDetails(order) {
     const content = document.getElementById('orderDetailsContent');
@@ -560,17 +569,17 @@ function renderOrderDetails(order) {
                 <!-- Balance Summary -->
                 ${order.is_store_order ? `
                     <div class="detail-section balance-summary">
-                        <h3><i class="fas fa-wallet"></i> Balance Summary</h3>
+                        <h3><i class="fas fa-wallet"></i> ${balanceLabels.heading}</h3>
                         <div class="balance-row">
-                            <span class="balance-label">Balance Before This Order</span>
+                            <span class="balance-label">${balanceLabels.beforeOrder}</span>
                             <span class="balance-value">₹${formatInvoiceCurrency(order.balance_before)}</span>
                         </div>
                         <div class="balance-row">
-                            <span class="balance-label">This Order Amount</span>
+                            <span class="balance-label">${balanceLabels.orderAmount}</span>
                             <span class="balance-value">₹${formatInvoiceCurrency(order.order_amount != null ? order.order_amount : order.total_amount)}</span>
                         </div>
                         <div class="balance-row grand">
-                            <span class="balance-label">Total Outstanding</span>
+                            <span class="balance-label">${balanceLabels.totalOutstanding}</span>
                             <span class="balance-value">₹${formatInvoiceCurrency(order.balance_total)}</span>
                         </div>
                     </div>
@@ -1812,18 +1821,18 @@ function generateInvoiceHTML(order, opts = {}) {
 
     <!-- Balance Summary -->
     ${order.is_store_order ? `
-    <h2 class="balance-section-heading">Balance Summary</h2>
+    <h2 class="balance-section-heading">${balanceLabels.heading}</h2>
     <div class="balance-section">
       <div class="balance-row">
-        <span class="balance-label">Balance Before This Order</span>
+        <span class="balance-label">${balanceLabels.beforeOrder}</span>
         <span class="balance-value">₹${formatInvoiceCurrency(order.balance_before)}</span>
       </div>
       <div class="balance-row">
-        <span class="balance-label">This Order Amount</span>
+        <span class="balance-label">${balanceLabels.orderAmount}</span>
         <span class="balance-value">₹${formatInvoiceCurrency(order.order_amount != null ? order.order_amount : order.total_amount)}</span>
       </div>
       <div class="balance-row grand">
-        <span class="balance-label">Total Outstanding</span>
+        <span class="balance-label">${balanceLabels.totalOutstanding}</span>
         <span class="balance-value">₹${formatInvoiceCurrency(order.balance_total)}</span>
       </div>
     </div>

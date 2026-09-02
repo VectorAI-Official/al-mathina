@@ -90,6 +90,10 @@ function calculateEffectivePrice(pricePerUnit, weight, unit) {
 let allOrders = [];
 let filteredOrders = []; // Currently filtered/displayed orders
 let currentOrder = null;
+// Store detail cache keyed by phone - avoids duplicate DB requests when the
+// same store appears across multiple orders. One fetch per store per session.
+const storeDetailCache = {};
+let currentStorePhone = null;
 let originalOrderItemsSnapshot = [];
 let selectedOrderIds = new Set(); // Track selected order IDs for bulk actions
 
@@ -183,8 +187,14 @@ function setupEventListeners() {
         if (e.key === 'Escape') {
             const revenueModal = document.getElementById('revenueModal');
             const orderModal = document.getElementById('orderDetailsModal');
+            const orderHistoryModal = document.getElementById('orderHistoryModal');
+            const paymentHistoryModal = document.getElementById('paymentHistoryModal');
 
-            if (revenueModal && revenueModal.style.display !== 'none') {
+            if (paymentHistoryModal && paymentHistoryModal.style.display !== 'none') {
+                closePaymentHistoryModal();
+            } else if (orderHistoryModal && orderHistoryModal.style.display !== 'none') {
+                closeOrderHistoryModal();
+            } else if (revenueModal && revenueModal.style.display !== 'none') {
                 closeRevenueModal();
             } else if (orderModal && orderModal.style.display !== 'none') {
                 closeOrderDetailsModal();
@@ -497,6 +507,14 @@ function showOrderDetailsModal(order) {
     renderOrderDetails(order);
 
     modal.style.display = 'block';
+
+    // Load store-level balance/payment data (cached per store, non-blocking)
+    if (order && order.is_store_order && order.user_phone) {
+        currentStorePhone = order.user_phone;
+        initStoreSections(order.user_phone);
+    } else {
+        currentStorePhone = null;
+    }
 }
 
 // Balance summary labels shown in Tamil on the order details modal and the
@@ -581,6 +599,48 @@ function renderOrderDetails(order) {
                         <div class="balance-row grand">
                             <span class="balance-label">${balanceLabels.totalOutstanding}</span>
                             <span class="balance-value">₹${formatInvoiceCurrency(order.balance_total)}</span>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Store Balance Update + Order History -->
+                ${order.is_store_order ? `
+                    <div class="order-history-btn-wrap">
+                        <button class="order-history-btn" onclick="openOrderHistory('${order.user_phone}', '${(order.user_store_name || '').replace(/'/g, "\\'")}')">
+                            <i class="fas fa-list-alt"></i> Order History
+                        </button>
+                    </div>
+                    <div class="detail-section balance-update-section">
+                        <h3>
+                            <span><i class="fas fa-wallet"></i> Balance Update</span>
+                            <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:6px;" onclick="openPaymentHistoryModal('${order.user_phone}')">
+                                <i class="fas fa-history"></i> Payment History
+                            </button>
+                        </h3>
+                        <div class="payment-tracking">
+                            <div class="payment-track-item">
+                                <div class="payment-track-icon blue"><i class="fas fa-file-invoice-dollar"></i></div>
+                                <div class="payment-track-info">
+                                    <label>Due (Total Revenue)</label>
+                                    <span id="storeDue" class="payment-value total">₹0</span>
+                                </div>
+                            </div>
+                            <div class="payment-track-item">
+                                <div class="payment-track-icon green"><i class="fas fa-wallet"></i></div>
+                                <div class="payment-track-info">
+                                    <label>Add Payment</label>
+                                    <button class="btn-edit-payment" onclick="addPaymentForStore()" title="Add payment">
+                                        <i class="fas fa-plus"></i> Add Payment
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="payment-track-item">
+                                <div class="payment-track-icon red"><i class="fas fa-hourglass-half"></i></div>
+                                <div class="payment-track-info">
+                                    <label>Balance (Remaining)</label>
+                                    <span id="storeBalance" class="payment-value balance">₹0</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 ` : ''}
@@ -2060,9 +2120,262 @@ async function updateOrderStats() {
 
 // Close modal
 function closeOrderDetailsModal() {
+    // Close any nested store modals opened on top first
+    closeOrderHistoryModal();
+    closePaymentHistoryModal();
     document.getElementById('orderDetailsModal').style.display = 'none';
     currentOrder = null;
+    currentStorePhone = null;
 }
+
+// ============ STORE BALANCE UPDATE + ORDER HISTORY (order popup) ============
+
+// Cached single fetch of store detail (store + orders + payment data) per phone.
+// Reused by both the Balance Update section and the Order History popup so we
+// never fire duplicate DB requests for the same store.
+async function getStoreDetailCached(phone) {
+    if (storeDetailCache[phone]) return storeDetailCache[phone].data;
+    const response = await fetch(`/admin/api/stores/detail/${phone}`, {
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'Failed to load store data');
+    storeDetailCache[phone] = { data };
+    return data;
+}
+
+// Populate the Balance Update section (Due / Balance) for the current store order
+async function initStoreSections(phone) {
+    try {
+        const data = await getStoreDetailCached(phone);
+        const store = data.store || {};
+        const dueEl = document.getElementById('storeDue');
+        const balanceEl = document.getElementById('storeBalance');
+        if (dueEl) dueEl.textContent = `₹${formatInvoiceCurrency(store.all_time_due || 0)}`;
+        if (balanceEl) balanceEl.textContent = `₹${formatInvoiceCurrency(store.all_time_balance || 0)}`;
+    } catch (e) {
+        console.error('Error loading store balance update:', e);
+    }
+}
+
+// Open the Payment History sub-modal
+function openPaymentHistoryModal(phone) {
+    if (!phone) return;
+    renderPaymentHistoryModal();
+    document.getElementById('paymentHistoryModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closePaymentHistoryModal() {
+    const modal = document.getElementById('paymentHistoryModal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+function renderPaymentHistoryModal() {
+    const tbody = document.getElementById('paymentHistoryTableBody');
+    if (!tbody) return;
+    const store = currentStorePhone && storeDetailCache[currentStorePhone] ? storeDetailCache[currentStorePhone].data.store : {};
+    const history = (store && store.payment_history) || [];
+
+    if (!history.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#9ca3af;"><i class="fas fa-inbox"></i> No payment history yet</td></tr>';
+        return;
+    }
+
+    const sorted = [...history].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    tbody.innerHTML = sorted.map((entry) => {
+        const amount = formatInvoiceCurrency(entry.amount || 0);
+        const date = entry.timestamp ? new Date(entry.timestamp).toLocaleDateString('en-IN', {
+            year: 'numeric', month: 'short', day: '2-digit'
+        }) : 'N/A';
+        return `
+            <tr>
+                <td>₹${amount}</td>
+                <td>${date}</td>
+                <td style="text-align:center;">
+                    <button onclick="removePaymentForStore('${entry.timestamp}', ${entry.amount})" class="btn-remove-payment" title="Remove this payment">
+                        <i class="fas fa-times"></i> Remove
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Add a payment to the current store's balance
+async function addPaymentForStore() {
+    if (!currentStorePhone) return;
+    const cache = storeDetailCache[currentStorePhone];
+    if (!cache) return;
+    const store = cache.data.store || {};
+    const totalDue = store.all_time_due || 0;
+    const totalPaid = store.all_time_paid || 0;
+    const balance = totalDue - totalPaid;
+
+    const paymentAmount = prompt(`Enter payment amount to add:\n\nBalance: ₹${formatInvoiceCurrency(balance)}\nTotal Due: ₹${formatInvoiceCurrency(totalDue)}`, '');
+    if (paymentAmount === null) return;
+
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+        showToast('Please enter a valid positive number', 'error');
+        return;
+    }
+
+    const newTotalPaid = totalPaid + amount;
+    if (newTotalPaid > totalDue) {
+        if (!confirm(`Payment (₹${formatInvoiceCurrency(amount)}) will exceed total due.\n\nNew total paid will be: ₹${formatInvoiceCurrency(newTotalPaid)}\nTotal due: ₹${formatInvoiceCurrency(totalDue)}\n\nContinue anyway?`)) {
+            return;
+        }
+    }
+
+    try {
+        const timestamp = new Date().toISOString();
+        const response = await fetch(`/admin/api/stores/${currentStorePhone}/payment-history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, timestamp })
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Failed to add payment');
+        }
+
+        // Update cached object locally - no re-fetch needed
+        store.all_time_paid = newTotalPaid;
+        store.all_time_balance = totalDue - newTotalPaid;
+        if (!store.payment_history) store.payment_history = [];
+        store.payment_history.push({ amount, timestamp });
+
+        const balanceEl = document.getElementById('storeBalance');
+        if (balanceEl) balanceEl.textContent = `₹${formatInvoiceCurrency(store.all_time_balance)}`;
+        renderPaymentHistoryModal();
+
+        showToast(`Payment of ₹${formatInvoiceCurrency(amount)} added successfully`, 'success');
+        refreshOrderStatsAfterBalanceChange();
+    } catch (error) {
+        console.error('Error adding payment:', error);
+        showToast(error.message || 'Failed to add payment', 'error');
+    }
+}
+
+// Remove a payment from the current store's balance
+async function removePaymentForStore(timestamp, amount) {
+    if (!currentStorePhone) return;
+    if (!confirm(`Remove payment of ₹${formatInvoiceCurrency(amount)}?\n\nThis will add ₹${formatInvoiceCurrency(amount)} back to the balance.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/stores/${currentStorePhone}/payment-history/${encodeURIComponent(timestamp)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Failed to remove payment');
+        }
+
+        const cache = storeDetailCache[currentStorePhone];
+        if (cache && cache.data.store) {
+            const store = cache.data.store;
+            const newTotalPaid = Math.max(0, (store.all_time_paid || 0) - amount);
+            store.all_time_paid = newTotalPaid;
+            store.all_time_balance = (store.all_time_due || 0) - newTotalPaid;
+            if (Array.isArray(store.payment_history)) {
+                store.payment_history = store.payment_history.filter(e => e.timestamp !== timestamp);
+            }
+            const balanceEl = document.getElementById('storeBalance');
+            if (balanceEl) balanceEl.textContent = `₹${formatInvoiceCurrency(store.all_time_balance)}`;
+        }
+
+        renderPaymentHistoryModal();
+        showToast(`Payment of ₹${formatInvoiceCurrency(amount)} removed`, 'success');
+        refreshOrderStatsAfterBalanceChange();
+    } catch (error) {
+        console.error('Error removing payment:', error);
+        showToast(error.message || 'Failed to remove payment', 'error');
+    }
+}
+
+// Refresh order stats (revenue) after a balance change
+async function refreshOrderStatsAfterBalanceChange() {
+    try {
+        await updateOrderStats();
+    } catch (e) {
+        // Non-fatal - stats refresh is best-effort
+    }
+}
+
+// Open the Order History popup above the order details modal
+async function openOrderHistory(phone, storeName) {
+    if (!phone) return;
+    const content = document.getElementById('orderHistoryContent');
+    if (!content) return;
+
+    content.innerHTML = `
+        <div class="history-empty">
+            <i class="fas fa-spinner fa-spin"></i> Loading order history...
+        </div>
+    `;
+    document.getElementById('orderHistoryModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    try {
+        const data = await getStoreDetailCached(phone); // reuses cached fetch
+        const orders = Array.isArray(data.orders) ? data.orders : [];
+        const resolvedStoreName = (data.store && data.store.store_details && data.store.store_details.store_name) || storeName || '';
+
+        if (!orders.length) {
+            content.innerHTML = `
+                <div class="history-empty">
+                    <i class="fas fa-inbox"></i> No orders found
+                </div>
+            `;
+            return;
+        }
+
+        content.innerHTML = `
+            ${resolvedStoreName ? `<h3 style="margin:0 0 16px 0; color:#004D40;"><i class="fas fa-store"></i> ${resolvedStoreName}</h3>` : ''}
+            <div class="store-orders">
+                ${orders.map(order => {
+                    const statusClass = 'status-' + (order.status || '');
+                    const itemCount = (order.items && order.items.length) || 0;
+                    return `
+                        <div class="order-slim-card ${statusClass}" onclick="closeOrderHistoryModal(); viewOrderDetails('${order.order_id}')" title="Click to view order details">
+                            <div class="order-slim-header">
+                                <div class="order-id"><i class="fas fa-receipt"></i> <strong>#${order.order_id}</strong></div>
+                                <div class="order-status">
+                                    <span class="status-badge ${statusClass}">${(order.status || '').toUpperCase()}</span>
+                                </div>
+                            </div>
+                            <div class="order-info-grid">
+                                <div class="order-info-item"><i class="fas fa-calendar"></i> <span>${formatDateTime(order.created_at)}</span></div>
+                                <div class="order-info-item"><i class="fas fa-box"></i> <span>${itemCount} item${itemCount !== 1 ? 's' : ''}</span></div>
+                                <div class="order-info-item"><i class="fas fa-credit-card"></i> <span>${order.payment_method || 'N/A'}</span></div>
+                                <div class="order-info-item revenue"><i class="fas fa-rupee-sign"></i> <span>₹${formatInvoiceCurrency(order.total_amount)}</span></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading order history:', error);
+        content.innerHTML = `
+            <div class="history-empty">
+                <i class="fas fa-exclamation-triangle"></i> Failed to load order history
+            </div>
+        `;
+    }
+}
+
+function closeOrderHistoryModal() {
+    const modal = document.getElementById('orderHistoryModal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
 
 // Get filtered orders based on current date filter
 function getFilteredOrders() {
@@ -2226,8 +2539,17 @@ function showError(containerId, message) {
 
 // Modal close on outside click
 window.onclick = function (event) {
-    const modal = document.getElementById('orderDetailsModal');
-    if (event.target === modal) {
+    const orderModal = document.getElementById('orderDetailsModal');
+    const orderHistoryModal = document.getElementById('orderHistoryModal');
+    const paymentHistoryModal = document.getElementById('paymentHistoryModal');
+
+    if (event.target === paymentHistoryModal) {
+        closePaymentHistoryModal();
+    }
+    if (event.target === orderHistoryModal) {
+        closeOrderHistoryModal();
+    }
+    if (event.target === orderModal) {
         closeOrderDetailsModal();
     }
 }

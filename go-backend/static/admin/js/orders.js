@@ -94,6 +94,7 @@ let currentOrder = null;
 // same store appears across multiple orders. One fetch per store per session.
 const storeDetailCache = {};
 let currentStorePhone = null;
+let currentOrderHistoryStoreName = '';
 let originalOrderItemsSnapshot = [];
 let selectedOrderIds = new Set(); // Track selected order IDs for bulk actions
 
@@ -508,10 +509,11 @@ function showOrderDetailsModal(order) {
 
     modal.style.display = 'block';
 
-    // Load store-level balance/payment data (cached per store, non-blocking)
+    // Load store-level balance/payment data - force a fresh query on each popup
+    // open so the balance is never stale (even for another order of the same store).
     if (order && order.is_store_order && order.user_phone) {
         currentStorePhone = order.user_phone;
-        initStoreSections(order.user_phone);
+        initStoreSections(order.user_phone, true);
     } else {
         currentStorePhone = null;
     }
@@ -2133,8 +2135,9 @@ function closeOrderDetailsModal() {
 // Cached single fetch of store detail (store + orders + payment data) per phone.
 // Reused by both the Balance Update section and the Order History popup so we
 // never fire duplicate DB requests for the same store.
-async function getStoreDetailCached(phone) {
-    if (storeDetailCache[phone]) return storeDetailCache[phone].data;
+// Always fetch store detail fresh from the server and update the cache.
+// Used when a new order popup opens so the balance is never stale.
+async function fetchStoreDetailFresh(phone) {
     const response = await fetch(`/admin/api/stores/detail/${phone}`, {
         headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
     });
@@ -2144,10 +2147,19 @@ async function getStoreDetailCached(phone) {
     return data;
 }
 
-// Populate the Balance Update section (Due / Balance) for the current store order
-async function initStoreSections(phone) {
+// Cached store detail (store + orders + payment data) per phone.
+// Within a single popup the cache is shared by Balance Update and Order History
+// so we never fire duplicate DB requests. A fresh value is fetched on popup open.
+async function getStoreDetailCached(phone) {
+    if (storeDetailCache[phone]) return storeDetailCache[phone].data;
+    return fetchStoreDetailFresh(phone);
+}
+
+// Populate the Balance Update section (Due / Balance) for the current store order.
+// Pass force=true when a new order popup opens to always query fresh.
+async function initStoreSections(phone, force = false) {
     try {
-        const data = await getStoreDetailCached(phone);
+        const data = force ? await fetchStoreDetailFresh(phone) : await getStoreDetailCached(phone);
         const store = data.store || {};
         const dueEl = document.getElementById('storeDue');
         const balanceEl = document.getElementById('storeBalance');
@@ -2325,6 +2337,7 @@ async function openOrderHistory(phone, storeName) {
         const data = await getStoreDetailCached(phone); // reuses cached fetch
         const orders = Array.isArray(data.orders) ? data.orders : [];
         const resolvedStoreName = (data.store && data.store.store_details && data.store.store_details.store_name) || storeName || '';
+        currentOrderHistoryStoreName = resolvedStoreName;
 
         if (!orders.length) {
             content.innerHTML = `
@@ -2374,6 +2387,225 @@ function closeOrderHistoryModal() {
     const modal = document.getElementById('orderHistoryModal');
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = 'auto';
+}
+
+// Build a clean printable HTML table of the store's order history
+function generateOrderHistoryHTML(orders, storeName) {
+    const rows = (Array.isArray(orders) ? orders : []).map((order, index) => {
+        const itemCount = (order.items && order.items.length) || 0;
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${order.order_id || '-'}</td>
+                <td>${formatDateTime(order.created_at)}</td>
+                <td>${(order.status || '').toUpperCase()}</td>
+                <td>${itemCount}</td>
+                <td style="text-align:right;">₹${formatInvoiceCurrency(order.total_amount)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    const total = (Array.isArray(orders) ? orders : []).reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
+    const generated = new Date().toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Order History</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    @page { size: A4; margin: 0; }
+    html { width: 794px; overflow-x: hidden; }
+    body {
+      font-family: 'Arial', 'Noto Sans Tamil', sans-serif;
+      background: #ffffff;
+      color: #000000;
+      width: 794px;
+      line-height: 1.5;
+    }
+    .history-container { width: 794px; padding: 40px; }
+    .history-header {
+      border-bottom: 4px solid #004D40;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .history-header h1 { font-size: 24px; color: #004D40; margin-bottom: 6px; }
+    .history-header .sub { font-size: 13px; color: #555555; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table thead th {
+      background: #004D40;
+      color: #fff;
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 600;
+    }
+    table tbody td {
+      padding: 9px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      color: #333333;
+    }
+    table tbody tr:nth-child(even) { background: #f8f9fa; }
+    .grand-total-row td {
+      font-weight: 700;
+      background: #e8f5e9 !important;
+      border-top: 2px solid #2E7D32;
+    }
+  </style>
+</head>
+<body>
+  <div class="history-container">
+    <div class="history-header">
+      <h1>Order History</h1>
+      <div class="sub">${storeName ? `<strong>${storeName}</strong><br>` : ''}Generated: ${generated}</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Order ID</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Items</th>
+          <th style="text-align:right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="grand-total-row">
+          <td colspan="5" style="text-align:right;">TOTAL:</td>
+          <td style="text-align:right;">₹${formatInvoiceCurrency(total)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`;
+}
+
+// Compact multi-page A4 PDF writer from a captured canvas (same approach as invoice)
+function addHistoryCanvasToPdf(canvas, pdf) {
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const topMargin = 0;
+    const bottomMarginFirstPage = 10;
+    const bottomMargin = 20;
+    const topMarginSubsequent = 25;
+    const safetyBuffer = 5;
+    const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage;
+    const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer;
+
+    if (imgHeight <= firstPageUsableHeight) {
+        pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight);
+        return;
+    }
+
+    let remainingHeight = imgHeight;
+    let sourceY = 0;
+    let pageNumber = 1;
+    const canvasHeight = canvas.height;
+    const canvasWidth = canvas.width;
+    const pixelsPerMm = canvasHeight / imgHeight;
+
+    const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
+    const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
+    const page1Canvas = document.createElement('canvas');
+    page1Canvas.width = canvasWidth;
+    page1Canvas.height = firstPageCanvasHeight;
+    const page1Ctx = page1Canvas.getContext('2d');
+    page1Ctx.drawImage(canvas, 0, 0, canvasWidth, firstPageCanvasHeight, 0, 0, canvasWidth, firstPageCanvasHeight);
+    pdf.addImage(page1Canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
+
+    sourceY += firstPageHeight;
+    remainingHeight -= firstPageHeight;
+
+    while (remainingHeight > 0) {
+        pdf.addPage();
+        pageNumber++;
+        const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
+        const pageCanvasHeight = pageHeight * pixelsPerMm;
+        const sourceCanvasY = sourceY * pixelsPerMm;
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvasWidth;
+        pageCanvas.height = pageCanvasHeight;
+        const pageCtx = pageCanvas.getContext('2d');
+        pageCtx.drawImage(canvas, 0, sourceCanvasY, canvasWidth, pageCanvasHeight, 0, 0, canvasWidth, pageCanvasHeight);
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
+        sourceY += pageHeight;
+        remainingHeight -= pageHeight;
+    }
+}
+
+// Download the store's order history as a clean PDF (reuses cached fresh data)
+async function downloadOrderHistoryPdf() {
+    if (!currentStorePhone) return;
+    try {
+        const data = await getStoreDetailCached(currentStorePhone); // reuses fresh data, no duplicate fetch
+        const orders = Array.isArray(data.orders) ? data.orders : [];
+        if (!orders.length) {
+            showToast('No order history to download', 'warning');
+            return;
+        }
+
+        const storeName = currentOrderHistoryStoreName || (data.store && data.store.store_details && data.store.store_details.store_name) || '';
+        const historyHTML = generateOrderHistoryHTML(orders, storeName);
+
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.left = '-9999px';
+        iframe.style.top = '-9999px';
+        iframe.style.width = '210mm';
+        iframe.style.height = '297mm';
+        iframe.style.border = 'none';
+        iframe.style.visibility = 'hidden';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(historyHTML);
+        iframeDoc.close();
+
+        try {
+            if (iframe.contentWindow.document.fonts) {
+                await iframe.contentWindow.document.fonts.ready;
+            }
+        } catch (e) { /* fonts API unavailable */ }
+        try {
+            if (document.fonts) {
+                await document.fonts.ready;
+            }
+        } catch (e) { /* fonts API unavailable */ }
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const element = iframe.contentWindow.document.querySelector('.history-container');
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: false,
+            backgroundColor: '#ffffff',
+            logging: false,
+            windowWidth: iframe.contentWindow.document.documentElement.scrollWidth,
+            windowHeight: iframe.contentWindow.document.documentElement.scrollHeight,
+            foreignObjectRendering: false,
+            imageTimeout: 0
+        });
+
+        document.body.removeChild(iframe);
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+        addHistoryCanvasToPdf(canvas, pdf);
+
+        const safeName = (storeName || currentStorePhone).replace(/[^\w\u0B80-\u0BFF]+/g, '_');
+        pdf.save(`OrderHistory_${safeName}.pdf`);
+        showToast('Order history PDF downloaded', 'success');
+    } catch (error) {
+        console.error('Error downloading order history PDF:', error);
+        showToast('Failed to download order history PDF', 'error');
+    }
 }
 
 

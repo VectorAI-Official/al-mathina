@@ -825,6 +825,25 @@ body {
     box-shadow: 0 6px 18px rgba(25, 118, 210, 0.4);
 }
 
+.order-history-download-btn {
+    padding: 8px 16px;
+    background: #ffffff;
+    color: #0d47a1;
+    border: 2px solid #ffffff;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+.order-history-download-btn:hover {
+    background: #e3f2fd;
+    border-color: #e3f2fd;
+}
+
 .balance-update-section {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     padding: 25px;

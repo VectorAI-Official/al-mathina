@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Order Management - AL-Madhina Admin</title>
-    <link rel="stylesheet" href="/static/admin/css/orders.css?v=2.10">
+    <link rel="stylesheet" href="/static/admin/css/orders.css?v=2.11">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts - Noto Sans Tamil for proper Tamil rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -169,7 +169,12 @@
         <div class="modal-content" style="max-width: 820px;">
             <div class="modal-header">
                 <h2><i class="fas fa-list-alt"></i> Order History</h2>
-                <span class="close-modal" onclick="closeOrderHistoryModal()">&times;</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button class="order-history-download-btn" onclick="downloadOrderHistoryPdf()">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <span class="close-modal" onclick="closeOrderHistoryModal()">&times;</span>
+                </div>
             </div>
             <div id="orderHistoryContent" class="order-history-content">
                 <!-- Store order cards will be loaded here -->
@@ -302,6 +307,6 @@
     <!-- jsPDF library for PDF generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <script src="/static/admin/js/orders.js?v=3.3"></script>
+    <script src="/static/admin/js/orders.js?v=3.4"></script>
 </body>
 </html>

@@ -268,36 +268,17 @@ func computeOrderBalance(ctx context.Context, ordersCollection, usersCollection 
 		dueCursor.Close(ctx)
 	}
 
-	// Sum payments made before this order was created.
-	// Payments without a parseable timestamp are counted as made before the
-	// order (safest for legacy data) so we never overstate the outstanding balance.
+	// Amount paid before this order. We use the authoritative total_paid field
+	// (the same source GetStoreDetail uses for the Balance Update section) so the
+	// invoice/popup balance is net of payments and consistent with that section.
+	// payment_history timestamps are record-time (when the admin entered them),
+	// not economically attributable to a given order, so summing them filtered by
+	// order creation time is unreliable and can wrongly report a gross balance.
 	var paidBefore float64
-	if ph, ok := user["payment_history"].(primitive.A); ok {
-		for _, entry := range ph {
-			e, ok := entry.(bson.M)
-			if !ok {
-				continue
-			}
-			if createdBefore != nil {
-				var payTime *time.Time
-				if ts, ok := e["timestamp"].(primitive.DateTime); ok {
-					t := ts.Time()
-					payTime = &t
-				} else if ts, ok := e["timestamp"].(time.Time); ok {
-					t := ts
-					payTime = &t
-				}
-				// No timestamp -> assume it was paid before this order.
-				if payTime != nil && !payTime.Before(*createdBefore) {
-					continue
-				}
-			}
-			if amount, ok := e["amount"].(float64); ok {
-				paidBefore += amount
-			} else if amount, ok := e["amount"].(int32); ok {
-				paidBefore += float64(amount)
-			}
-		}
+	if paid, ok := user["total_paid"].(float64); ok {
+		paidBefore = paid
+	} else if paid, ok := user["total_paid"].(int32); ok {
+		paidBefore = float64(paid)
 	}
 
 	return dueBefore - paidBefore, true

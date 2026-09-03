@@ -192,12 +192,12 @@ func GetOrderByID(c *gin.Context) {
 		orderDoc["items"] = enrichedItems
 	}
 
-	// Compute balance-before-order for store orders (used on the invoice)
-	balanceBefore, isStoreOrder := computeOrderBalance(ctx, ordersCollection, usersCollection, orderDoc)
+	// Compute net balance figures for store orders (used on the invoice/popup)
+	balanceBefore, balanceTotal, isStoreOrder := computeOrderBalance(ctx, ordersCollection, usersCollection, orderDoc)
 
 	orderDoc["balance_before"] = balanceBefore
 	orderDoc["order_amount"] = orderDoc["total_amount"]
-	orderDoc["balance_total"] = balanceBefore + toFloat(orderDoc["total_amount"])
+	orderDoc["balance_total"] = balanceTotal
 	orderDoc["is_store_order"] = isStoreOrder
 
 	// Return response matching JavaScript expectations: {"success": true, "order": {...}}
@@ -207,30 +207,28 @@ func GetOrderByID(c *gin.Context) {
 	})
 }
 
-// computeOrderBalance calculates the store's outstanding balance BEFORE a given
-// order was placed, plus whether the order belongs to a registered store.
+// computeOrderBalance calculates the store's net outstanding balance figures
+// used on the invoice/popup, plus whether the order belongs to a registered store.
 //
-// balance_before = (sum of prior orders' total_amount) - (sum of payments made before this order)
-func computeOrderBalance(ctx context.Context, ordersCollection, usersCollection *mongo.Collection, orderDoc bson.M) (float64, bool) {
+// The outstanding balance is derived from the authoritative all-time totals so it
+// stays consistent with the Balance Update section for every order (not just the
+// latest one):
+//
+//	balance_total = (sum of ALL orders' total_amount) - total_paid   // net outstanding
+//	balance_before = balance_total - this_order_amount               // net outstanding before this order
+//
+// total_paid is read from the user document (same source GetStoreDetail uses).
+// payment_history timestamps are record-time (when the admin entered them), not
+// economically attributable to a given order, so summing them filtered by order
+// creation time is unreliable and can wrongly report a gross balance.
+func computeOrderBalance(ctx context.Context, ordersCollection, usersCollection *mongo.Collection, orderDoc bson.M) (balanceBefore float64, balanceTotal float64, isStore bool) {
 	userPhone, _ := orderDoc["user_phone"].(string)
 	if userPhone == "" {
-		return 0, false
-	}
-
-	orderID, _ := orderDoc["order_id"].(string)
-
-	var createdBefore *time.Time
-	if ct, ok := orderDoc["created_at"].(primitive.DateTime); ok {
-		t := ct.Time()
-		createdBefore = &t
-	} else if ct, ok := orderDoc["created_at"].(time.Time); ok {
-		t := ct
-		createdBefore = &t
+		return 0, 0, false
 	}
 
 	// Determine whether this user is a registered store (has store_details)
 	var user bson.M
-	isStore := false
 	if err := usersCollection.FindOne(ctx, bson.M{"phone": userPhone}).Decode(&user); err == nil {
 		if sd, ok := user["store_details"].(bson.M); ok && len(sd) > 0 {
 			isStore = true
@@ -238,21 +236,13 @@ func computeOrderBalance(ctx context.Context, ordersCollection, usersCollection 
 	}
 
 	if !isStore {
-		return 0, false
+		return 0, 0, false
 	}
 
-	// Sum prior orders' total_amount (before this order was created).
-	// If created_at is missing, fall back to excluding this order by order_id
-	// so the current order is never self-included in its own "before" balance.
-	dueQuery := bson.M{"user_phone": userPhone}
-	if createdBefore != nil {
-		dueQuery["created_at"] = bson.M{"$lt": *createdBefore}
-	} else if orderID != "" {
-		dueQuery["order_id"] = bson.M{"$ne": orderID}
-	}
-	var dueBefore float64
-	dueCursor, err := ordersCollection.Aggregate(ctx, []bson.D{
-		{{Key: "$match", Value: dueQuery}},
+	// Sum ALL orders' total_amount for this user (all-time due).
+	var allTimeDue float64
+	allDueCursor, err := ordersCollection.Aggregate(ctx, []bson.D{
+		{{Key: "$match", Value: bson.M{"user_phone": userPhone}}},
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: nil},
 			{Key: "due", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
@@ -262,26 +252,27 @@ func computeOrderBalance(ctx context.Context, ordersCollection, usersCollection 
 		var dueResults []struct {
 			Due float64 `bson:"due"`
 		}
-		if err := dueCursor.All(ctx, &dueResults); err == nil && len(dueResults) > 0 {
-			dueBefore = dueResults[0].Due
+		if err := allDueCursor.All(ctx, &dueResults); err == nil && len(dueResults) > 0 {
+			allTimeDue = dueResults[0].Due
 		}
-		dueCursor.Close(ctx)
+		allDueCursor.Close(ctx)
 	}
 
-	// Amount paid before this order. We use the authoritative total_paid field
-	// (the same source GetStoreDetail uses for the Balance Update section) so the
-	// invoice/popup balance is net of payments and consistent with that section.
-	// payment_history timestamps are record-time (when the admin entered them),
-	// not economically attributable to a given order, so summing them filtered by
-	// order creation time is unreliable and can wrongly report a gross balance.
-	var paidBefore float64
+	// Net outstanding (total outstanding) = all-time due minus payments.
+	var totalPaid float64
 	if paid, ok := user["total_paid"].(float64); ok {
-		paidBefore = paid
+		totalPaid = paid
 	} else if paid, ok := user["total_paid"].(int32); ok {
-		paidBefore = float64(paid)
+		totalPaid = float64(paid)
 	}
 
-	return dueBefore - paidBefore, true
+	balanceTotal = allTimeDue - totalPaid
+	balanceBefore = balanceTotal - toFloat(orderDoc["total_amount"])
+	if balanceBefore < 0 {
+		balanceBefore = 0
+	}
+
+	return balanceBefore, balanceTotal, true
 }
 
 // toFloat converts a bson value to float64.

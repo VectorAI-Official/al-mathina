@@ -3740,11 +3740,6 @@ body {
 @media (max-width: 480px) {
     /* Extra small devices */
     
-    /* Ensure no element exceeds viewport */
-    * {
-        max-width: 100%;
-    }
-    
     img,
     video,
     iframe,

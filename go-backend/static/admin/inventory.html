@@ -481,6 +481,7 @@
 
             .search-box {
                 width: 100%;
+                min-width: 0;
             }
 
             .filters {
@@ -492,9 +493,13 @@
                 flex: 1;
             }
 
-            .inventory-table {
-                display: block;
+            #tableContainer {
                 overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .inventory-table {
+                min-width: 600px;
             }
 
             .form-row {

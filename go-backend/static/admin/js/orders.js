@@ -523,9 +523,9 @@ function showOrderDetailsModal(order) {
 // generated invoice PDF. Kept in one place so both renderers stay in sync.
 const balanceLabels = {
     heading: 'இருப்பு சுருக்கம்',
-    beforeOrder: 'இந்த ஆர்டருக்கு முன் இருப்பு',
-    orderAmount: 'இந்த ஆர்டர் தொகை',
-    totalOutstanding: 'மொத்த நிலுவை',
+    beforeOrder: 'பழைய பாக்கி',
+    orderAmount: 'ஆர்டர் தொகை',
+    totalOutstanding: 'புதிய பாக்கி',
 };
 
 // Render order details content (extracted for re-use)

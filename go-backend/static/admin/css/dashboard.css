@@ -284,7 +284,8 @@ body {
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: auto;
+    max-height: 520px;
     -webkit-overflow-scrolling: touch;
     position: relative;
 }

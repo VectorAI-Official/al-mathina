@@ -1019,6 +1019,16 @@ body {
     border: 1px solid #e9ecef;
 }
 
+/* Order popup: keep the items/return tables internally scrollable so the
+   popup stays a normal height. Scoped to the popup only so the printed /
+   WhatsApp invoice (rendered in a separate iframe using the same .items-table
+   class) is never clipped. */
+#orderDetailsContent .items-table {
+    max-height: 320px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 .items-table table {
     width: 100%;
     border-collapse: collapse;

@@ -1695,6 +1695,8 @@ body {
 /* Summary Table */
 .table-container {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 520px;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }

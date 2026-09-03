@@ -192,6 +192,12 @@
         }
 
         /* Inventory Table */
+        #tableContainer {
+            overflow: auto;
+            max-height: 520px;
+            -webkit-overflow-scrolling: touch;
+        }
+
         .inventory-table {
             width: 100%;
             border-collapse: separate;
@@ -201,6 +207,9 @@
         .inventory-table thead {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
 
         .inventory-table th {

@@ -1881,8 +1881,9 @@ function generateInvoiceHTML(order, opts = {}) {
       </div>
     </div>
 
-    <!-- Balance Summary -->
-    ${order.is_store_order ? `
+    <!-- BALANCE SUMMARY DISABLED (commented out) - hidden from generated invoice PDF.
+         To re-enable, uncomment the block below. -->
+    ${false && order.is_store_order ? `
     <h2 class="balance-section-heading">${balanceLabels.heading}</h2>
     <div class="balance-section">
       <div class="balance-row">

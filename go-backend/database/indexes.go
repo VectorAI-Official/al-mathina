@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -9,6 +10,18 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// isIndexConflict reports whether an index build failed only because an
+// equivalent index already exists under a different name. MongoDB uses code 85
+// (IndexOptionsConflict) and 86 (IndexKeySpecsConflict) for this. Such indexes
+// still serve queries, so they are treated as success rather than a warning.
+func isIndexConflict(err error) bool {
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) {
+		return cmdErr.Code == 85 || cmdErr.Code == 86
+	}
+	return false
+}
 
 // indexSpec names an index so a failure can be reported precisely.
 type indexSpec struct {
@@ -65,10 +78,21 @@ func EnsureIndexes() error {
 				keys: bson.D{{Key: "order_id", Value: 1}},
 				opts: options.Index().SetUnique(true),
 			},
-			// user order lookups + status updates
+			// Revenue pages: $match {user_phone: {$in}, created_at: range} → single seek
 			{
-				name: "orders_user_phone",
-				keys: bson.D{{Key: "user_phone", Value: 1}},
+				name: "orders_user_phone_created_at",
+				keys: bson.D{
+					{Key: "user_phone", Value: 1},
+					{Key: "created_at", Value: -1},
+				},
+			},
+			// Covered aggregation for stats/revenue ($group on status + total_amount)
+			{
+				name: "orders_status_total_amount",
+				keys: bson.D{
+					{Key: "status", Value: 1},
+					{Key: "total_amount", Value: 1},
+				},
 			},
 		},
 		"inventory": {
@@ -115,6 +139,12 @@ func EnsureIndexes() error {
 			model := mongo.IndexModel{Keys: def.keys, Options: opts}
 			name, err := GetCollection(coll).Indexes().CreateOne(ctx, model)
 			if err != nil {
+				// An equivalent index under another name is fine.
+				if isIndexConflict(err) {
+					log.Printf("✅ INDEXES: %s.%s already exists (equivalent index)", coll, def.name)
+					created++
+					continue
+				}
 				// Warn, don't fatal: keep the server up even if Atlas hiccups
 				// during a deploy, and continue with the remaining indexes.
 				log.Printf("⚠️ INDEXES: %s.%s creation failed (queries may be slow): %v", coll, def.name, err)

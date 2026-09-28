@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"al-mathina-backend/config"
 	"al-mathina-backend/database"
 	"al-mathina-backend/handlers"
+	"al-mathina-backend/middleware"
 	"al-mathina-backend/utils"
 
 	"github.com/gin-gonic/gin"
@@ -82,11 +84,22 @@ func main() {
 		c.Next()
 	})
 
-	// Cache-busting headers (critical for Flutter - prevents stale data)
+	// gzip compression for eligible responses (JSON/JS/CSS/HTML/SVG).
+	// Registered after CORS, before routes. Static binary assets are skipped.
+	router.Use(middleware.Gzip())
+
+	// Cache headers:
+	//   - /static/* assets are versioned via ?v= (e.g. orders.js?v=3.4) →
+	//     cache aggressively so each navigation does not re-download ~550KB.
+	//   - HTML + APIs stay no-cache so data/fixes are never stale.
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Writer.Header().Set("Pragma", "no-cache")
-		c.Writer.Header().Set("Expires", "0")
+		if strings.HasPrefix(c.Request.URL.Path, "/static/") {
+			c.Writer.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			c.Writer.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Writer.Header().Set("Pragma", "no-cache")
+			c.Writer.Header().Set("Expires", "0")
+		}
 		c.Next()
 	})
 

@@ -111,7 +111,9 @@ func GetAllOrders(c *gin.Context) {
 
 	// Return response matching JavaScript expectations: {"success": true, "orders": [...]}
 	if limit > 0 {
-		total, err := ordersCollection.CountDocuments(ctx, bson.M{})
+		// Estimated count is O(1) metadata; an exact count over a fast-growing
+		// collection adds seconds for no practical benefit to the client.
+		total, err := ordersCollection.EstimatedDocumentCount(ctx)
 		if err != nil {
 			log.Printf("⚠️ GET /api/admin/orders COUNT failed: %v (ctx: %v)", err, ctx.Err())
 		}
@@ -823,31 +825,37 @@ func DeleteOrder(c *gin.Context) {
 
 // GetOrderStats - GET /api/admin/orders/stats/summary
 func GetOrderStats(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Heavy aggregation → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
 	collection := database.GetCollection("orders")
 
-	// Aggregate stats by status
-	statusPipeline := []bson.D{
+	// ONE pipeline derives counts per status AND revenue together, halving the
+	// full-collection scans (previously a status group + a separate revenue group).
+	pipeline := []bson.D{
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: "$status"},
 			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+			{Key: "revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
 		}}},
 	}
 
-	cursor, err := collection.Aggregate(ctx, statusPipeline)
+	start := time.Now()
+	cursor, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
+		log.Printf("❌ GET /api/admin/orders/stats/summary AGGREGATE failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to get stats"})
 		return
 	}
 	defer cursor.Close(ctx)
 
 	var stats []struct {
-		ID    string `bson:"_id"`
-		Count int    `bson:"count"`
+		ID      string  `bson:"_id"`
+		Count   int     `bson:"count"`
+		Revenue float64 `bson:"revenue"`
 	}
-
 	if err := cursor.All(ctx, &stats); err != nil {
+		log.Printf("❌ GET /api/admin/orders/stats/summary CURSOR failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to decode stats"})
 		return
 	}
@@ -856,8 +864,10 @@ func GetOrderStats(c *gin.Context) {
 	pending := 0
 	delivered := 0
 	total := 0
+	totalRevenue := 0.0
 	for _, stat := range stats {
 		total += stat.Count
+		totalRevenue += stat.Revenue
 		if stat.ID == "pending" {
 			pending = stat.Count
 		} else if stat.ID == "delivered" {
@@ -865,27 +875,8 @@ func GetOrderStats(c *gin.Context) {
 		}
 	}
 
-	// Calculate total revenue
-	revenuePipeline := []bson.D{
-		{{Key: "$group", Value: bson.D{
-			{Key: "_id", Value: nil},
-			{Key: "total_revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
-		}}},
-	}
-
-	revenueCursor, err := collection.Aggregate(ctx, revenuePipeline)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to calculate revenue"})
-		return
-	}
-	defer revenueCursor.Close(ctx)
-
-	var revenueResult []struct {
-		TotalRevenue float64 `bson:"total_revenue"`
-	}
-	totalRevenue := 0.0
-	if err := revenueCursor.All(ctx, &revenueResult); err == nil && len(revenueResult) > 0 {
-		totalRevenue = revenueResult[0].TotalRevenue
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		log.Printf("⚠️ GET /api/admin/orders/stats/summary SLOW: %v (%d status buckets)", elapsed, len(stats))
 	}
 
 	// Return response matching JavaScript expectations

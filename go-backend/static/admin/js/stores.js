@@ -524,9 +524,10 @@ async function loadStores(reset = false) {
         hideLoading();
         isLoading = false;
         if (displayedStoresCount === 0) {
-            showEmptyState();
+            // A server/DB failure is NOT an empty database — show an actionable error.
+            showErrorState(`Failed to load stores — ${error.message}`);
         }
-        showToast('Failed to load stores', 'error');
+        showToast(`Failed to load stores: ${error.message}`, 'error');
     }
 }
 
@@ -555,6 +556,7 @@ async function loadStatistics() {
         updateStatisticsDisplay(data.statistics);
     } catch (error) {
         console.error('Error loading statistics:', error);
+        showToast(`Failed to load statistics: ${error.message}`, 'error');
     }
 }
 
@@ -722,7 +724,7 @@ async function viewStoreDetail(phone) {
     } catch (error) {
         console.error('Error loading store detail:', error);
         hideLoading();
-        showToast('Failed to load store details', 'error');
+        showToast(`Failed to load store details: ${error.message}`, 'error');
     }
 }
 
@@ -851,6 +853,10 @@ async function showRevenueDetails() {
             }
         });
 
+        if (!response.ok) {
+            throw new Error(`Server error (HTTP ${response.status})`);
+        }
+
         const data = await response.json();
         const summary = data.summary;
 
@@ -863,7 +869,7 @@ async function showRevenueDetails() {
         openRevenueModal();
     } catch (error) {
         console.error('Error loading revenue summary:', error);
-        showToast('Failed to load revenue summary', 'error');
+        showToast(`Failed to load revenue summary: ${error.message}`, 'error');
     }
 }
 
@@ -1129,6 +1135,26 @@ function showEmptyState() {
 
 function hideEmptyState() {
     document.getElementById('emptyState').style.display = 'none';
+}
+
+// Actionable error state for server/DB failures (distinct from "no stores")
+function showErrorState(message) {
+    hideEmptyState();
+    const grid = document.getElementById('storesGrid');
+    if (grid) {
+        grid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px;">
+                <div style="font-size: 48px; margin-bottom: 12px;">🚨</div>
+                <div style="color: #d32f2f; font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+                    ${message || 'Failed to load stores'}
+                </div>
+                <div style="color: #757575; font-size: 13px; margin-bottom: 12px;">
+                    This is a server error, not an empty list. Please retry.
+                </div>
+                <button class="btn btn-primary" onclick="loadStores(true)">🔄 Retry</button>
+            </div>
+        `;
+    }
 }
 
 // Utility functions

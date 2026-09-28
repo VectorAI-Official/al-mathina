@@ -117,7 +117,8 @@ func GetAllProducts(c *gin.Context) {
 
 	// Match FastAPI response format: {products: [...]}
 	if limit > 0 {
-		total, err := productsCol.CountDocuments(ctx, bson.M{})
+		// Estimated count is O(1) metadata; exact counts are needlessly expensive.
+		total, err := productsCol.EstimatedDocumentCount(ctx)
 		if err != nil {
 			log.Printf("⚠️ GET /admin/api/products/all COUNT failed: %v (ctx: %v)", err, ctx.Err())
 		}

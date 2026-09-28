@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"al-mathina-backend/database"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -32,7 +33,8 @@ func GetStoresList(c *gin.Context) {
 		}
 	}
 
-	ctx, cancel := database.GetDBContext()
+	// Heavy aggregation → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
 	usersCollection := database.GetCollection("users")
 	ordersCollection := database.GetCollection("orders")
@@ -77,102 +79,86 @@ func GetStoresList(c *gin.Context) {
 		}
 	}
 
-	// Build order match query with date filter
-	orderMatch := bson.M{}
-	if len(userPhones) > 0 {
-		orderMatch["user_phone"] = bson.M{"$in": userPhones}
+	// Build the in-range condition once. When no date filter is supplied every
+	// order counts, so the date-filtered accumulators collapse to "all-time".
+	// The boundary semantics match the previous implementation exactly:
+	// time.Parse("2006-01-02") (UTC) for start, and end-date + 1 day for the end.
+	var inRange interface{} = true
+	var dateBounds []interface{}
+	if startDate != "" {
+		if startTime, err := time.Parse("2006-01-02", startDate); err == nil {
+			dateBounds = append(dateBounds, bson.D{{Key: "$gte", Value: []interface{}{"$created_at", startTime}}})
+		}
 	}
-	if startDate != "" || endDate != "" {
-		dateQuery := bson.M{}
-		if startDate != "" {
-			startTime, err := time.Parse("2006-01-02", startDate)
-			if err == nil {
-				dateQuery["$gte"] = startTime
-			}
+	if endDate != "" {
+		if endTime, err := time.Parse("2006-01-02", endDate); err == nil {
+			endTime = endTime.AddDate(0, 0, 1)
+			dateBounds = append(dateBounds, bson.D{{Key: "$lte", Value: []interface{}{"$created_at", endTime}}})
 		}
-		if endDate != "" {
-			endTime, err := time.Parse("2006-01-02", endDate)
-			if err == nil {
-				endTime = endTime.AddDate(0, 0, 1)
-				dateQuery["$lte"] = endTime
-			}
-		}
-		if len(dateQuery) > 0 {
-			orderMatch["created_at"] = dateQuery
-		}
+	}
+	if len(dateBounds) == 1 {
+		inRange = dateBounds[0]
+	} else if len(dateBounds) > 1 {
+		inRange = bson.D{{Key: "$and", Value: dateBounds}}
 	}
 
-	// Batch fetch order stats (date-filtered)
+	// ONE pipeline serves both the date-filtered stats and the all-time revenue:
+	// conditional accumulation = one scan instead of the previous two.
 	pipeline := []bson.D{
-		{{Key: "$match", Value: orderMatch}},
+		{{Key: "$match", Value: bson.M{"user_phone": bson.M{"$in": userPhones}}}},
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: "$user_phone"},
-			{Key: "order_count", Value: bson.D{{Key: "$sum", Value: 1}}},
-			{Key: "total_revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
-			{Key: "latest_order", Value: bson.D{{Key: "$max", Value: "$created_at"}}},
+			{Key: "order_count", Value: bson.D{{Key: "$sum", Value: bson.D{{Key: "$cond", Value: []interface{}{inRange, 1, 0}}}}}},
+			{Key: "total_revenue", Value: bson.D{{Key: "$sum", Value: bson.D{{Key: "$cond", Value: []interface{}{inRange, "$total_amount", 0}}}}}},
+			{Key: "latest_order", Value: bson.D{{Key: "$max", Value: bson.D{{Key: "$cond", Value: []interface{}{inRange, "$created_at", nil}}}}}},
+			{Key: "all_time_revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
 		}}},
 	}
 
+	start := time.Now()
 	aggCursor, err := ordersCollection.Aggregate(ctx, pipeline)
 	if err != nil {
+		log.Printf("❌ GET /admin/api/stores/list AGGREGATE failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get order stats"})
 		return
 	}
 	defer aggCursor.Close(ctx)
 
 	var orderStatsResults []struct {
-		UserPhone    string    `bson:"_id"`
-		OrderCount   int       `bson:"order_count"`
-		TotalRevenue float64   `bson:"total_revenue"`
-		LatestOrder  time.Time `bson:"latest_order"`
+		UserPhone      string     `bson:"_id"`
+		OrderCount     int        `bson:"order_count"`
+		TotalRevenue   float64    `bson:"total_revenue"`
+		LatestOrder    *time.Time `bson:"latest_order"`
+		AllTimeRevenue float64    `bson:"all_time_revenue"`
 	}
 	if err := aggCursor.All(ctx, &orderStatsResults); err != nil {
+		log.Printf("❌ GET /admin/api/stores/list CURSOR failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode order stats"})
 		return
 	}
 
-	// Create lookup map
+	// Create lookup maps (date-filtered stats + all-time revenue)
 	orderStats := make(map[string]struct {
 		OrderCount   int
 		TotalRevenue float64
 		LatestOrder  time.Time
 	})
+	allTimeStats := make(map[string]float64)
 	for _, stat := range orderStatsResults {
+		var latest time.Time
+		if stat.LatestOrder != nil {
+			latest = *stat.LatestOrder
+		}
 		orderStats[stat.UserPhone] = struct {
 			OrderCount   int
 			TotalRevenue float64
 			LatestOrder  time.Time
-		}{stat.OrderCount, stat.TotalRevenue, stat.LatestOrder}
-	}
-
-	// Fetch ALL-TIME revenue totals for Due calculations
-	allTimePipeline := []bson.D{
-		{{Key: "$match", Value: bson.M{"user_phone": bson.M{"$in": userPhones}}}},
-		{{Key: "$group", Value: bson.D{
-			{Key: "_id", Value: "$user_phone"},
-			{Key: "all_time_revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
-		}}},
-	}
-
-	allTimeCursor, err := ordersCollection.Aggregate(ctx, allTimePipeline)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get all-time stats"})
-		return
-	}
-	defer allTimeCursor.Close(ctx)
-
-	var allTimeResults []struct {
-		UserPhone      string  `bson:"_id"`
-		AllTimeRevenue float64 `bson:"all_time_revenue"`
-	}
-	if err := allTimeCursor.All(ctx, &allTimeResults); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode all-time stats"})
-		return
-	}
-
-	allTimeStats := make(map[string]float64)
-	for _, stat := range allTimeResults {
+		}{stat.OrderCount, stat.TotalRevenue, latest}
 		allTimeStats[stat.UserPhone] = stat.AllTimeRevenue
+	}
+
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		log.Printf("⚠️ GET /admin/api/stores/list SLOW: %v (%d stores)", elapsed, len(orderStatsResults))
 	}
 
 	// Build response with enriched store data
@@ -248,8 +234,10 @@ func GetStoresStatistics(c *gin.Context) {
 	endDate := c.Query("end_date")
 	search := c.Query("search")
 
-	ctx, cancel := database.GetDBContext()
+	// Heavy aggregation → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
+	start := time.Now()
 	usersCollection := database.GetCollection("users")
 	ordersCollection := database.GetCollection("orders")
 
@@ -266,14 +254,14 @@ func GetStoresStatistics(c *gin.Context) {
 	// Get total store count (ALL stores, never filtered by date)
 	totalStores, err := usersCollection.CountDocuments(ctx, userQuery)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count stores"})
+		respondDBError(c, "GET /admin/api/stores/statistics (count)", start, err)
 		return
 	}
 
 	// Get all user phones for order filtering
 	cursor, err := usersCollection.Find(ctx, userQuery)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user phones"})
+		respondDBError(c, "GET /admin/api/stores/statistics (find)", start, err)
 		return
 	}
 	defer cursor.Close(ctx)
@@ -282,7 +270,7 @@ func GetStoresStatistics(c *gin.Context) {
 		Phone string `bson:"phone"`
 	}
 	if err := cursor.All(ctx, &users); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode user phones"})
+		respondDBError(c, "GET /admin/api/stores/statistics (decode phones)", start, err)
 		return
 	}
 
@@ -340,7 +328,7 @@ func GetStoresStatistics(c *gin.Context) {
 
 	aggCursor, err := ordersCollection.Aggregate(ctx, pipeline)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get statistics"})
+		respondDBError(c, "GET /admin/api/stores/statistics (aggregate)", start, err)
 		return
 	}
 	defer aggCursor.Close(ctx)
@@ -352,9 +340,11 @@ func GetStoresStatistics(c *gin.Context) {
 		DeliveredRevenue float64 `bson:"delivered_revenue"`
 	}
 	if err := aggCursor.All(ctx, &results); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode statistics"})
+		respondDBError(c, "GET /admin/api/stores/statistics (decode stats)", start, err)
 		return
 	}
+
+	logSlowQuery("GET /admin/api/stores/statistics", start, len(results))
 
 	var stats struct {
 		TotalOrders      int     `json:"total_orders"`
@@ -393,8 +383,10 @@ func GetStoreDetail(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
-	ctx, cancel := database.GetDBContext()
+	// Heavy full-detail read → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
+	start := time.Now()
 	usersCollection := database.GetCollection("users")
 	ordersCollection := database.GetCollection("orders")
 
@@ -432,18 +424,21 @@ func GetStoreDetail(c *gin.Context) {
 	findOptions := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 	cursor, err := ordersCollection.Find(ctx, ordersQuery, findOptions)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to fetch orders"})
+		respondDBError(c, "GET /admin/api/stores/detail", start, err)
 		return
 	}
 	defer cursor.Close(ctx)
 
 	var orders []bson.M
 	if err := cursor.All(ctx, &orders); err != nil {
+		log.Printf("⚠️ GET /admin/api/stores/detail CURSOR decode failed after %v: %v", time.Since(start), err)
 		orders = []bson.M{}
 	}
 	if orders == nil {
 		orders = []bson.M{}
 	}
+
+	logSlowQuery("GET /admin/api/stores/detail", start, len(orders))
 
 	// Calculate revenue statistics (date-filtered)
 	totalOrders := len(orders)
@@ -588,7 +583,8 @@ func GetRevenueSummary(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
-	ctx, cancel := database.GetDBContext()
+	// Heavy aggregation → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
 	ordersCollection := database.GetCollection("orders")
 
@@ -614,46 +610,67 @@ func GetRevenueSummary(c *gin.Context) {
 		}
 	}
 
-	// Fetch all orders
-	cursor, err := ordersCollection.Find(ctx, query)
+	// Single aggregation returns ONE document — nothing but the summary crosses
+	// the wire, so memory/GC pressure from shipping every order into Go is gone.
+	pipeline := []bson.D{
+		{{Key: "$match", Value: query}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "total_orders", Value: bson.D{{Key: "$sum", Value: 1}}},
+			{Key: "total_revenue", Value: bson.D{{Key: "$sum", Value: "$total_amount"}}},
+			{Key: "delivered_revenue", Value: bson.D{{Key: "$sum", Value: bson.D{{Key: "$cond", Value: []interface{}{
+				bson.D{{Key: "$eq", Value: []interface{}{"$status", "delivered"}}},
+				"$total_amount",
+				0,
+			}}}}}},
+			{Key: "stores", Value: bson.D{{Key: "$addToSet", Value: "$user_phone"}}},
+		}}},
+	}
+
+	start := time.Now()
+	cursor, err := ordersCollection.Aggregate(ctx, pipeline)
 	if err != nil {
+		log.Printf("❌ GET /admin/api/stores/revenue-summary AGGREGATE failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to fetch orders"})
 		return
 	}
 	defer cursor.Close(ctx)
 
-	var orders []bson.M
-	if err := cursor.All(ctx, &orders); err != nil {
+	var results []struct {
+		TotalOrders      int           `bson:"total_orders"`
+		TotalRevenue     float64       `bson:"total_revenue"`
+		DeliveredRevenue float64       `bson:"delivered_revenue"`
+		Stores           []interface{} `bson:"stores"`
+	}
+	if err := cursor.All(ctx, &results); err != nil {
+		log.Printf("❌ GET /admin/api/stores/revenue-summary CURSOR failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to decode orders"})
 		return
 	}
 
-	totalOrders := len(orders)
+	var totalOrders int
 	var totalRevenue, deliveredRevenue float64
-	uniqueStores := make(map[string]bool)
-
-	for _, order := range orders {
-		if amount, ok := order["total_amount"].(float64); ok {
-			totalRevenue += amount
-			if status, ok := order["status"].(string); ok && status == "delivered" {
-				deliveredRevenue += amount
+	activeStores := 0
+	if len(results) > 0 {
+		totalOrders = results[0].TotalOrders
+		totalRevenue = results[0].TotalRevenue
+		deliveredRevenue = results[0].DeliveredRevenue
+		// $addToSet includes null/missing user_phone; count only real phones,
+		// matching the previous `phone != ""` filtering exactly.
+		for _, s := range results[0].Stores {
+			if phone, ok := s.(string); ok && phone != "" {
+				activeStores++
 			}
-		} else if amount, ok := order["total_amount"].(int32); ok {
-			amt := float64(amount)
-			totalRevenue += amt
-			if status, ok := order["status"].(string); ok && status == "delivered" {
-				deliveredRevenue += amt
-			}
-		}
-		if phone, ok := order["user_phone"].(string); ok && phone != "" {
-			uniqueStores[phone] = true
 		}
 	}
 
-	activeStores := len(uniqueStores)
 	averagePerStore := 0.0
 	if activeStores > 0 {
 		averagePerStore = totalRevenue / float64(activeStores)
+	}
+
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		log.Printf("⚠️ GET /admin/api/stores/revenue-summary SLOW: %v", elapsed)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -672,7 +689,8 @@ func GetRevenueSummary(c *gin.Context) {
 func GetPaymentHistory(c *gin.Context) {
 	phone := c.Param("phone")
 
-	ctx, cancel := database.GetDBContext()
+	// Reads full user document (incl. payment history) → longer timeout
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
 	usersCollection := database.GetCollection("users")
 

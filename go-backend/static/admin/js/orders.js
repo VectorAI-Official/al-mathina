@@ -210,7 +210,11 @@ async function loadOrders() {
     try {
         showLoading('ordersContainer');
 
-        const response = await fetch('/api/admin/orders');
+        // Bounded page: the orders collection is large (thousands of documents
+        // with embedded items). Loading every order exceeded the request timeout
+        // and returned HTTP 500. The API sorts created_at desc, so this returns
+        // the most recent orders; client-side search/filter works over the page.
+        const response = await fetch('/api/admin/orders?limit=200');
         console.log(`📡 API Response Status: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {

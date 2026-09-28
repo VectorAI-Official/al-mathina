@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -34,6 +35,10 @@ type Config struct {
 	Port        string
 	Environment string
 	Host        string
+
+	// Database timeouts
+	DBTimeout     time.Duration // env DB_TIMEOUT,      default 5s
+	DBLongTimeout time.Duration // env DB_LONG_TIMEOUT, default 30s
 
 	// Admin
 	AdminPhones []string
@@ -72,6 +77,10 @@ func LoadConfig() *Config {
 		Environment: getEnv("ENVIRONMENT", "development"),
 		Host:        getEnv("HOST", "0.0.0.0"),
 
+		// Database timeouts
+		DBTimeout:     getDuration("DB_TIMEOUT", 5*time.Second),
+		DBLongTimeout: getDuration("DB_LONG_TIMEOUT", 30*time.Second),
+
 		// Admin
 		AdminPhones: getEnvList("ADMIN_PHONES", []string{"+917339651541", "+918870503350", "+919487715568"}),
 	}
@@ -91,6 +100,7 @@ func LoadConfig() *Config {
 	log.Printf("✅ CONFIG: Environment: %s", config.Environment)
 	log.Printf("✅ CONFIG: Port: %s", config.Port)
 	log.Printf("✅ CONFIG: Admin Phones: %d configured", len(config.AdminPhones))
+	log.Printf("✅ CONFIG: DB timeouts: short=%s long=%s", config.DBTimeout, config.DBLongTimeout)
 
 	AppConfig = config
 	return config
@@ -103,6 +113,20 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// Helper function to get a duration from environment (e.g. "10s", "1m30s")
+func getDuration(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil || d <= 0 {
+		log.Printf("⚠️ CONFIG: invalid %s=%q, using default %s", key, value, defaultValue)
+		return defaultValue
+	}
+	return d
 }
 
 // Helper function to get comma-separated list from environment

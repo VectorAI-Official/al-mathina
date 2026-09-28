@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"al-mathina-backend/database"
@@ -27,14 +29,37 @@ import (
 // GetAllProducts returns all products for admin dashboard product management
 // GET /admin/api/products/all
 func GetAllProducts(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Heavy full-collection read → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
 
 	productsCol := database.GetCollection("products")
 
+	// Opt-in pagination. limit=0 (default) returns ALL products, preserving the
+	// existing response shape expected by dashboard.js and other consumers.
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+	if limit > 0 {
+		if limit > 500 {
+			limit = 500
+		}
+		if page < 1 {
+			page = 1
+		}
+	}
+
 	// Use bson.D for ordered sort (bson.M doesn't guarantee order)
-	// Use aggregation to lookup inventory details
+	// $sort FIRST so the query planner can use the compound index (IXSCAN)
+	// instead of materializing + blocking-sorting the whole collection after the join.
 	pipeline := []bson.M{
+		{
+			"$sort": bson.D{
+				{Key: "category_section", Value: 1},
+				{Key: "category_main", Value: 1},
+				{Key: "category_sub", Value: 1},
+				{Key: "product_name", Value: 1},
+			},
+		},
 		{
 			"$lookup": bson.M{
 				"from":         "inventory",
@@ -49,19 +74,19 @@ func GetAllProducts(c *gin.Context) {
 				"preserveNullAndEmptyArrays": true,
 			},
 		},
-		// Add sorting stage (matches previous Find options)
-		{
-			"$sort": bson.D{
-				{Key: "category_section", Value: 1},
-				{Key: "category_main", Value: 1},
-				{Key: "category_sub", Value: 1},
-				{Key: "product_name", Value: 1},
-			},
-		},
 	}
 
+	if limit > 0 {
+		pipeline = append(pipeline,
+			bson.M{"$skip": (page - 1) * limit},
+			bson.M{"$limit": int64(limit)},
+		)
+	}
+
+	start := time.Now()
 	cursor, err := productsCol.Aggregate(ctx, pipeline)
 	if err != nil {
+		log.Printf("❌ GET /admin/api/products/all AGGREGATE failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch products"})
 		return
 	}
@@ -69,6 +94,7 @@ func GetAllProducts(c *gin.Context) {
 
 	var products []bson.M
 	if err := cursor.All(ctx, &products); err != nil {
+		log.Printf("❌ GET /admin/api/products/all CURSOR failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse products"})
 		return
 	}
@@ -85,7 +111,26 @@ func GetAllProducts(c *gin.Context) {
 		products = []bson.M{}
 	}
 
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		log.Printf("⚠️ GET /admin/api/products/all SLOW: %v (%d docs)", elapsed, len(products))
+	}
+
 	// Match FastAPI response format: {products: [...]}
+	if limit > 0 {
+		total, err := productsCol.CountDocuments(ctx, bson.M{})
+		if err != nil {
+			log.Printf("⚠️ GET /admin/api/products/all COUNT failed: %v (ctx: %v)", err, ctx.Err())
+		}
+		pages := int(math.Ceil(float64(total) / float64(limit)))
+		c.JSON(http.StatusOK, gin.H{
+			"products": products,
+			"total":    total,
+			"page":     page,
+			"pages":    pages,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 

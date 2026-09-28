@@ -97,8 +97,34 @@ func DisconnectMongoDB() error {
 // Helper function to create context with timeout for database operations
 // Most CRUD operations should complete within 5 seconds
 // Use this consistently across all handlers to prevent hanging requests
+//
+// Defaults are preserved if ConfigureTimeouts is never called, so behavior is
+// identical without configuration.
+var (
+	dbTimeout     = 5 * time.Second
+	dbLongTimeout = 30 * time.Second
+)
+
+// ConfigureTimeouts overrides the default database operation timeouts.
+// Called once from main() after config.LoadConfig().
+func ConfigureTimeouts(short, long time.Duration) {
+	if short > 0 {
+		dbTimeout = short
+	}
+	if long > 0 {
+		dbLongTimeout = long
+	}
+}
+
 func GetDBContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 5*time.Second)
+	return context.WithTimeout(context.Background(), dbTimeout)
+}
+
+// GetLongDBContext returns a context with the longer timeout, intended for
+// heavy read endpoints (full aggregations / exports) that legitimately need
+// more headroom than a single CRUD operation.
+func GetLongDBContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), dbLongTimeout)
 }
 
 // GetMongoOptions returns a new UpdateOptions instance

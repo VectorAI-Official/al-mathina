@@ -13,6 +13,11 @@ services:
         value: "9000"
       - key: ENVIRONMENT
         value: production
+      # Database timeouts (adjustable without recompiling)
+      - key: DB_TIMEOUT
+        value: 5s
+      - key: DB_LONG_TIMEOUT
+        value: 30s
       # MongoDB - set in Render Dashboard
       - key: MONGO_URI
         sync: false

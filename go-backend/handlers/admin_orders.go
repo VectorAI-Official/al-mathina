@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,16 +21,35 @@ import (
 
 // GetAllOrders - GET /api/admin/orders
 func GetAllOrders(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Heavy full-collection read → longer timeout (configurable via DB_LONG_TIMEOUT)
+	ctx, cancel := database.GetLongDBContext()
 	defer cancel()
 	ordersCollection := database.GetCollection("orders")
 	usersCollection := database.GetCollection("users")
 
+	// Opt-in pagination. limit=0 (default) returns ALL orders, preserving the
+	// existing response shape and client-side filtering in orders.js.
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+	if limit > 0 {
+		if limit > 500 {
+			limit = 500
+		}
+		if page < 1 {
+			page = 1
+		}
+	}
+
 	// Fetch all orders sorted by created_at (newest first)
-	cursor, err := ordersCollection.Find(ctx, bson.M{}, &options.FindOptions{
-		Sort: bson.D{{Key: "created_at", Value: -1}},
-	})
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+	if limit > 0 {
+		opts.SetSkip(int64((page - 1) * limit)).SetLimit(int64(limit))
+	}
+
+	start := time.Now()
+	cursor, err := ordersCollection.Find(ctx, bson.M{}, opts)
 	if err != nil {
+		log.Printf("❌ GET /api/admin/orders FIND failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to fetch orders: %v", err)})
 		return
 	}
@@ -36,6 +57,7 @@ func GetAllOrders(c *gin.Context) {
 
 	var orders []models.Order
 	if err := cursor.All(ctx, &orders); err != nil {
+		log.Printf("❌ GET /api/admin/orders CURSOR failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to decode orders: %v", err)})
 		return
 	}
@@ -83,7 +105,27 @@ func GetAllOrders(c *gin.Context) {
 		}
 	}
 
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		log.Printf("⚠️ GET /api/admin/orders SLOW: %v (%d docs)", elapsed, len(orders))
+	}
+
 	// Return response matching JavaScript expectations: {"success": true, "orders": [...]}
+	if limit > 0 {
+		total, err := ordersCollection.CountDocuments(ctx, bson.M{})
+		if err != nil {
+			log.Printf("⚠️ GET /api/admin/orders COUNT failed: %v (ctx: %v)", err, ctx.Err())
+		}
+		pages := int(math.Ceil(float64(total) / float64(limit)))
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"orders":  orders,
+			"total":   total,
+			"page":    page,
+			"pages":   pages,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"orders":  orders,

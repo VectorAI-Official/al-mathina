@@ -19,11 +19,19 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
+	// Apply configurable database timeouts (must precede any DB operation)
+	database.ConfigureTimeouts(cfg.DBTimeout, cfg.DBLongTimeout)
+
 	// Connect to MongoDB
 	if err := database.ConnectMongoDB(cfg.MongoURI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	defer database.DisconnectMongoDB()
+
+	// Create indexes (idempotent). Warn, don't fatal: keep serving if Atlas is slow.
+	if err := database.EnsureIndexes(); err != nil {
+		log.Printf("⚠️ Index creation failed (queries may be slow): %v", err)
+	}
 
 	// Connect to Supabase (optional - log warning if missing)
 	if cfg.SupabaseURL != "" {

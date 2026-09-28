@@ -372,29 +372,39 @@ async function loadProducts() {
     try {
         const timestamp = Date.now();
         const response = await fetch(`/admin/api/products/all?t=${timestamp}`);
+
+        // Check HTTP status BEFORE parsing: a 500/timeout body must never be
+        // treated as "empty database".
+        if (!response.ok) {
+            throw new Error(`Server error (HTTP ${response.status})`);
+        }
+
         const data = await response.json();
 
         // Handle both response formats
         if (data.products) {
             allProducts = data.products;
-            displayProducts(allProducts);
-            updateStatistics();
         } else {
-            // No products returned
+            // 200 with no products = genuinely empty
             allProducts = [];
-            displayProducts(allProducts);
-            updateStatistics();
         }
+        displayProducts(allProducts);
+        updateStatistics();
     } catch (error) {
-        console.error('Error loading products:', error);
-        showToast('Failed to load products. Database may be empty.', 'warning');
+        console.error('❌ Error loading products:', error);
+        showToast('⚠️ Failed to load products — server error. This is NOT an empty database.', 'error');
         allProducts = [];
         document.getElementById('productsTableBody').innerHTML = `
             <tr>
                 <td colspan="6" style="text-align: center; padding: 40px;">
-                    <div style="color: #FF9800; font-size: 48px; margin-bottom: 16px;">📦</div>
-                    <div style="color: #757575; font-size: 16px; margin-bottom: 8px;">No products in database</div>
-                    <div style="color: #9E9E9E; font-size: 14px;">Add your first product using the "Add Product" button</div>
+                    <div style="font-size: 48px; margin-bottom: 12px;">🚨</div>
+                    <div style="color: #d32f2f; font-size: 16px; font-weight: 600; margin-bottom: 8px;">
+                        Failed to load products — server error (HTTP 500 / timeout)
+                    </div>
+                    <div style="color: #757575; font-size: 13px;">
+                        The database is not empty. Check server logs, then try again.
+                    </div>
+                    <button class="btn-primary" onclick="loadProducts()" style="margin-top: 12px;">🔄 Retry</button>
                 </td>
             </tr>
         `;

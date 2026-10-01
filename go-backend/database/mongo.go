@@ -127,6 +127,25 @@ func GetLongDBContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), dbLongTimeout)
 }
 
+// GetDBContextFor derives a database context from the request context instead
+// of context.Background(), applying the short timeout on top.
+//
+// Why: when a client disconnects mid-response, net/http cancels the request
+// context. A handler still running its full-collection aggregation then keeps
+// burning CPU and MongoDB resources writing a response nobody will read.
+// Tying the query to the request lets the driver abandon it immediately.
+//
+// Always pair with defer cancel(), exactly like GetDBContext.
+func GetDBContextFor(reqCtx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(reqCtx, dbTimeout)
+}
+
+// GetLongDBContextFor is GetDBContextFor with the long timeout, for heavy read
+// endpoints. Same rationale and same defer-cancel requirement.
+func GetLongDBContextFor(reqCtx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(reqCtx, dbLongTimeout)
+}
+
 // GetMongoOptions returns a new UpdateOptions instance
 // Used for MongoDB update operations with custom options
 func GetMongoOptions() *options.UpdateOptions {

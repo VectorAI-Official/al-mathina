@@ -29,8 +29,10 @@ import (
 // GetAllProducts returns all products for admin dashboard product management
 // GET /admin/api/products/all
 func GetAllProducts(c *gin.Context) {
-	// Heavy full-collection read → longer timeout (configurable via DB_LONG_TIMEOUT)
-	ctx, cancel := database.GetLongDBContext()
+	// Heavy full-collection read → longer timeout (configurable via DB_LONG_TIMEOUT).
+	// Derived from the request context so a client disconnect aborts the query
+	// instead of letting it finish and write into a dead socket.
+	ctx, cancel := database.GetLongDBContextFor(c.Request.Context())
 	defer cancel()
 
 	productsCol := database.GetCollection("products")
@@ -720,7 +722,8 @@ func RemoveMostBought(c *gin.Context) {
 // GetCategoryMetadata returns all category metadata (images, icons)
 // GET /admin/api/categories/metadata
 func GetCategoryMetadata(c *gin.Context) {
-	ctx, cancel := database.GetDBContext()
+	// Request-scoped: aborts the scan when the client disconnects mid-response.
+	ctx, cancel := database.GetDBContextFor(c.Request.Context())
 	defer cancel()
 
 	metadataCol := database.GetCollection("category_metadata")

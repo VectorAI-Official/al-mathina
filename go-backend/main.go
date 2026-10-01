@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"al-mathina-backend/config"
 	"al-mathina-backend/database"
@@ -68,6 +71,11 @@ func main() {
 	}
 
 	router := gin.Default()
+
+	// Strip benign client disconnects (EPIPE/ECONNRESET) from c.Errors before
+	// the Logger installed by gin.Default() formats the access-log line.
+	// Registered immediately after gin.Default() so it runs inside the logger.
+	router.Use(middleware.ClientDisconnect())
 
 	// CORS middleware - allow Flutter web and mobile apps
 	router.Use(func(c *gin.Context) {
@@ -334,17 +342,49 @@ func main() {
 	log.Printf("📱 Flutter API: http://localhost:%s/api/flutter/home", port)
 	log.Printf("🏥 Health check: http://localhost:%s/health", port)
 
-	// Graceful shutdown
+	// Explicit http.Server so SIGTERM/SIGINT can drain in-flight requests
+	// instead of the process dying under them (which is what router.Run does).
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: router,
+		// Do not let a slow or stuck client hold a connection open forever.
+		ReadHeaderTimeout: 20 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	serverErr := make(chan error, 1)
 	go func() {
-		if err := router.Run(":" + port); err != nil {
-			log.Fatalf("Failed to start server: %v", err)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
+		close(serverErr)
 	}()
 
-	// Wait for interrupt signal
+	// Wait for a termination signal or an unrecoverable listener failure.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
 
-	log.Println("👋 Shutting down server...")
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	case sig := <-quit:
+		log.Printf("👋 Shutting down server (received %s)...", sig)
+	}
+
+	// Drain: stop accepting new connections and let in-flight handlers finish
+	// within the grace period, otherwise Render's 30s SIGTERM budget cuts
+	// responses off mid-write and clients see truncated bodies.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("⚠️  Graceful shutdown failed (%v), forcing close", err)
+		_ = srv.Close()
+	} else {
+		log.Println("✅ Graceful shutdown complete")
+	}
+
+	// DisconnectMongoDB runs via the deferred call in main().
 }

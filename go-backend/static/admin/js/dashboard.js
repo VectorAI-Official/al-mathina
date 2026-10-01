@@ -367,8 +367,38 @@ function populateSubCategoryDropdown(section, mainCategory) {
     // Note: "Add New Subcategory" option removed - use Mobile View for category management
 }
 
+// In-flight promise for the products fetch. /admin/api/products/all is a heavy
+// full-collection aggregation (~1s+), and several code paths can request it
+// concurrently (initial DOMContentLoaded load + mobile-view pre-load, or a
+// mutation handler firing while a background reload is still running).
+// Without this guard each caller opened its own request, which is what produced
+// the duplicated slow responses and mid-write client disconnects in the logs.
+let productsLoadInFlight = null;
+
 // Load all products
-async function loadProducts() {
+// @param {Object}  [options]
+// @param {boolean} [options.refresh] Force a new request after any in-flight one
+//   finishes. Set this after a mutation so the payload is guaranteed to be
+//   post-write; a plain call joins an in-flight request to avoid duplicate work.
+function loadProducts(options) {
+    const refresh = !!(options && options.refresh);
+
+    if (productsLoadInFlight) {
+        if (!refresh) {
+            return productsLoadInFlight;
+        }
+        // Queue behind the current request instead of racing it, then refetch.
+        return productsLoadInFlight.then(() => loadProducts());
+    }
+
+    productsLoadInFlight = fetchProducts().finally(() => {
+        productsLoadInFlight = null;
+    });
+
+    return productsLoadInFlight;
+}
+
+async function fetchProducts() {
     try {
         const timestamp = Date.now();
         const response = await fetch(`/admin/api/products/all?t=${timestamp}`);
@@ -1128,7 +1158,7 @@ async function handleProductSubmit(e) {
 
         // Reload products and categories
         console.log('Reloading products and categories...');
-        await loadProducts();
+        await loadProducts({ refresh: true });
         await loadCategories();
 
         // Check if we need to refresh mobile view
@@ -1201,7 +1231,7 @@ async function toggleBestSeller(productId, currentStatus) {
         );
 
         // Reload products to reflect the change
-        await loadProducts();
+        await loadProducts({ refresh: true });
     } catch (error) {
         console.error('Error toggling best seller:', error);
         showToast('Error updating Best Seller status', 'error');
@@ -1258,7 +1288,7 @@ async function uploadImageFile(productId, file) {
         showToast(data.message || 'Image uploaded successfully!', 'success');
 
         // Reload products to show the new image
-        await loadProducts();
+        await loadProducts({ refresh: true });
     } catch (error) {
         console.error('Error uploading image:', error);
         showToast('Error uploading image', 'error');
@@ -1291,7 +1321,7 @@ async function deleteProduct(productId) {
         const data = await response.json();
         showToast(data.message || 'Product deleted successfully', 'success');
         closeDeleteModal();
-        await loadProducts();
+        await loadProducts({ refresh: true });
     } catch (error) {
         console.error('Error deleting product:', error);
         showToast('Error deleting product', 'error');
@@ -3128,7 +3158,7 @@ async function deleteMobileProduct(productId) {
             const currentSubcategory = deletedProduct?.category_sub;
 
             // Remove product from allProducts array and reload from database
-            await loadProducts();
+            await loadProducts({ refresh: true });
 
             // Refresh the mobile view with the same section and subcategory
             if (currentSection && currentSubcategory) {
@@ -4048,7 +4078,7 @@ async function handleMainCategoryEdit(event) {
                 setTimeout(async () => {
                     await loadCategories();
                     console.log('🔄 Reloading products view');
-                    await loadProducts();
+                    await loadProducts({ refresh: true });
 
                     if (mobileViewState.currentView === 'main-categories' && mobileViewState.currentSection === section) {
                         console.log('🔄 Refreshing mobile main category cards');

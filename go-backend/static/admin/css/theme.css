@@ -1,0 +1,389 @@
+/* ==========================================================================
+   AL-Madhina Admin — Design Tokens & Base Layer
+   --------------------------------------------------------------------------
+   LOAD ORDER CONTRACT (safety rule R1)
+   This file is linked BEFORE each page's own stylesheet. Every rule here is
+   therefore a *default*: at equal specificity the later page rule wins, so
+   today's visuals are untouched unless a page opts in.
+
+   RULES OBSERVED IN THIS FILE
+     - No selector here targets an existing page class (.btn, .modal, .header,
+       .stat-card, ...). Only :root/html/body/element defaults and u-* helpers.
+     - No !important, so page CSS can always override.
+     - No .modal / .toast / .form-group overrides: those are owned by the pages.
+   ========================================================================== */
+
+/* --------------------------------------------------------------- 1. TOKENS */
+:root {
+    /* Brand ramp — values lifted verbatim from the colours already in use
+       (dashboard.css :root) so nothing shifts. */
+    --brand-900: #004D40;
+    --brand-700: #00695C;
+    --brand-500: #059669;
+    --brand-400: #10B981;
+    --brand-300: #34D399;
+    --brand-100: #D1FAE5;
+    --brand-050: #F0FDF4;
+
+    --brand-gradient: linear-gradient(135deg, #004D40 0%, #00695C 100%);
+    --brand-gradient-alt: linear-gradient(135deg, #10B981 0%, #059669 100%);
+
+    /* Status — aliased from the hexes used today, identical values (R4) */
+    --success: #2E7D32;
+    --success-soft: #E8F5E9;
+    --accent: #4CAF50;
+
+    --warn: #FF9800;
+    --warn-deep: #F57C00;
+    --warn-soft: #FFF3E0;
+
+    --danger: #D32F2F;
+    --danger-deep: #DC2626;
+    --danger-soft: #FFEBEE;
+
+    --info: #1976D2;
+    --info-bright: #2196F3;
+    --info-soft: #E3F2FD;
+    --violet: #7B1FA2;
+    --violet-soft: #F3E5F5;
+    --teal: #00897B;
+
+    /* Surfaces */
+    --surface: #FFFFFF;
+    --surface-2: #F5F5F5;
+    --surface-3: #F5F7FA;
+    --surface-4: #F8F9FA;
+    --surface-sunken: #F8F9FF;
+    --page-bg: #F5F5F5;
+
+    /* Text */
+    --text: #212121;
+    --text-strong: #1A1A1A;
+    --text-body: #333333;
+    --text-muted: #666666;
+    --text-subtle: #757575;
+    --text-faint: #999999;
+    --text-inverse: #FFFFFF;
+
+    /* Borders */
+    --border: #E0E0E0;
+    --border-soft: #E9ECEF;
+    --border-strong: #D1D5DB;
+    --hairline: #F0F0F0;
+
+    /* Spacing scale (4px base) */
+    --sp-0: 0;
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-7: 32px;
+    --sp-8: 40px;
+    --sp-9: 48px;
+    --gutter: 24px;
+    --section-gap: 24px;
+
+    /* Radii */
+    --r-sm: 6px;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 16px;
+    --r-2xl: 20px;
+    --r-pill: 999px;
+
+    /* Elevation */
+    --sh-1: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --sh-2: 0 4px 20px rgba(0, 0, 0, 0.10);
+    --sh-3: 0 10px 40px rgba(0, 0, 0, 0.18);
+    --sh-focus: 0 0 0 4px rgba(5, 150, 105, 0.18);
+
+    /* Layering */
+    --z-base: 1;
+    --z-sticky: 100;
+    --z-drawer: 500;
+    --z-header: 900;
+    --z-panel: 1000;
+    --z-modal: 2000;
+    --z-datepicker: 3000;
+    --z-toast: 4000;
+
+    /* Type */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Noto Sans Tamil', sans-serif;
+    --font-ui: 'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Sans Tamil', sans-serif;
+    --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+    /* Interaction */
+    --tap: 44px;
+    --tap-sm: 36px;
+    --input-font-mobile: 16px;
+    --focus-ring: 0 0 0 3px rgba(5, 150, 105, 0.35);
+    --focus-ring-offset: 0 0 0 2px #fff;
+    --t-fast: 0.15s ease;
+    --t-base: 0.2s ease;
+    --t-slow: 0.3s ease;
+
+    /* Layout */
+    --page-max: 1400px;
+    --shell-min: 56px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* --------------------------------------------------------------- 2. BASE */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand-700) var(--surface-2);
+}
+
+html::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html::-webkit-scrollbar-track {
+    background: var(--surface-2);
+}
+
+html::-webkit-scrollbar-thumb {
+    background: var(--brand-700);
+    border-radius: 5px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-900);
+}
+
+body {
+    font-family: var(--font-sans);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+/* Media never overflows its column — the most common cause of horizontal
+   page scroll on a phone. Scoped to the phone/tablet tiers so desktop
+   rendering is untouched. */
+@media (max-width: 768px) {
+    img,
+    svg,
+    video,
+    canvas,
+    iframe {
+        max-width: 100%;
+    }
+
+    img,
+    video {
+        height: auto;
+    }
+}
+
+a {
+    color: var(--brand-500);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* One visible focus treatment for keyboard users on every page. The UA
+   already draws an outline for :focus-visible, so this only restyles it. */
+:focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+}
+
+/* NOTE: no generic rule is declared for button / input / select / textarea
+   here on purpose. Those elements already render, the pages style them
+   individually, and a global font-size or font-family would silently resize
+   controls that no page currently targets. Form baselines live under the
+   .ui-field / .ui-label namespace in components.css instead. The iOS
+   zoom-prevention floor is applied in each page's own stylesheet, where the
+   existing input sizes are visible and can be overridden deliberately. */
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+/* Honour the OS "reduce motion" setting across the whole admin. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* --------------------------------------------------------- 3. UTILITIES
+   All namespaced with `u-` so they can never collide with a page class.  */
+
+/* Layout */
+.u-container {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+}
+
+.u-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+}
+
+.u-stack-2 { gap: var(--sp-2); }
+.u-stack-3 { gap: var(--sp-3); }
+.u-stack-5 { gap: var(--sp-5); }
+.u-stack-6 { gap: var(--sp-6); }
+
+.u-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-3);
+}
+
+.u-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-3);
+}
+
+.u-spacer { flex: 1 1 auto; }
+
+/* Grid helpers */
+.u-grid-auto {
+    display: grid;
+    gap: var(--sp-4);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.u-grid-2 {
+    display: grid;
+    gap: var(--sp-4);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.u-grid-3 {
+    display: grid;
+    gap: var(--sp-4);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Scroll containment — guarantees a wide table never widens the page */
+.u-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+
+.u-scroll-y {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Text */
+.u-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.u-muted { color: var(--text-muted); }
+.u-subtle { color: var(--text-subtle); }
+.u-faint { color: var(--text-faint); }
+.u-strong { color: var(--text-strong); }
+.u-xs { font-size: 12px; }
+.u-sm { font-size: 13px; }
+.u-md { font-size: 14px; }
+.u-lg { font-size: 16px; }
+.u-num { font-variant-numeric: tabular-nums; }
+.u-center { text-align: center; }
+.u-right { text-align: right; }
+.u-nowrap { white-space: nowrap; }
+
+.u-visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Spacing shorthands */
+.u-mt-0 { margin-top: 0; }
+.u-mt-2 { margin-top: var(--sp-2); }
+.u-mt-3 { margin-top: var(--sp-3); }
+.u-mt-4 { margin-top: var(--sp-4); }
+.u-mt-5 { margin-top: var(--sp-5); }
+.u-mt-6 { margin-top: var(--sp-6); }
+.u-mb-2 { margin-bottom: var(--sp-2); }
+.u-mb-3 { margin-bottom: var(--sp-3); }
+.u-mb-4 { margin-bottom: var(--sp-4); }
+.u-mb-5 { margin-bottom: var(--sp-5); }
+.u-mb-6 { margin-bottom: var(--sp-6); }
+.u-p-3 { padding: var(--sp-3); }
+.u-p-4 { padding: var(--sp-4); }
+.u-p-5 { padding: var(--sp-5); }
+.u-p-6 { padding: var(--sp-6); }
+
+/* Visibility — desktop-first helpers, flipped at the 768 breakpoint */
+.u-hide-mobile { display: revert; }
+.u-show-mobile { display: none; }
+
+/* ------------------------------------------------- 4. GLOBAL GUARANTEES
+   Cross-page invariants. Each one is a floor, not a replacement: pages keep
+   their own look, these only prevent the classic phone failures.
+   -------------------------------------------------------------------- */
+
+/* No sideways page scroll, ever. */
+@media (max-width: 1024px) {
+    html,
+    body {
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+}
+
+/* Comfortable tap targets on touch hardware, without touching desktop. */
+@media (hover: none) and (pointer: coarse) {
+    .u-tap {
+        min-height: var(--tap);
+        min-width: var(--tap);
+    }
+}
+
+/* Stacked full-width controls on the narrowest phones. */
+@media (max-width: 480px) {
+    .u-container {
+        padding-inline: var(--sp-4);
+    }
+
+    .u-grid-2,
+    .u-grid-3,
+    .u-grid-auto {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .u-hide-mobile { display: none !important; }
+    .u-show-mobile { display: revert; }
+    .u-stack { gap: var(--sp-3); }
+}

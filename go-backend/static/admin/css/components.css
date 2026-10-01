@@ -1,0 +1,798 @@
+/* ==========================================================================
+   AL-Madhina Admin — Shared Component Layer
+   --------------------------------------------------------------------------
+   LOAD ORDER CONTRACT (safety rule R1)
+   Linked BEFORE every page stylesheet. Nothing here uses !important, and no
+   selector here collides with a class a page already owns. Page CSS always
+   wins at equal specificity.
+
+   NAMESPACES (safety rule R2)
+     .app-*   application shell  — header, brand, nav, drawer
+     .ui-*    components        — buttons, cards, tiles, tables, badges…
+     .u-*     utilities        — defined in theme.css
+   Deliberately NOT defined here: .modal, .modal-content, .toast, .form-group,
+   .header-actions. Those are owned per page and driven by three different
+   JS show/hide mechanisms (style.display flex | block, .active, .show).
+   A shared baseline there would be a regression risk with no upside.
+   ========================================================================== */
+
+/* ============================================================ 1. APP SHELL
+
+   The bar is `position: sticky` in normal flow as the first child of <body>.
+   That matters: a fixed hero banner on Orders/Revenue is simply offset by
+   --appbar-h, so no hard-coded page-offset arithmetic is duplicated.
+
+   body{overflow-x:hidden} is propagated to the viewport by the CSS overflow
+   rules (html is `visible`), so body remains `visible` and sticky works.
+   -------------------------------------------------------------------- */
+
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-height: var(--shell-min);
+    padding-top: var(--safe-top);
+    padding-left: max(var(--sp-4), var(--safe-left));
+    padding-right: max(var(--sp-4), var(--safe-right));
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--sh-1);
+    /* Promote to its own layer so iOS does not repaint on scroll. */
+    -webkit-backdrop-filter: saturate(180%) blur(8px);
+    backdrop-filter: saturate(180%) blur(8px);
+}
+
+.app-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex: 0 0 auto;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    color: var(--brand-900);
+    text-decoration: none;
+    white-space: nowrap;
+    min-height: var(--tap-sm);
+}
+
+.app-brand:hover,
+.app-brand:focus-visible {
+    text-decoration: none;
+    color: var(--brand-500);
+}
+
+.app-brand__mark {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.app-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    margin-left: auto;
+    min-width: 0;
+}
+
+.app-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    min-height: var(--tap-sm);
+    border-radius: var(--r-md);
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+
+.app-nav-link:hover {
+    background: var(--brand-050);
+    color: var(--brand-900);
+    text-decoration: none;
+}
+
+.app-nav-link[aria-current='page'] {
+    background: var(--brand-900);
+    color: var(--text-inverse);
+}
+
+.app-nav-link i {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+/* The logout POST must keep working exactly as before — only its look changes. */
+.app-logout {
+    margin: 0 0 0 var(--sp-2);
+    padding-left: var(--sp-2);
+    border-left: 1px solid var(--border);
+}
+
+.app-logout .ui-btn {
+    min-height: var(--tap-sm);
+    padding: var(--sp-2) var(--sp-3);
+    font-size: 14px;
+}
+
+/* Hamburger — hidden whenever the full nav fits. */
+.nav-toggle {
+    display: none;
+    margin-left: auto;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    color: var(--brand-900);
+    flex: 0 0 auto;
+}
+
+.nav-toggle__bars {
+    position: relative;
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 2px;
+    transition: background var(--t-fast);
+}
+
+.nav-toggle__bars::before,
+.nav-toggle__bars::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 2px;
+    transition: transform var(--t-base);
+}
+
+.nav-toggle__bars::before { top: -6px; }
+.nav-toggle__bars::after  { top: 6px; }
+
+.nav-toggle[aria-expanded='true'] .nav-toggle__bars {
+    background: transparent;
+}
+
+.nav-toggle[aria-expanded='true'] .nav-toggle__bars::before {
+    transform: translateY(6px) rotate(45deg);
+}
+
+.nav-toggle[aria-expanded='true'] .nav-toggle__bars::after {
+    transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Drawer ------------------------------------------------------------------ */
+
+.app-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 960;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--t-base), visibility var(--t-base);
+}
+
+.app-drawer-backdrop[data-open='true'] {
+    opacity: 1;
+    visibility: visible;
+}
+
+.app-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 970;
+    width: min(300px, 84vw);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: calc(var(--shell-min) + var(--safe-top) + var(--sp-2)) var(--sp-4)
+             calc(var(--sp-4) + var(--safe-bottom));
+    background: var(--surface);
+    box-shadow: var(--sh-3);
+    overflow-y: auto;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform var(--t-base), visibility var(--t-base);
+}
+
+.app-drawer[data-open='true'] {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.app-drawer__link {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    min-height: var(--tap);
+    border-radius: var(--r-md);
+    color: var(--text-body);
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.app-drawer__link:hover {
+    background: var(--brand-050);
+    text-decoration: none;
+}
+
+.app-drawer__link[aria-current='page'] {
+    background: var(--brand-900);
+    color: var(--text-inverse);
+}
+
+.app-drawer__link i {
+    width: 20px;
+    text-align: center;
+    font-size: 15px;
+}
+
+.app-drawer__divider {
+    height: 1px;
+    margin: var(--sp-2) 0;
+    background: var(--border);
+}
+
+/* Progressive-enhancement floor.
+   Below 768px the nav links stay visible as a horizontally scrollable row by
+   default, so navigation still works if nav.js is blocked. nav.js stamps
+   data-enhanced on the header once it is wired up, and only then is the row
+   retired in favour of the drawer. */
+@media (max-width: 768px) {
+    .app-header {
+        flex-wrap: wrap;
+        row-gap: var(--sp-2);
+        padding-left: max(var(--sp-3), var(--safe-left));
+        padding-right: max(var(--sp-3), var(--safe-right));
+    }
+
+    .nav-toggle {
+        display: inline-flex;
+    }
+
+    .app-nav {
+        order: 3;
+        width: 100%;
+        margin-left: 0;
+        padding-bottom: var(--sp-2);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .app-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .app-nav-link {
+        min-height: var(--tap-sm);
+    }
+
+    /* Enhanced: the drawer takes over. */
+    .app-header[data-enhanced='true'] .app-nav {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-brand {
+        font-size: 15px;
+    }
+
+    .app-brand__mark {
+        font-size: 18px;
+    }
+}
+
+/* ============================================================== 2. BUTTONS
+   .ui-btn is additive. Existing .btn / .btn-primary / .btn-secondary /
+   .logout-button etc. are untouched and keep their own appearance.
+   -------------------------------------------------------------------- */
+
+.ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: var(--tap);
+    padding: var(--sp-3) var(--sp-5);
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--t-fast), color var(--t-fast),
+        border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+}
+
+.ui-btn:active {
+    transform: translateY(1px);
+}
+
+.ui-btn:focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
+}
+
+.ui-btn--primary {
+    background: var(--brand-gradient);
+    color: var(--text-inverse);
+    box-shadow: var(--sh-1);
+}
+
+.ui-btn--primary:hover {
+    background: linear-gradient(135deg, #00332B 0%, #004D40 100%);
+    color: var(--text-inverse);
+    text-decoration: none;
+}
+
+.ui-btn--secondary {
+    background: var(--surface-2);
+    color: var(--text-strong);
+    border-color: var(--border);
+}
+
+.ui-btn--secondary:hover {
+    background: #E8E8E8;
+    text-decoration: none;
+}
+
+.ui-btn--ghost {
+    background: transparent;
+    color: var(--brand-900);
+    border-color: var(--border);
+}
+
+.ui-btn--ghost:hover {
+    background: var(--brand-050);
+    text-decoration: none;
+}
+
+.ui-btn--onDark {
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--text-inverse);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.ui-btn--onDark:hover {
+    background: rgba(255, 255, 255, 0.3);
+    color: var(--text-inverse);
+    text-decoration: none;
+}
+
+.ui-btn--danger {
+    background: var(--danger);
+    color: var(--text-inverse);
+}
+
+.ui-btn--danger:hover {
+    background: var(--danger-deep);
+    color: var(--text-inverse);
+    text-decoration: none;
+}
+
+.ui-btn--success {
+    background: var(--brand-500);
+    color: var(--text-inverse);
+}
+
+.ui-btn--success:hover {
+    background: var(--brand-400);
+    text-decoration: none;
+}
+
+.ui-btn--sm {
+    min-height: var(--tap-sm);
+    padding: var(--sp-2) var(--sp-3);
+    font-size: 13px;
+}
+
+.ui-btn--block {
+    width: 100%;
+}
+
+.ui-btn--icon {
+    min-width: var(--tap);
+    padding: var(--sp-2);
+}
+
+/* ================================================================= 3. CARDS */
+
+.ui-card {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-1);
+    overflow: hidden;
+}
+
+.ui-card__header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-4) var(--sp-5);
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--surface-4);
+}
+
+.ui-card__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-strong);
+}
+
+.ui-card__body {
+    padding: var(--sp-5);
+}
+
+.ui-card__footer {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-4) var(--sp-5);
+    border-top: 1px solid var(--border-soft);
+    background: var(--surface-4);
+}
+
+/* Stat tile — one rhythm for every metric on every page. */
+.ui-stat-grid {
+    display: grid;
+    gap: var(--sp-4);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    margin-bottom: var(--section-gap);
+}
+
+.stat-tile {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    min-width: 0;
+    padding: var(--sp-4) var(--sp-5);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-1);
+}
+
+.stat-tile--clickable {
+    cursor: pointer;
+    transition: box-shadow var(--t-fast), transform var(--t-fast);
+}
+
+.stat-tile--clickable:hover {
+    box-shadow: var(--sh-2);
+    transform: translateY(-1px);
+}
+
+.stat-tile__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--r-md);
+    font-size: 22px;
+    background: var(--brand-050);
+    color: var(--brand-700);
+}
+
+.stat-tile__icon--blue   { background: var(--info-soft);   color: var(--info); }
+.stat-tile__icon--orange { background: var(--warn-soft);   color: var(--warn-deep); }
+.stat-tile__icon--green  { background: var(--success-soft); color: var(--success); }
+.stat-tile__icon--purple { background: var(--violet-soft); color: var(--violet); }
+.stat-tile__icon--red    { background: var(--danger-soft); color: var(--danger); }
+
+.stat-tile__body {
+    min-width: 0;
+}
+
+.stat-tile__label {
+    margin: 0 0 2px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+}
+
+.stat-tile__value {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+/* ================================================================ 4. TABLE
+   A frame, not a restyle. Pages keep their own table rules and column
+   widths; .table-scroll only guarantees the wide table scrolls inside a
+   container instead of widening the page.
+   -------------------------------------------------------------------- */
+
+.table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    border-radius: var(--r-lg);
+}
+
+.table-scroll--tall {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.ui-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.ui-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface-3);
+    padding: var(--sp-3) var(--sp-4);
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+}
+
+.ui-table tbody td {
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--hairline);
+    color: var(--text-body);
+    vertical-align: middle;
+}
+
+.ui-table tbody tr:nth-child(even) {
+    background: var(--surface-4);
+}
+
+.ui-table tbody tr:hover {
+    background: var(--brand-050);
+}
+
+.ui-table .u-num,
+.ui-table td.is-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ui-table__actions {
+    white-space: nowrap;
+    text-align: right;
+}
+
+/* ================================================================= 5. FORMS
+   Baseline only. Every page defines its own .form-group, .search-input,
+   .filter-select etc., which load later and therefore win.
+   -------------------------------------------------------------------- */
+
+.ui-label {
+    display: block;
+    margin-bottom: var(--sp-2);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-body);
+}
+
+.ui-hint {
+    display: block;
+    margin-top: var(--sp-1);
+    font-size: 12px;
+    color: var(--text-subtle);
+}
+
+.ui-error-text {
+    display: block;
+    margin-top: var(--sp-1);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--danger);
+}
+
+.ui-field {
+    width: 100%;
+    min-height: var(--tap);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    color: var(--text);
+    transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.ui-field:focus {
+    outline: none;
+    border-color: var(--brand-500);
+    box-shadow: var(--sh-focus);
+}
+
+.ui-field:focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 1px;
+}
+
+textarea.ui-field {
+    min-height: 88px;
+    resize: vertical;
+}
+
+.ui-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    min-width: 0;
+}
+
+/* =========================================================== 6. FEEDBACK */
+
+.ui-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 4px 10px;
+    border-radius: var(--r-pill);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.ui-badge--neutral  { background: var(--surface-2);   color: var(--text-subtle); }
+.ui-badge--info     { background: var(--info-soft);   color: var(--info); }
+.ui-badge--success  { background: var(--success-soft); color: var(--success); }
+.ui-badge--warn     { background: var(--warn-soft);   color: var(--warn-deep); }
+.ui-badge--danger   { background: var(--danger-soft); color: var(--danger); }
+.ui-badge--violet   { background: var(--violet-soft); color: var(--violet); }
+
+.ui-spinner {
+    width: 40px;
+    height: 40px;
+    margin: var(--sp-6) auto;
+    border: 3px solid #F3F3F3;
+    border-top-color: var(--brand-500);
+    border-radius: 50%;
+    animation: ui-spin 1s linear infinite;
+}
+
+@keyframes ui-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ui-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-8) var(--sp-4);
+    text-align: center;
+    color: var(--text-subtle);
+}
+
+.ui-empty-state__icon {
+    font-size: 40px;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+.ui-empty-state__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-body);
+}
+
+.ui-empty-state__text {
+    margin: 0;
+    font-size: 13px;
+}
+
+/* ===================================================== 7. MODAL ADDITIONS
+   Namespaced variants only. No `.modal` base rule is declared, so the
+   three existing per-page modal implementations are unaffected. Pages opt
+   in per modal via .ui-modal--sm / --md / --lg, plus a shared phone tier.
+   -------------------------------------------------------------------- */
+
+.ui-modal--sm { width: 90%; max-width: 420px; }
+.ui-modal--md { width: 92%; max-width: 640px; }
+.ui-modal--lg { width: 94%; max-width: 1100px; }
+.ui-modal--full { width: 96%; max-width: none; }
+
+/* Bottom-sheet treatment on phones. Applied to the existing .modal-content
+   only inside the phone tier, so desktop geometry is byte-identical. */
+@media (max-width: 480px) {
+    .ui-modal--sm,
+    .ui-modal--md,
+    .ui-modal--lg,
+    .ui-modal--full {
+        width: 96vw;
+        max-width: 96vw;
+        max-height: 90vh;
+    }
+}
+
+/* ============================================== 8. TOUCH / A11Y GUARANTEES */
+
+@media (hover: none) and (pointer: coarse) {
+    .ui-btn {
+        min-height: var(--tap);
+    }
+
+    .app-nav-link {
+        min-height: var(--tap);
+    }
+}
+
+@media (max-width: 768px) {
+    .ui-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--sp-3);
+    }
+
+    .stat-tile {
+        gap: var(--sp-3);
+        padding: var(--sp-3) var(--sp-4);
+    }
+
+    .stat-tile__icon {
+        width: 42px;
+        height: 42px;
+        font-size: 19px;
+    }
+
+    .stat-tile__value {
+        font-size: 19px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ui-stat-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-btn {
+        width: 100%;
+    }
+
+    .ui-btn--inline {
+        width: auto;
+    }
+
+    .ui-card__body {
+        padding: var(--sp-4);
+    }
+}

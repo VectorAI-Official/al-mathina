@@ -15,3 +15,6 @@
 local.properties
 *.jks
 *.pem
+
+# UI audit: generated device-matrix screenshots (regenerate with tools/ui-audit/shots.mjs)
+tools/ui-audit/shots/

@@ -12,25 +12,43 @@
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
     <link rel="stylesheet" href="/static/admin/css/theme.css?v=1.0">
     <link rel="stylesheet" href="/static/admin/css/components.css?v=1.0">
-    <link rel="stylesheet" href="/static/admin/css/dashboard.css?v=3.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/admin/css/dashboard.css?v=3.1">
     <script src="/static/admin/js/nav.js?v=1.0" defer></script>
 </head>
 
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <div class="logo">
-                <h1>🏪 AL-Madhina Admin</h1>
-            </div>
-            <div class="header-actions">
-                <span class="welcome-text">Welcome</span>
-                <form method="POST" action="/admin/logout" style="display: inline;">
-                    <button type="submit" class="logout-button">Logout</button>
-                </form>
-            </div>
-        </div>
+    <!-- App Shell -->
+    <header class="app-header">
+        <a class="app-brand" href="/admin/dashboard">
+            <span class="app-brand__mark" aria-hidden="true">🏪</span> AL-Madhina
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="appDrawer">
+            <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+        <nav class="app-nav" aria-label="Admin sections">
+            <a class="app-nav-link" href="/admin/dashboard">Dashboard</a>
+            <a class="app-nav-link" href="/admin/orders">Orders</a>
+            <a class="app-nav-link" href="/admin/revenue">Revenue</a>
+            <a class="app-nav-link" href="/admin/inventory">Inventory</a>
+            <form method="POST" action="/admin/logout" class="app-logout">
+                <button type="submit" class="ui-btn ui-btn--ghost">Logout</button>
+            </form>
+        </nav>
     </header>
+    <div class="app-drawer-backdrop" data-open="false"></div>
+    <nav class="app-drawer" id="appDrawer" data-open="false" aria-label="Admin sections">
+        <a class="app-drawer__link" href="/admin/dashboard">Dashboard</a>
+        <a class="app-drawer__link" href="/admin/orders">Orders</a>
+        <a class="app-drawer__link" href="/admin/revenue">Revenue</a>
+        <a class="app-drawer__link" href="/admin/inventory">Inventory</a>
+        <div class="app-drawer__divider"></div>
+        <form method="POST" action="/admin/logout">
+            <button type="submit" class="app-drawer__link" style="width: 100%; border: 0; background: none; cursor: pointer;">
+                Logout
+            </button>
+        </form>
+    </nav>
 
     <!-- Main Container -->
     <div class="container">
@@ -44,18 +62,6 @@
                 </select>
             </div>
             <div class="action-buttons-group">
-                <button class="btn-secondary" onclick="window.location.href='/admin/orders'"
-                    style="background: #004D40; color: white;">
-                    🛒 Orders
-                </button>
-                <button class="btn-secondary" onclick="window.location.href='/admin/revenue'"
-                    style="background: #1B5E20; color: white;">
-                    🏪 Revenue
-                </button>
-                <button class="btn-secondary" onclick="window.location.href='/admin/inventory'"
-                    style="background: #059669; color: white;">
-                    📦 Inventory
-                </button>
                 <button class="btn-secondary" onclick="openMobileView()">
                     📱 Mobile View
                 </button>
@@ -68,21 +74,21 @@
         <!-- Statistics Cards -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon">📦</div>
+                <div class="stat-icon" aria-hidden="true"><i class="fas fa-box"></i></div>
                 <div class="stat-info">
                     <div class="stat-value" id="totalProducts">0</div>
                     <div class="stat-label">Total Products</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">📂</div>
+                <div class="stat-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></div>
                 <div class="stat-info">
                     <div class="stat-value" id="totalCategories">0</div>
                     <div class="stat-label">Categories</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">⚠️</div>
+                <div class="stat-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></div>
                 <div class="stat-info">
                     <div class="stat-value" id="lowStock">0</div>
                     <div class="stat-label">Low Stock Items</div>

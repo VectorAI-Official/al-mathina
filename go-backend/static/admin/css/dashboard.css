@@ -3875,3 +3875,196 @@ body {
     }
 }
 
+
+/* ==========================================================================
+   RESPONSIVE CONSOLIDATION — app shell era
+   --------------------------------------------------------------------------
+   Appended last so it wins over every block above at equal specificity. The
+   earlier blocks are left exactly where they are: several of them override
+   one another by source order (e.g. .orders-page-style padding chains), so
+   physically merging them would change the cascade and therefore the pixels.
+   ========================================================================== */
+
+/* --- 769px and up: the shell owns the full row ------------------------- */
+@media (min-width: 769px) {
+    .app-header {
+        min-height: 60px;
+    }
+}
+
+/* --- Tablet and below -------------------------------------------------- */
+@media (max-width: 1024px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* --- Phone and below: the action bar wraps instead of stacking --------- */
+@media (max-width: 768px) {
+    .action-bar {
+        align-items: stretch;
+    }
+
+    /* Wrapping row rather than a single tall column: keeps the primary
+       action reachable without a long scroll. */
+    .action-buttons-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 10px;
+    }
+
+    .action-buttons-group .btn-secondary,
+    .action-buttons-group .btn-primary {
+        flex: 1 1 auto;
+    }
+
+    /* The obsolete .header rules above no longer have markup to style, but
+       the class name is still queried by no script; neutralise the leftovers
+       so a stray element cannot inherit a hidden state. */
+    .welcome-text {
+        display: none;
+    }
+
+    /* Products table: JS renders a fixed 9-cell row. Hiding the two
+       lowest-priority columns visually keeps every JS cell index intact. */
+    .products-table {
+        font-size: 12px;
+    }
+
+    .products-table th,
+    .products-table td {
+        padding: 10px 8px;
+    }
+
+    /* Sticky first (Image) and last (Actions) column so the row stays
+       readable while the middle scrolls horizontally. */
+    .products-table th:first-child,
+    .products-table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 3;
+        background: var(--card-white);
+    }
+
+    .products-table thead th:first-child {
+        z-index: 4;
+        background: var(--primary-green);
+    }
+
+    .products-table th:last-child,
+    .products-table td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 3;
+        background: var(--card-white);
+        box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.18);
+    }
+
+    .products-table thead th:last-child {
+        z-index: 4;
+        background: var(--primary-green-light);
+        box-shadow: none;
+    }
+
+    /* The sticky cells carry their own opaque background, so the row-hover
+       tint has to be replayed on them or the edges stay white. */
+    .products-table tbody tr:hover td:first-child,
+    .products-table tbody tr:hover td:last-child {
+        background: #F0F7F6;
+    }
+}
+
+/* --- 600px and below: drop the two non-essential columns --------------- */
+@media (max-width: 600px) {
+    /* 4 = Buying Date, 7 = Inv. Stock. Display-only; the DOM is untouched so
+       every index the JS writes to still resolves. */
+    .products-table th:nth-child(4),
+    .products-table td:nth-child(4),
+    .products-table th:nth-child(7),
+    .products-table td:nth-child(7) {
+        display: none;
+    }
+}
+
+/* --- Small phone: stack the actions, open the modals full-bleed -------- */
+@media (max-width: 480px) {
+    .action-buttons-group {
+        flex-direction: column;
+    }
+
+    .action-buttons-group .btn-secondary,
+    .action-buttons-group .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* 12px, not 11px: 11px is below the legibility floor for a data table. */
+    .products-table {
+        font-size: 12px;
+    }
+
+    .products-table th,
+    .products-table td {
+        padding: 8px 6px;
+    }
+
+    .modal-content {
+        width: 98vw;
+        max-width: 98vw;
+        max-height: 92vh;
+        margin: 10px auto;
+        overflow-y: auto;
+    }
+
+    .modal-header h2 {
+        font-size: 17px;
+    }
+
+    .modal-actions {
+        flex-direction: column-reverse;
+        justify-content: flex-start;
+        gap: 8px;
+    }
+
+    .modal-actions button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .form-group label,
+    .form-row label {
+        font-size: 13px;
+    }
+}
+
+/* --- Touch hardware: hit targets, and never below the iOS zoom floor --- */
+@media (hover: none) and (pointer: coarse) {
+    .action-buttons-group .btn-primary,
+    .action-buttons-group .btn-secondary,
+    .modal-actions button,
+    .products-table td button {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 768px) {
+    .search-input,
+    .category-filter,
+    .form-group input,
+    .form-group select,
+    .form-group textarea,
+    .setting-row input[type='range'] {
+        font-size: 16px;
+    }
+}
+
+/* --- Small phone: one card per row ------------------------------------
+   The two-column rule above is declared later in this file than the
+   original single-column mobile rule, so it wins at every width <= 480.
+   Restating the single column here keeps the last word. */
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

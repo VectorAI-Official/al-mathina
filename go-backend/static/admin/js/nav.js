@@ -41,6 +41,26 @@
             }
         }
 
+        /* --- publish the real bar height as --appbar-h --------------------
+           Pages that keep a position:fixed hero banner offset themselves by
+           this variable. The bar is deliberately not a fixed height: it grows
+           for 44px touch targets, for safe-area insets, and for user font
+           scaling, so any number hard-coded in CSS is wrong on some device.
+           Measuring keeps the bar and the offset in step. The stylesheet still
+           ships a sane fallback for when this script never runs. */
+        function publishBarHeight() {
+            var h = Math.round(header.getBoundingClientRect().height);
+            if (h > 0) doc.documentElement.style.setProperty('--appbar-h', h + 'px');
+        }
+
+        publishBarHeight();
+        if (typeof window.ResizeObserver === 'function') {
+            new window.ResizeObserver(publishBarHeight).observe(header);
+        } else {
+            window.addEventListener('resize', publishBarHeight);
+            window.addEventListener('orientationchange', publishBarHeight);
+        }
+
         /* --- no drawer on this page: nothing else to wire up ---------------- */
         if (!toggle || !drawer) return;
 

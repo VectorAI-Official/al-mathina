@@ -37,7 +37,14 @@ body {
 
 /* Orders Page Layout */
 .orders-page {
-    padding: 160px 30px 30px 30px;
+    /* The hero banner is position:fixed, so it contributes no height to the
+       flow and the content below has to reserve room for it. --hero-h is the
+       single source of truth: the banner is given that min-height and this
+       padding is derived from the same value, so the two can never drift
+       apart and strand content underneath the banner. */
+    --hero-h: 124px;
+    --hero-gap: 24px;
+    padding: calc(var(--appbar-h) + var(--hero-h) + var(--hero-gap)) 30px 30px 30px;
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     min-height: 100vh;
     overflow-x: hidden;
@@ -52,10 +59,12 @@ body {
     border-radius: 0 0 30px 30px;
     box-shadow: 0 8px 32px rgba(27, 94, 32, 0.35), 0 4px 16px rgba(0, 0, 0, 0.15);
     position: fixed;
-    top: 0;
+    top: var(--appbar-h);
     left: 0;
     right: 0;
     z-index: 100;
+    min-height: var(--hero-h);
+    box-sizing: border-box;
     transition: transform 0.3s ease-in-out;
     transform: translateY(0);
 }
@@ -2321,5 +2330,91 @@ body {
     
     .invoice-title {
         font-size: 16px;
+    }
+}
+
+/* ===================================================== 8. SHELL + MOBILE
+
+   Declared last so it wins over the scattered breakpoint blocks above, which
+   were written before the app bar existed and still assume the banner owns the
+   top of the viewport.
+   -------------------------------------------------------------------- */
+
+/* Tablet and below: the banner shrinks with the type inside it. */
+@media (max-width: 1024px) {
+    .orders-page {
+        --hero-h: 110px;
+        --hero-gap: 20px;
+        padding-top: calc(var(--appbar-h) + var(--hero-h) + var(--hero-gap));
+    }
+}
+
+@media (max-width: 768px) {
+    .orders-page {
+        --hero-h: 90px;
+        --hero-gap: 16px;
+        padding-top: calc(var(--appbar-h) + var(--hero-h) + var(--hero-gap));
+    }
+
+    /* Two cards per row uses the width better than the single column the old
+       block asked for, and the stat labels stay short enough to fit. */
+    .order-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    /* 16px is the iOS zoom floor: below it, focusing a field scales the whole
+       page and the keyboard covers the form. */
+    .filter-group input,
+    .filter-group select,
+    .order-filters select,
+    .order-filters input {
+        font-size: 16px;
+    }
+
+    .filter-group input,
+    .filter-group select {
+        width: 100%;
+    }
+
+    /* The modal is a true full-screen sheet: 100vh of content plus 20px of
+       padding overflowed by exactly the padding. */
+    .modal {
+        padding: 0;
+    }
+
+    .close-modal {
+        width: var(--tap);
+        height: var(--tap);
+        font-size: 22px;
+    }
+}
+
+@media (max-width: 480px) {
+    .orders-page {
+        --hero-h: 78px;
+        --hero-gap: 14px;
+        padding-top: calc(var(--appbar-h) + var(--hero-h) + var(--hero-gap));
+    }
+
+    /* Restated last: the two-column rule above is later in this file than the
+       original single-column mobile rule and would otherwise win here. */
+    .order-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Touch hardware: 44px hit targets. */
+@media (hover: none) and (pointer: coarse) {
+    .filter-group input,
+    .filter-group select,
+    .close-modal,
+    .bulk-action-btn,
+    .order-card button,
+    .orders-filters button {
+        min-height: var(--tap);
+    }
+
+    .close-modal {
+        min-width: var(--tap);
     }
 }

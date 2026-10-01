@@ -252,6 +252,23 @@
     background: var(--border);
 }
 
+/* The logout control is a real <button> inside a form so it submits without
+   JavaScript, but it has to look and behave like the anchor links above.
+   Kept here rather than inlined so the shell markup stays copy-pasteable. */
+.app-drawer__form {
+    margin: 0;
+}
+
+.app-drawer__logout {
+    width: 100%;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
 /* Progressive-enhancement floor.
    Below 768px the nav links stay visible as a horizontally scrollable row by
    default, so navigation still works if nav.js is blocked. nav.js stamps

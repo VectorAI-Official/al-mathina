@@ -127,6 +127,9 @@
     /* Layout */
     --page-max: 1400px;
     --shell-min: 56px;
+    /* Height a page with its own fixed hero header must clear: the app bar
+       plus the safe-area inset it pads itself by. */
+    --appbar-h: calc(var(--shell-min) + var(--safe-top));
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-left: env(safe-area-inset-left, 0px);
@@ -160,6 +163,10 @@ html::-webkit-scrollbar-thumb:hover {
 }
 
 body {
+    /* Reset explicitly: the UA default 8px inset would leave a sliver above
+       the sticky app bar and break the --appbar-h offset that pages with a
+       fixed hero banner depend on. */
+    margin: 0;
     font-family: var(--font-sans);
     color: var(--text);
     -webkit-font-smoothing: antialiased;

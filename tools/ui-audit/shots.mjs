@@ -6,6 +6,9 @@
  *
  *   PLAYWRIGHT_DIR=/tmp/pwrunner/node_modules node tools/ui-audit/shots.mjs [outDir]
  *
+ * UI_PAGES / UI_DEVICES narrow the matrix while iterating, e.g.
+ *   UI_PAGES=orders UI_DEVICES=390x844,1440x900 node tools/ui-audit/shots.mjs
+ *
  * Playwright is a dev-only dependency and is deliberately not vendored here.
  * Pages are requested at their real production paths (/admin/dashboard, ...)
  * so that active-link resolution is tested, not just the file on disk.
@@ -65,6 +68,21 @@ const DEVICES = [
   { name: '1024x768', w: 1024, h: 768, touch: false },
   { name: '1440x900', w: 1440, h: 900, touch: false },
 ];
+
+const only = (env, all) => {
+  const want = process.env[env];
+  if (!want) return all;
+  const set = new Set(want.split(',').map((s) => s.trim()).filter(Boolean));
+  const picked = all.filter((x) => set.has(x.name));
+  if (!picked.length) {
+    console.error(`${env}=${want} matched nothing. Known: ${all.map((x) => x.name).join(', ')}`);
+    process.exit(2);
+  }
+  return picked;
+};
+
+const MATRIX_PAGES = only('UI_PAGES', PAGES);
+const MATRIX_DEVICES = only('UI_DEVICES', DEVICES);
 
 // The pages reference assets as /static/... (Go serves them from ./static).
 // The test server is rooted at that directory, so a leading /static is
@@ -208,8 +226,8 @@ async function probeShell(page, device) {
 }
 
 
-for (const page of PAGES) {
-  for (const d of DEVICES) {
+for (const page of MATRIX_PAGES) {
+  for (const d of MATRIX_DEVICES) {
     const ctx = await browser.newContext({
       viewport: { width: d.w, height: d.h },
       hasTouch: d.touch,
@@ -217,6 +235,7 @@ for (const page of PAGES) {
       deviceScaleFactor: 1,
     });
     const p = await ctx.newPage();
+    if (process.env.UI_VERBOSE) console.log(`.... ${page.name} ${d.name}`);
     const errors = [];
     const missing = [];
 

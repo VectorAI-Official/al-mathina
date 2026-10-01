@@ -9,7 +9,9 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,9 +22,17 @@ import (
 )
 
 // GetAllOrders - GET /api/admin/orders
+//
+// Supports an optional ?search= term that is matched against the ENTIRE order
+// history. The orders page only ever loads the most recent page of orders into
+// the browser (the full collection previously timed out with HTTP 500), so
+// client-side filtering alone cannot find a store whose orders predate that
+// page - which is exactly what the Revenue page (server-side, all-time) shows.
 func GetAllOrders(c *gin.Context) {
-	// Heavy full-collection read → longer timeout (configurable via DB_LONG_TIMEOUT)
-	ctx, cancel := database.GetLongDBContext()
+	// Heavy full-collection read → longer timeout (configurable via DB_LONG_TIMEOUT).
+	// Request-scoped so a client disconnect aborts the query rather than letting
+	// it finish and write into a dead socket.
+	ctx, cancel := database.GetLongDBContextFor(c.Request.Context())
 	defer cancel()
 	ordersCollection := database.GetCollection("orders")
 	usersCollection := database.GetCollection("users")
@@ -32,22 +42,71 @@ func GetAllOrders(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
 	if limit > 0 {
-		if limit > 500 {
-			limit = 500
+		if limit > searchResultCap {
+			limit = searchResultCap
 		}
-		if page < 1 {
-			page = 1
-		}
-	}
-
-	// Fetch all orders sorted by created_at (newest first)
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
-	if limit > 0 {
-		opts.SetSkip(int64((page - 1) * limit)).SetLimit(int64(limit))
 	}
 
 	start := time.Now()
-	cursor, err := ordersCollection.Find(ctx, bson.M{}, opts)
+
+	// Build the server-side search filter. Every user-supplied value is escaped
+	// with regexp.QuoteMeta so a pasted store name containing regex
+	// metacharacters (, +, [, . is matched literally instead of being rejected
+	// by MongoDB as an invalid pattern.
+	search := strings.TrimSpace(c.Query("search"))
+	filter := bson.M{}
+	searching := search != ""
+	if searching {
+		re := primitive.Regex{Pattern: regexp.QuoteMeta(search), Options: "i"}
+
+		conditions := []bson.M{
+			{"order_id": re},
+			{"user_phone": re},
+			{"user_name": re},
+			{"user_store_name": re},
+		}
+
+		// Store name and customer name live on the user document, not on the
+		// order, so resolve matching users to their phones first. This is the
+		// same field the Revenue page searches (users.store_details.store_name).
+		if phones, err := findUserPhonesBySearch(ctx, usersCollection, re); err != nil {
+			log.Printf("⚠️ GET /api/admin/orders user search failed after %v: %v", time.Since(start), err)
+		} else if len(phones) > 0 {
+			conditions = append(conditions, bson.M{"user_phone": bson.M{"$in": phones}})
+		}
+
+		filter["$or"] = conditions
+	}
+
+	// Searching always bounds the result set: an unbounded regex scan of the
+	// whole collection is what caused the original timeouts. Fetch one extra
+	// document to detect truncation without a second count query.
+	effectiveLimit := limit
+	if searching && effectiveLimit == 0 {
+		effectiveLimit = searchResultCap
+	}
+
+	// Normalize the page before computing skip. This must key off
+	// effectiveLimit, not limit: a search without an explicit limit paginates
+	// too, and a page of 0 would produce a negative skip that MongoDB rejects.
+	var fetchLimit int64
+	if effectiveLimit > 0 {
+		if page < 1 {
+			page = 1
+		}
+		fetchLimit = int64(effectiveLimit)
+		if searching {
+			fetchLimit++
+		}
+	}
+
+	// Fetch orders sorted by created_at (newest first)
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+	if fetchLimit > 0 {
+		opts.SetSkip(int64((page - 1) * effectiveLimit)).SetLimit(fetchLimit)
+	}
+
+	cursor, err := ordersCollection.Find(ctx, filter, opts)
 	if err != nil {
 		log.Printf("❌ GET /api/admin/orders FIND failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to fetch orders: %v", err)})
@@ -60,6 +119,13 @@ func GetAllOrders(c *gin.Context) {
 		log.Printf("❌ GET /api/admin/orders CURSOR failed after %v: %v (ctx: %v)", time.Since(start), err, ctx.Err())
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("Failed to decode orders: %v", err)})
 		return
+	}
+
+	// Drop the look-ahead document; the set is larger than the cap.
+	hasMore := false
+	if searching && fetchLimit > 0 && len(orders) > effectiveLimit {
+		hasMore = true
+		orders = orders[:effectiveLimit]
 	}
 
 	// Collect unique user phones for batch lookup
@@ -106,10 +172,39 @@ func GetAllOrders(c *gin.Context) {
 	}
 
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		log.Printf("⚠️ GET /api/admin/orders SLOW: %v (%d docs)", elapsed, len(orders))
+		log.Printf("⚠️ GET /api/admin/orders SLOW: %v (%d docs, search=%q)", elapsed, len(orders), search)
 	}
 
 	// Return response matching JavaScript expectations: {"success": true, "orders": [...]}
+	if searching {
+		// New code path: ?search= is only ever sent by the orders page's server
+		// search, so these keys cannot affect existing consumers.
+		//
+		// total is the number of matches in this response. Because the find
+		// fetched limit+1 documents, has_more == false means this is the complete
+		// match set and total is exact. When has_more is true the true count is
+		// larger; recomputing it would mean a second full regex scan, so the
+		// client is told to narrow its search instead.
+		if orders == nil {
+			// Empty array rather than null: clients iterate this directly.
+			orders = []models.Order{}
+		}
+		pages := page
+		if hasMore {
+			pages = page + 1
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success":  true,
+			"orders":   orders,
+			"search":   search,
+			"has_more": hasMore,
+			"total":    len(orders),
+			"page":     page,
+			"pages":    pages,
+		})
+		return
+	}
+
 	if limit > 0 {
 		// Estimated count is O(1) metadata; an exact count over a fast-growing
 		// collection adds seconds for no practical benefit to the client.
@@ -132,6 +227,57 @@ func GetAllOrders(c *gin.Context) {
 		"success": true,
 		"orders":  orders,
 	})
+}
+
+// searchResultCap bounds an unfiltered ?search= response. The orders page can
+// only ever render a fraction of this, and an unbounded regex scan of the whole
+// collection is what originally produced request timeouts and HTTP 500s.
+const searchResultCap = 500
+
+// maxUserPhoneMatches bounds the $in list built from a user search. A term that
+// matches thousands of users (a single letter, say) would otherwise produce an
+// unbounded query document.
+const maxUserPhoneMatches = 1000
+
+// findUserPhonesBySearch resolves an admin search term to the phone numbers of
+// matching users. Store name and customer name are stored on the user document
+// while orders only carry user_phone, so this bridges the two collections.
+//
+// re must already be escaped with regexp.QuoteMeta.
+func findUserPhonesBySearch(ctx context.Context, usersCollection *mongo.Collection, re primitive.Regex) ([]string, error) {
+	opts := options.Find().
+		SetProjection(bson.M{"phone": 1}).
+		SetLimit(maxUserPhoneMatches + 1)
+
+	cursor, err := usersCollection.Find(ctx, bson.M{
+		"$or": []bson.M{
+			{"store_details.store_name": re},
+			{"name": re},
+			{"phone": re},
+		},
+	}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []models.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+
+	phones := make([]string, 0, len(users))
+	for _, u := range users {
+		if u.Phone != "" {
+			phones = append(phones, u.Phone)
+		}
+	}
+	if len(phones) > maxUserPhoneMatches {
+		phones = phones[:maxUserPhoneMatches]
+		log.Printf("⚠️ GET /api/admin/orders user search matched >%d users, truncating $in list", maxUserPhoneMatches)
+	}
+
+	return phones, nil
 }
 
 // GetOrderByID - GET /api/admin/orders/:order_id

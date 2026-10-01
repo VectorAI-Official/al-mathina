@@ -4,6 +4,7 @@ import (
 	"al-mathina-backend/database"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"time"
@@ -42,10 +43,14 @@ func GetStoresList(c *gin.Context) {
 	// Build user query for store filtering
 	userQuery := bson.M{}
 	if search != "" {
+		// Escape the term: admins paste store names straight from other pages,
+		// and an unescaped "(", "+" or "[" is an invalid regex that MongoDB
+		// rejects, which breaks the search on the Revenue page itself.
+		pattern := regexp.QuoteMeta(search)
 		userQuery["$or"] = []bson.M{
-			{"store_details.store_name": bson.M{"$regex": search, "$options": "i"}},
-			{"phone": bson.M{"$regex": search, "$options": "i"}},
-			{"name": bson.M{"$regex": search, "$options": "i"}},
+			{"store_details.store_name": bson.M{"$regex": pattern, "$options": "i"}},
+			{"phone": bson.M{"$regex": pattern, "$options": "i"}},
+			{"name": bson.M{"$regex": pattern, "$options": "i"}},
 		}
 	}
 
@@ -244,10 +249,14 @@ func GetStoresStatistics(c *gin.Context) {
 	// Build user query for store count (never filtered by date)
 	userQuery := bson.M{}
 	if search != "" {
+		// Escape the term: admins paste store names straight from other pages,
+		// and an unescaped "(", "+" or "[" is an invalid regex that MongoDB
+		// rejects, which breaks the search on the Revenue page itself.
+		pattern := regexp.QuoteMeta(search)
 		userQuery["$or"] = []bson.M{
-			{"store_details.store_name": bson.M{"$regex": search, "$options": "i"}},
-			{"phone": bson.M{"$regex": search, "$options": "i"}},
-			{"name": bson.M{"$regex": search, "$options": "i"}},
+			{"store_details.store_name": bson.M{"$regex": pattern, "$options": "i"}},
+			{"phone": bson.M{"$regex": pattern, "$options": "i"}},
+			{"name": bson.M{"$regex": pattern, "$options": "i"}},
 		}
 	}
 

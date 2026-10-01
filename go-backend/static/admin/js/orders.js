@@ -90,6 +90,18 @@ function calculateEffectivePrice(pricePerUnit, weight, unit) {
 let allOrders = [];
 let filteredOrders = []; // Currently filtered/displayed orders
 let currentOrder = null;
+// Full-history search support.
+//
+// allOrders only holds the most recent page of orders (the full collection
+// previously timed out with HTTP 500), so a store whose orders predate that
+// page was invisible to the client-side filter even though the Revenue page -
+// which searches server-side over all time - showed it. When the admin types a
+// search term we also ask the server for matches across the entire history and
+// merge them in, so both pages agree on what exists.
+let serverSearchOrders = [];      // Extra matches found outside allOrders
+let lastServerSearchTerm = '';    // Term serverSearchOrders corresponds to
+let serverSearchTimer = null;     // Debounce handle for the input listener
+let serverSearchSeq = 0;          // Monotonic id; discards stale responses
 // Store detail cache keyed by phone - avoids duplicate DB requests when the
 // same store appears across multiple orders. One fetch per store per session.
 const storeDetailCache = {};
@@ -167,8 +179,22 @@ function setupEventListeners() {
     // Search input - try both IDs for compatibility
     const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
     if (searchInput) {
-        searchInput.addEventListener('input', filterOrders);
-        searchInput.addEventListener('keyup', filterOrders);
+        // Filter locally right away for instant feedback, then ask the server
+        // for full-history matches once typing pauses. One debounced handler
+        // covers both 'input' and 'keyup' so a single keystroke fires one
+        // request instead of two.
+        const handleSearchInput = () => {
+            filterOrders();
+            if (serverSearchTimer) {
+                clearTimeout(serverSearchTimer);
+            }
+            serverSearchTimer = setTimeout(() => {
+                serverSearchTimer = null;
+                searchOrdersServer(searchInput.value);
+            }, 400);
+        };
+        searchInput.addEventListener('input', handleSearchInput);
+        searchInput.addEventListener('keyup', handleSearchInput);
         console.log('   ✅ Search listeners attached');
     } else {
         console.warn('   ⚠️  Search input not found');
@@ -255,7 +281,13 @@ async function loadOrders() {
 
             // Apply filters if URL parameters exist
             if (searchParam || statusParam) {
-                filterOrders();
+                if (searchParam) {
+                    // Deep link: search the full history immediately (no debounce)
+                    // so the URL lands on the same results a manual search shows.
+                    searchOrdersServer(searchParam);
+                } else {
+                    filterOrders();
+                }
             } else {
                 displayOrders(allOrders);
                 updateOrderStats();
@@ -279,13 +311,34 @@ function displayOrders(orders, append = false) {
     }
 
     if (orders.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-shopping-bag" style="font-size: 64px; color: #ccc;"></i>
-                <h3>No Orders Found</h3>
-                <p>Orders will appear here once customers place them.</p>
-            </div>
-        `;
+        // Distinguish "no orders at all" from "this search matched nothing".
+        // The old copy ("Orders will appear here once customers place them")
+        // is actively misleading when the admin is looking at a filtered list.
+        const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
+        const activeSearchTerm = (searchInput?.value || '').trim();
+
+        if (activeSearchTerm) {
+            const escapedTerm = activeSearchTerm
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search" style="font-size: 64px; color: #ccc;"></i>
+                    <h3>No orders match "${escapedTerm}"</h3>
+                    <p>Searched across the full order history.</p>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-shopping-bag" style="font-size: 64px; color: #ccc;"></i>
+                    <h3>No Orders Found</h3>
+                    <p>Orders will appear here once customers place them.</p>
+                </div>
+            `;
+        }
         displayedOrdersCount = 0;
         return;
     }
@@ -1982,6 +2035,111 @@ function generateInvoiceHTML(order, opts = {}) {
 </html>`;
 }
 
+// Merge server-side search results with the recent page, keyed by order_id.
+// Server matches that are already in allOrders are dropped so an order is never
+// rendered or counted twice.
+function dedupeOrdersById(base, extras) {
+    if (!Array.isArray(extras) || extras.length === 0) {
+        return Array.isArray(base) ? base : [];
+    }
+
+    const seen = new Set();
+    const merged = [];
+
+    for (const order of (Array.isArray(base) ? base : [])) {
+        if (!order) continue;
+        const id = order.order_id;
+        if (id) seen.add(String(id));
+        merged.push(order);
+    }
+
+    for (const order of extras) {
+        if (!order) continue;
+        const id = order.order_id;
+        if (id) {
+            if (seen.has(String(id))) continue;
+            seen.add(String(id));
+        }
+        merged.push(order);
+    }
+
+    return merged;
+}
+
+// Ask the server for orders matching `term` across the entire order history.
+//
+// Debounced by the caller. Failures are logged and swallowed on purpose: local
+// filtering over allOrders keeps working, so a search outage degrades to the
+// old (recent-orders-only) behaviour instead of breaking the page.
+async function searchOrdersServer(term) {
+    const trimmed = (term || '').trim();
+
+    // Cancel any pending debounce and invalidate in-flight responses.
+    if (serverSearchTimer) {
+        clearTimeout(serverSearchTimer);
+        serverSearchTimer = null;
+    }
+    const seq = ++serverSearchSeq;
+
+    // Below 2 characters there is nothing meaningful to search for, and it
+    // keeps the endpoint from being hit on every keystroke of a short term.
+    if (trimmed.length < 2) {
+        serverSearchOrders = [];
+        lastServerSearchTerm = '';
+        filterOrders();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/orders?search=' + encodeURIComponent(trimmed));
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // A newer keystroke already started its own search - discard this reply.
+        if (seq !== serverSearchSeq) {
+            console.log(`   ⏭️ Discarding stale search response for "${trimmed}"`);
+            return;
+        }
+
+        if (!data.success) {
+            throw new Error(data.error || 'Search request failed');
+        }
+
+        serverSearchOrders = Array.isArray(data.orders) ? data.orders : [];
+        lastServerSearchTerm = trimmed;
+        console.log(`🔎 Server search "${trimmed}" → ${serverSearchOrders.length} match(es)${data.has_more ? ' (capped)' : ''}`);
+
+        // Re-render with the widened candidate set.
+        filterOrders();
+
+        if (data.has_more) {
+            showToast('Showing the most recent matches — refine your search to narrow down', 'info');
+        }
+    } catch (error) {
+        if (seq !== serverSearchSeq) {
+            return; // Superseded; a newer search is in flight.
+        }
+        console.error('❌ Server search failed for "' + trimmed + '":', error);
+        serverSearchOrders = [];
+        lastServerSearchTerm = '';
+    }
+}
+
+// Drop any server-side search state so the page returns to its base view.
+function clearServerSearchState() {
+    if (serverSearchTimer) {
+        clearTimeout(serverSearchTimer);
+        serverSearchTimer = null;
+    }
+    serverSearchSeq++; // invalidate any in-flight response
+    serverSearchOrders = [];
+    lastServerSearchTerm = '';
+}
+
 // Filter orders
 function filterOrders() {
     console.log('🔍 filterOrders() called');
@@ -1997,11 +2155,20 @@ function filterOrders() {
         const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
         const searchTerm = searchInput?.value?.toLowerCase().trim() || '';
 
+        // Candidate set: the recent page, widened with server-side matches when
+        // the search that produced them is still the active one. Comparing the
+        // raw input against lastServerSearchTerm keeps the merge from leaking
+        // into an unrelated search the user typed in the meantime.
+        const searchTermMatchesServer = searchTerm && searchTerm === lastServerSearchTerm.toLowerCase();
+        const candidates = (searchTermMatchesServer && serverSearchOrders.length > 0)
+            ? dedupeOrdersById(allOrders, serverSearchOrders)
+            : allOrders;
+
         // Get status filter
         const statusFilterElement = document.getElementById('statusFilter');
         const statusFilter = statusFilterElement?.value || '';
 
-        console.log(`   Filtering ${allOrders.length} orders - Search: "${searchTerm}", Status: "${statusFilter}"`);
+        console.log(`   Filtering ${candidates.length} orders - Search: "${searchTerm}", Status: "${statusFilter}"`);
 
         // Update URL with search parameters for automation
         const url = new URL(window.location);
@@ -2021,7 +2188,7 @@ function filterOrders() {
         updateClearButtonVisibility();
 
         // Filter orders
-        let filtered = allOrders.filter((order, index) => {
+        let filtered = candidates.filter((order, index) => {
             try {
                 // Skip if order is null or undefined
                 if (!order) {
@@ -2795,6 +2962,9 @@ window.onclick = function (event) {
 // Clear search input
 function clearSearch() {
     try {
+        // Drop the full-history merge first so the base view and its stats are
+        // restored exactly as if no search had ever run.
+        clearServerSearchState();
         const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
         if (searchInput) {
             searchInput.value = '';
@@ -2811,6 +2981,7 @@ function resetFilters() {
     console.log('🔄 Resetting all filters...');
 
     // Clear search
+    clearServerSearchState();
     const searchInput = document.getElementById('searchInput') || document.getElementById('orderSearch');
     if (searchInput) {
         searchInput.value = '';
@@ -2874,6 +3045,11 @@ async function deleteOrder(orderId) {
 
             // Remove from allOrders array
             allOrders = allOrders.filter(order => order.order_id !== orderId);
+
+            // Also drop it from the full-history search results, otherwise the
+            // deleted order reappears in the next re-render while a search term
+            // is active.
+            serverSearchOrders = serverSearchOrders.filter(order => order.order_id !== orderId);
 
             // Refresh display
             filterOrders();

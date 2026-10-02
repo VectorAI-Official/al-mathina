@@ -155,6 +155,7 @@ async function probeShell(page, device) {
     return {
       vw: de.clientWidth,
       header: box(header),
+      headerW: header ? Math.round(header.getBoundingClientRect().width) : null,
       headerPos: header ? getComputedStyle(header).position : null,
       brand: box(q('.app-brand')),
       navLinks,
@@ -181,6 +182,10 @@ async function probeShell(page, device) {
      `header.bottom=${geo.header && geo.header.bottom} content.y=${geo.firstContent && geo.firstContent.y}`);
   ok('brand inside viewport', geo.brand && geo.brand.x >= 0 && geo.brand.x + geo.brand.w <= geo.vw + 1, JSON.stringify(geo.brand));
   ok('brand >= 36px tall', (geo.brand && geo.brand.h) >= 36, geo.brand && geo.brand.h);
+  // The bar is full-bleed: a page that pads <body> would inset it and make it
+  // jump on scroll, which no other check here would notice.
+  ok('app bar is full-bleed', geo.header && geo.header.x <= 1 && Math.round(geo.header.w) >= geo.vw - 1,
+     `header.x=${geo.header && geo.header.x} w=${geo.header && geo.header.w} vw=${geo.vw}`);
 
   if (device.touch) {
     ok('hamburger visible on touch', geo.toggle && geo.toggle.w > 0, JSON.stringify(geo.toggle));

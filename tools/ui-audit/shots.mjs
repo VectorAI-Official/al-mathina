@@ -122,7 +122,7 @@ const EXPECTED_NOISE = [
   /^\s*at /i,
 ];
 
-const browser = await chromium.launch();
+let browser = await chromium.launch();
 const report = [];
 let bad = 0;
 
@@ -160,8 +160,20 @@ async function probeShell(page, device) {
       navLinks,
       toggle: box(q('.nav-toggle')),
       firstContent,
+      // Orders and Revenue keep a position:fixed hero banner above the page
+      // body. It has to clear the app bar and must not sit on top of content.
+      hero: box(q('.orders-header, .stores-header')),
+      heroFirstChild: box(q('.orders-header ~ *, .stores-header ~ *')),
     };
   });
+
+  if (geo.hero) {
+    ok('hero clears app bar', geo.hero.y >= (geo.header ? geo.header.bottom : 0) - 1,
+       `hero.y=${geo.hero.y} bar.bottom=${geo.header && geo.header.bottom}`);
+    ok('hero does not cover content',
+       geo.heroFirstChild && geo.heroFirstChild.y >= geo.hero.bottom - 1,
+       `content.y=${geo.heroFirstChild && geo.heroFirstChild.y} hero.bottom=${geo.hero.bottom}`);
+  }
 
   ok('header present', geo.header);
   ok('header is sticky', geo.headerPos === 'sticky', geo.headerPos);
@@ -226,8 +238,9 @@ async function probeShell(page, device) {
 }
 
 
-for (const page of MATRIX_PAGES) {
-  for (const d of MATRIX_DEVICES) {
+/** Runs one page at one device size. Throws if the browser process dies. */
+async function capture(page, d) {
+  {
     const ctx = await browser.newContext({
       viewport: { width: d.w, height: d.h },
       hasTouch: d.touch,
@@ -267,13 +280,19 @@ for (const page of MATRIX_PAGES) {
 
     try {
       await p.goto(`${base}${page.route}`, { waitUntil: 'commit', timeout: 15000 });
-      await p.waitForFunction(() => document.body && document.body.children.length > 0, null, { timeout: 10000 });
+      // Interval polling, not the default requestAnimationFrame: rAF is throttled
+      // or stopped when the machine is loaded, which times out even though the
+      // condition is already true.
+      await p.waitForFunction(() => document.body && document.body.children.length > 0, null, { timeout: 10000, polling: 100 });
     } catch (e) {
+      // A parse timeout on a loaded machine says nothing about the layout, so
+      // let the caller relaunch and retry instead of recording a fault.
+      if (/Timeout|timed out/i.test(e.message)) throw e;
       console.log(`FAIL ${page.name.padEnd(10)} ${d.name.padEnd(9)} navigation: ${e.message.split('\n')[0]}`);
       console.log(`       missing: ${[...new Set(missing)].slice(0, 4).join(', ') || '(none logged)'}`);
       bad += 1;
-      await ctx.close();
-      continue;
+      await ctx.close().catch(() => {});
+      return;
     }
     await p.waitForTimeout(500);
 
@@ -377,7 +396,31 @@ for (const page of MATRIX_PAGES) {
   }
 }
 
-await browser.close();
+for (const page of MATRIX_PAGES) {
+  for (const d of MATRIX_DEVICES) {
+    // A busy machine can get the browser process OOM-killed mid-run, which is
+    // not a layout fault. Relaunch and retry so one bad kill does not look
+    // like a broken page.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await capture(page, d);
+        break;
+      } catch (e) {
+        const dead = /closed|crash|Target page|Protocol error|Timeout|timed out/i.test(e.message);
+        if (!dead || attempt === 3) {
+          console.log(`FAIL ${page.name.padEnd(10)} ${d.name.padEnd(9)} ${dead ? 'browser died' : 'error'}: ${e.message.split('\n')[0]}`);
+          bad += 1;
+          break;
+        }
+        if (process.env.UI_VERBOSE) console.log(`.... ${page.name} ${d.name} browser died, relaunching (${attempt})`);
+        try { await browser.close(); } catch {}
+        browser = await chromium.launch();
+      }
+    }
+  }
+}
+
+await browser.close().catch(() => {});
 server.close();
 
 

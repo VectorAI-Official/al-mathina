@@ -1982,7 +1982,6 @@ body {
 
 .modal-header h2 {
     font-size: 18px;
-    color: #333;
     margin: 0;
     display: flex;
     align-items: center;
@@ -2023,7 +2022,6 @@ body {
 }
 
 #summaryTypeModal .modal-header h2 {
-    color: #1976D2;
     font-size: 20px;
 }
 

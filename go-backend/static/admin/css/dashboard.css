@@ -253,6 +253,7 @@ body {
 
 .stat-icon {
     font-size: 42px;
+    color: #fff;
     background: linear-gradient(135deg, var(--primary-green) 0%, var(--primary-green-light) 100%);
     width: 70px;
     height: 70px;

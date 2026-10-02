@@ -12,8 +12,8 @@
     <meta http-equiv="Expires" content="0">
     <title>Revenue Management - AL-Madhina Admin</title>
     <link rel="stylesheet" href="/static/admin/css/theme.css?v=1.1">
-    <link rel="stylesheet" href="/static/admin/css/components.css?v=1.0">
-    <link rel="stylesheet" href="/static/admin/css/stores.css?v=3.0">
+    <link rel="stylesheet" href="/static/admin/css/components.css?v=1.1">
+    <link rel="stylesheet" href="/static/admin/css/stores.css?v=3.1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts - Noto Sans Tamil for proper Tamil rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,24 +22,44 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="/static/admin/js/nav.js?v=1.1" defer></script>
 </head>
 
 <body>
+    <!-- App Shell -->
+    <header class="app-header">
+        <a class="app-brand" href="/admin/dashboard">
+            <span class="app-brand__mark" aria-hidden="true">🏪</span> AL-Madhina
+        </a>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="appDrawer">
+            <span class="nav-toggle__bars" aria-hidden="true"></span>
+        </button>
+        <nav class="app-nav" aria-label="Admin sections">
+            <a class="app-nav-link" href="/admin/dashboard">Dashboard</a>
+            <a class="app-nav-link" href="/admin/orders">Orders</a>
+            <a class="app-nav-link" href="/admin/revenue">Revenue</a>
+            <a class="app-nav-link" href="/admin/inventory">Inventory</a>
+            <form method="POST" action="/admin/logout" class="app-logout">
+                <button type="submit" class="ui-btn ui-btn--ghost">Logout</button>
+            </form>
+        </nav>
+    </header>
+    <div class="app-drawer-backdrop" data-open="false"></div>
+    <nav class="app-drawer" id="appDrawer" data-open="false" aria-label="Admin sections">
+        <a class="app-drawer__link" href="/admin/dashboard">Dashboard</a>
+        <a class="app-drawer__link" href="/admin/orders">Orders</a>
+        <a class="app-drawer__link" href="/admin/revenue">Revenue</a>
+        <a class="app-drawer__link" href="/admin/inventory">Inventory</a>
+        <div class="app-drawer__divider"></div>
+        <form method="POST" action="/admin/logout" class="app-drawer__form">
+            <button type="submit" class="app-drawer__link app-drawer__logout">Logout</button>
+        </form>
+    </nav>
     <div class="stores-page">
         <!-- Header -->
         <div class="stores-header">
             <div class="header-content">
                 <h1><i class="fas fa-store"></i> Revenue Management</h1>
-                <div class="header-actions">
-                    <button class="btn btn-secondary navigate-btn" onclick="window.location.href='/admin/orders'"
-                        title="Go to Orders Management">
-                        <i class="fas fa-shopping-cart"></i> Orders
-                    </button>
-                    <button class="btn btn-primary back-to-dashboard-btn"
-                        onclick="window.location.href='/admin/dashboard'">
-                        <i class="fas fa-arrow-left"></i> Back to Dashboard
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -224,7 +244,7 @@
                 <label for="searchInput">
                     <i class="fas fa-search"></i> Search
                 </label>
-                <div style="position: relative; display: flex; align-items: center;">
+                <div class="filter-group__control">
                     <input type="text" id="searchInput" placeholder="Search by Store Name, Phone, Customer Name..."
                         oninput="handleSearchInput()">
                     <button id="clearSearchBtn" onclick="clearSearch()"

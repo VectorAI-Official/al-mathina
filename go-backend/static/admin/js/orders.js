@@ -973,6 +973,270 @@ async function printInvoice(orderId) {
     }
 }
 
+// ============ SHARED PDF PAGINATION (invoice + order history) ============
+
+// A4 page geometry. Page 1 starts at the very top with a small bottom reserve;
+// pages 2+ reserve a 25mm band at the top plus bottom/safety buffers. These are the
+// same margins both PDFs have always used - only WHERE the cut lands changes.
+const PDF_PAGE = {
+    widthMm: 210,
+    topFirst: 0,
+    bottomFirst: 10,
+    topSubsequent: 25,
+    bottom: 20,
+    safetyBuffer: 5,
+    minFillMm: 12, // a page must carry at least this much content
+    tailSliverMm: 2 // absorb a leftover this thin into the page before it
+};
+
+// Blocks whose BOTTOM edge is a safe place to cut. html2canvas flattens the whole
+// document into one bitmap, so the page-break-inside rules in the generated markup
+// never run - a cut at a fixed millimetre offset slices table rows in half and
+// shows the top of the row at the bottom of one page and its bottom at the top of
+// the next. Cuts snap to the bottom edge of these blocks instead.
+const PDF_SAFE_BREAK_BLOCKS = [
+    'items-table',
+    'invoice-header',
+    'invoice-details',
+    'invoice-section-heading',
+    'return-total-section',
+    'total-section',
+    'history-header'
+];
+
+/**
+ * Measure the safe page-break offsets of a rendered invoice / order-history
+ * document while it is still attached to the document.
+ *
+ * @param {HTMLElement} containerEl .invoice-container or .history-container
+ * @returns {number[]} offsets in mm from the top of the container (the same
+ *   vertical space html2canvas rasterises), ascending and de-duplicated
+ */
+function collectPageBreakpoints(containerEl) {
+    if (!containerEl) return [];
+    const base = containerEl.getBoundingClientRect();
+    if (!base.width) return [];
+    const mmPerPx = PDF_PAGE.widthMm / base.width;
+    const blocks = PDF_SAFE_BREAK_BLOCKS.map(cls => `.${cls}`).join(', ');
+    const points = [];
+    containerEl.querySelectorAll(`${blocks}, tbody tr`).forEach(el => {
+        const rect = el.getBoundingClientRect();
+        // height > 0 skips hidden blocks (e.g. the disabled balance summary)
+        if (rect.height > 0) points.push((rect.bottom - base.top) * mmPerPx);
+    });
+    return Array.from(new Set(points.map(v => Math.round(v * 1000) / 1000))).sort((a, b) => a - b);
+}
+
+/**
+ * Measure the table header strips of a rendered document in mm from the top of the
+ * container, so continuation pages can repeat the column headings in their top
+ * band. One entry per <thead>, in document order.
+ *
+ * @param {HTMLElement} containerEl .invoice-container or .history-container
+ * @returns {Array<{leftMm:number,widthMm:number,topMm:number,heightMm:number,tableTopMm:number,tableBottomMm:number}>}
+ */
+function collectTableHeaderStrips(containerEl) {
+    if (!containerEl) return [];
+    const base = containerEl.getBoundingClientRect();
+    if (!base.width) return [];
+    const mmPerPx = PDF_PAGE.widthMm / base.width;
+    return Array.from(containerEl.querySelectorAll('thead')).map(head => {
+        const headRect = head.getBoundingClientRect();
+        const table = head.closest('table');
+        const tableRect = table ? table.getBoundingClientRect() : headRect;
+        return {
+            leftMm: (headRect.left - base.left) * mmPerPx,
+            widthMm: headRect.width * mmPerPx,
+            topMm: (headRect.top - base.top) * mmPerPx,
+            heightMm: headRect.height * mmPerPx,
+            tableTopMm: (tableRect.top - base.top) * mmPerPx,
+            tableBottomMm: (tableRect.bottom - base.top) * mmPerPx
+        };
+    }).filter(strip => strip.heightMm > 0);
+}
+
+/**
+ * Last canvas row (0-based) that carries anything but background white, scanning
+ * bottom-up in strips so a tall document never needs a full-size pixel read.
+ */
+function lastContentRowIndex(canvas) {
+    const ctx = canvas.getContext('2d');
+    const strip = 64;
+    for (let bottom = canvas.height; bottom > 0; bottom -= strip) {
+        const top = Math.max(0, bottom - strip);
+        const rows = bottom - top;
+        const data = ctx.getImageData(0, top, canvas.width, rows).data;
+        for (let y = rows - 1; y >= 0; y--) {
+            const rowStart = y * canvas.width * 4;
+            for (let x = 0; x < canvas.width; x++) {
+                const i = rowStart + x * 4;
+                if (data[i] < 250 || data[i + 1] < 250 || data[i + 2] < 250) return top + y;
+            }
+        }
+    }
+    return canvas.height - 1;
+}
+
+/** The header strip of the table a continuation page starts inside, if any. */
+function headerStripForPage(headerStrips, startMm) {
+    if (!headerStrips || !headerStrips.length) return null;
+    for (const strip of headerStrips) {
+        if (startMm >= strip.tableTopMm - 0.01 && startMm < strip.tableBottomMm - 0.01) return strip;
+    }
+    return null;
+}
+
+/** Copy canvas rows [startPx, endPx) onto the PDF page at topMarginMm. */
+function addCanvasSliceToPdf(canvas, pdf, startPx, endPx, topMarginMm) {
+    const heightPx = Math.max(1, endPx - startPx);
+    const pxPerMm = canvas.width / pdf.internal.pageSize.getWidth();
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = heightPx;
+    pageCanvas.getContext('2d').drawImage(
+        canvas, 0, startPx, canvas.width, heightPx, // source slice
+        0, 0, canvas.width, heightPx               // destination
+    );
+    pdf.addImage(
+        pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, topMarginMm,
+        pdf.internal.pageSize.getWidth(), heightPx / pxPerMm
+    );
+}
+
+/**
+ * Copy canvas rows [startPx, endPx) onto a new page, repeating a table header in
+ * the band that pages 2+ reserve at the top. The header is drawn at its natural
+ * height - the rest of the band stays white - so the image still ends exactly where
+ * it did before, keeping the bottom margin unchanged.
+ */
+function addCanvasSliceWithHeaderToPdf(canvas, pdf, startPx, endPx, strip) {
+    const pxPerMm = canvas.width / pdf.internal.pageSize.getWidth();
+    const heightPx = Math.max(1, endPx - startPx);
+    const bandPx = Math.round(PDF_PAGE.topSubsequent * pxPerMm);
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = bandPx + heightPx;
+    const ctx = pageCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+    const sx = Math.max(0, Math.min(canvas.width - 1, Math.round(strip.leftMm * pxPerMm)));
+    const sw = Math.max(1, Math.min(canvas.width - sx, Math.round(strip.widthMm * pxPerMm)));
+    const sy = Math.max(0, Math.min(canvas.height - 1, Math.round(strip.topMm * pxPerMm)));
+    const sh = Math.max(1, Math.min(canvas.height - sy, Math.round(strip.heightMm * pxPerMm)));
+    ctx.drawImage(canvas, sx, sy, sw, sh, sx, 0, sw, sh);
+    ctx.drawImage(canvas, 0, startPx, canvas.width, heightPx, 0, bandPx, canvas.width, heightPx);
+
+    pdf.addImage(
+        pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0,
+        pdf.internal.pageSize.getWidth(), (bandPx + heightPx) / pxPerMm
+    );
+}
+
+/**
+ * Slice a rasterised document across A4 pages.
+ *
+ * Cuts snap to `breakpointsMm` (measured from the live DOM by
+ * collectPageBreakpoints) so a table row or block is never split at the seam.
+ * Source rows are rounded up to whole pixels and accumulated, so consecutive slices
+ * are exactly contiguous - no 1px seam and no overlap - and the final slice always
+ * ends at the last row that carries content.
+ *
+ * @param {HTMLCanvasElement} canvas    rasterised document
+ * @param {object} pdf                  jsPDF instance (page 1 already open)
+ * @param {number[]} [breakpointsMm]    safe cut offsets, mm from the canvas top
+ * @param {Array} [headerStrips]        strips from collectTableHeaderStrips
+ * @returns {number} number of pages written
+ */
+function paginateCanvasToPdf(canvas, pdf, breakpointsMm, headerStrips) {
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const pxPerMm = canvas.width / pdfWidth; // uniform scale: canvas px -> mm
+    const firstUsableMm = pdfHeight - PDF_PAGE.bottomFirst;
+    const nextUsableMm = pdfHeight - PDF_PAGE.topSubsequent - PDF_PAGE.bottom - PDF_PAGE.safetyBuffer;
+
+    // Single page - whole document fits, nothing to slice.
+    if (canvas.height / pxPerMm <= firstUsableMm) {
+        pdf.addImage(
+            canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, PDF_PAGE.topFirst,
+            pdfWidth, canvas.height / pxPerMm
+        );
+        console.log('📄 Single page layout');
+        return 1;
+    }
+
+    // The generated markup ends in intentional whitespace (40mm of container padding
+    // plus an empty footer spacer). Crop it off, otherwise the document carries a
+    // fully blank trailing sheet.
+    const contentPx = lastContentRowIndex(canvas) + 1;
+    const contentMm = contentPx / pxPerMm;
+    if (contentMm <= firstUsableMm) {
+        addCanvasSliceToPdf(canvas, pdf, 0, contentPx, PDF_PAGE.topFirst);
+        console.log('📄 Single page layout (trailing whitespace cropped)');
+        return 1;
+    }
+
+    const breaks = (breakpointsMm || [])
+        .filter(mm => mm > 0 && mm < contentMm)
+        .sort((a, b) => a - b);
+
+    let pages = 0;
+    let startPx = 0;
+
+    while (startPx < contentPx) {
+        const isFirstPage = pages === 0;
+        const startMm = startPx / pxPerMm;
+        const usableMm = isFirstPage ? firstUsableMm : nextUsableMm;
+        const limitMm = Math.min(startMm + usableMm, contentMm);
+
+        // Largest safe cut that still leaves this page worth printing. When no block
+        // boundary fits (a block taller than the page), fall back to the fixed cut so
+        // pagination always makes progress.
+        let cutMm = -1;
+        for (let i = breaks.length - 1; i >= 0; i--) {
+            if (breaks[i] > limitMm + 0.001) continue;
+            if (breaks[i] >= startMm + PDF_PAGE.minFillMm) {
+                cutMm = breaks[i];
+                break;
+            }
+            break; // every earlier break is closer still - none can fill the page
+        }
+        const snapped = cutMm > 0;
+        if (!snapped) cutMm = limitMm;
+
+        // Round up to whole source pixels: the cut then lands on or just past the block
+        // edge, so no part of a block is ever carried onto the next page, and
+        // consecutive slices are exactly contiguous - no 1px seam and no overlap.
+        let endPx = Math.min(contentPx, Math.ceil(cutMm * pxPerMm));
+        if (endPx <= startPx) endPx = Math.min(contentPx, startPx + 1);
+        // Absorb a leftover sliver instead of printing a page holding 0.1mm of
+        // nothing: the last block's bottom edge and the last inked pixel can differ
+        // by a pixel or two, and what sits between them is pure whitespace.
+        if (contentPx - endPx <= Math.round(PDF_PAGE.tailSliverMm * pxPerMm)) endPx = contentPx;
+
+        if (!isFirstPage) pdf.addPage();
+        const strip = isFirstPage ? null : headerStripForPage(headerStrips, startMm);
+        if (strip) {
+            addCanvasSliceWithHeaderToPdf(canvas, pdf, startPx, endPx, strip);
+        } else {
+            addCanvasSliceToPdf(canvas, pdf, startPx, endPx, isFirstPage ? PDF_PAGE.topFirst : PDF_PAGE.topSubsequent);
+        }
+
+        console.log(
+            `📄 Page ${pages + 1}: ${((endPx - startPx) / pxPerMm).toFixed(1)}mm ` +
+            `(source ${startMm.toFixed(1)}mm → ${(endPx / pxPerMm).toFixed(1)}mm) ` +
+            `${snapped ? 'at block boundary' : 'FIXED CUT - no boundary fit'}` +
+            `${strip ? ' + repeated header' : ''}`
+        );
+
+        startPx = endPx;
+        pages++;
+    }
+
+    console.log(`✅ Generated ${pages} pages with row-safe pagination`);
+    return pages;
+}
+
 // Generate a clean multi-page invoice PDF using html2canvas + jsPDF.
 // Avoids the browser's native print header/footer (which shows the page URL).
 // Returns a Promise resolving to the jsPDF instance.
@@ -1027,6 +1291,12 @@ async function generateInvoicePdf(order) {
         throw new Error('Invoice element not found');
     }
 
+    // Measure where it is safe to cut the document BEFORE capturing it, while the
+    // iframe is still attached: the cut points are the block boundaries the page
+    // seams have to land on. html2canvas rasterises the layout as it is right here.
+    const breakpoints = collectPageBreakpoints(invoiceElement);
+    const headerStrips = collectTableHeaderStrips(invoiceElement);
+
     console.log('📸 Capturing invoice as image...');
 
     // Capture with html2canvas
@@ -1056,107 +1326,17 @@ async function generateInvoicePdf(order) {
         compress: true
     });
 
-    // Get PDF dimensions
+    // Diagnostics: the page geometry is shared with the order-history PDF, so the
+    // only thing left to confirm is that the capture scale matched the measurement.
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-
-    // Define page margins - First page minimal, subsequent pages with safety buffers
-    const topMargin = 0; // No top margin on first page
-    const bottomMarginFirstPage = 10; // 10mm bottom margin on first page only (minimal)
-    const bottomMargin = 20; // 20mm bottom margin on subsequent pages (increased buffer)
-    const topMarginSubsequent = 25; // 25mm top margin on pages 2+ (increased buffer)
-    const safetyBuffer = 5; // 5mm extra safety buffer on subsequent pages to avoid row splits
-
-    // Calculate usable heights - First page gets more space, subsequent pages more conservative
-    const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage; // First page with minimal bottom margin
-    const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer; // Pages 2+ with buffers
-
-    // Calculate scaled image dimensions
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    // Convert canvas to high-quality image
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const canvasPxPerMm = canvas.width / pdfWidth;
 
     console.log(`📐 PDF Dimensions: ${pdfWidth}mm x ${pdfHeight}mm`);
-    console.log(`📐 Image Height: ${imgHeight}mm`);
-    console.log(`📐 First Page Usable: ${firstPageUsableHeight}mm`);
-    console.log(`📐 Subsequent Usable: ${subsequentPageUsableHeight}mm`);
+    console.log(`📐 Capture: ${canvas.width}x${canvas.height}px = ${(canvas.height / canvasPxPerMm).toFixed(1)}mm tall`);
+    console.log(`📐 Safe breaks measured: ${breakpoints.length}`);
 
-    // Add image to PDF with intelligent pagination
-    if (imgHeight <= firstPageUsableHeight) {
-        // Single page - fits perfectly
-        pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight);
-        console.log('📄 Single page layout');
-    } else {
-        // Multi-page pagination with proper breaks
-        let remainingHeight = imgHeight;
-        let sourceY = 0; // Y position in source image (in mm)
-        let pageNumber = 1;
-
-        // First page
-        const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
-
-        // Calculate source dimensions in canvas pixels for clipping
-        const canvasHeight = canvas.height;
-        const canvasWidth = canvas.width;
-        const pixelsPerMm = canvasHeight / imgHeight; // Conversion factor
-
-        // First page: clip from top of canvas
-        const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
-
-        // Create canvas for first page
-        const page1Canvas = document.createElement('canvas');
-        page1Canvas.width = canvasWidth;
-        page1Canvas.height = firstPageCanvasHeight;
-        const page1Ctx = page1Canvas.getContext('2d');
-
-        page1Ctx.drawImage(
-            canvas,
-            0, 0, canvasWidth, firstPageCanvasHeight, // Source clip
-            0, 0, canvasWidth, firstPageCanvasHeight  // Destination
-        );
-
-        const page1Data = page1Canvas.toDataURL('image/jpeg', 0.95);
-        pdf.addImage(page1Data, 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
-
-        sourceY += firstPageHeight;
-        remainingHeight -= firstPageHeight;
-
-        console.log(`📄 Page 1: ${firstPageHeight}mm (source 0 → ${firstPageHeight}mm)`);
-
-        // Subsequent pages
-        while (remainingHeight > 0) {
-            pdf.addPage();
-            pageNumber++;
-
-            const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
-            const pageCanvasHeight = pageHeight * pixelsPerMm;
-            const sourceCanvasY = sourceY * pixelsPerMm;
-
-            // Create canvas for this page
-            const pageCanvas = document.createElement('canvas');
-            pageCanvas.width = canvasWidth;
-            pageCanvas.height = pageCanvasHeight;
-            const pageCtx = pageCanvas.getContext('2d');
-
-            pageCtx.drawImage(
-                canvas,
-                0, sourceCanvasY, canvasWidth, pageCanvasHeight, // Source clip
-                0, 0, canvasWidth, pageCanvasHeight              // Destination
-            );
-
-            const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
-            pdf.addImage(pageData, 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
-
-            console.log(`📄 Page ${pageNumber}: ${pageHeight}mm (source ${sourceY}mm → ${sourceY + pageHeight}mm)`);
-
-            sourceY += pageHeight;
-            remainingHeight -= pageHeight;
-        }
-
-        console.log(`✅ Generated ${pageNumber} pages with intelligent pagination`);
-    }
+    paginateCanvasToPdf(canvas, pdf, breakpoints, headerStrips);
 
     return pdf;
 }
@@ -2655,60 +2835,10 @@ function generateOrderHistoryHTML(orders, storeName) {
 </html>`;
 }
 
-// Compact multi-page A4 PDF writer from a captured canvas (same approach as invoice)
-function addHistoryCanvasToPdf(canvas, pdf) {
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const topMargin = 0;
-    const bottomMarginFirstPage = 10;
-    const bottomMargin = 20;
-    const topMarginSubsequent = 25;
-    const safetyBuffer = 5;
-    const firstPageUsableHeight = pdfHeight - bottomMarginFirstPage;
-    const subsequentPageUsableHeight = pdfHeight - topMarginSubsequent - bottomMargin - safetyBuffer;
-
-    if (imgHeight <= firstPageUsableHeight) {
-        pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight);
-        return;
-    }
-
-    let remainingHeight = imgHeight;
-    let sourceY = 0;
-    let pageNumber = 1;
-    const canvasHeight = canvas.height;
-    const canvasWidth = canvas.width;
-    const pixelsPerMm = canvasHeight / imgHeight;
-
-    const firstPageHeight = Math.min(firstPageUsableHeight, remainingHeight);
-    const firstPageCanvasHeight = firstPageHeight * pixelsPerMm;
-    const page1Canvas = document.createElement('canvas');
-    page1Canvas.width = canvasWidth;
-    page1Canvas.height = firstPageCanvasHeight;
-    const page1Ctx = page1Canvas.getContext('2d');
-    page1Ctx.drawImage(canvas, 0, 0, canvasWidth, firstPageCanvasHeight, 0, 0, canvasWidth, firstPageCanvasHeight);
-    pdf.addImage(page1Canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, topMargin, imgWidth, firstPageHeight);
-
-    sourceY += firstPageHeight;
-    remainingHeight -= firstPageHeight;
-
-    while (remainingHeight > 0) {
-        pdf.addPage();
-        pageNumber++;
-        const pageHeight = Math.min(subsequentPageUsableHeight, remainingHeight);
-        const pageCanvasHeight = pageHeight * pixelsPerMm;
-        const sourceCanvasY = sourceY * pixelsPerMm;
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvasWidth;
-        pageCanvas.height = pageCanvasHeight;
-        const pageCtx = pageCanvas.getContext('2d');
-        pageCtx.drawImage(canvas, 0, sourceCanvasY, canvasWidth, pageCanvasHeight, 0, 0, canvasWidth, pageCanvasHeight);
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, topMarginSubsequent, imgWidth, pageHeight);
-        sourceY += pageHeight;
-        remainingHeight -= pageHeight;
-    }
+// Order-history PDF writer - shares the invoice's row-safe paginator so a store
+// with many orders never gets an order row cut across the page seam.
+function addHistoryCanvasToPdf(canvas, pdf, breakpoints, headerStrips) {
+    paginateCanvasToPdf(canvas, pdf, breakpoints, headerStrips);
 }
 
 // Download the store's order history as a clean PDF (reuses cached fresh data)
@@ -2753,6 +2883,9 @@ async function downloadOrderHistoryPdf() {
         await new Promise(resolve => setTimeout(resolve, 300));
 
         const element = iframe.contentWindow.document.querySelector('.history-container');
+        // Measure the safe cut points while the document is still attached.
+        const breakpoints = collectPageBreakpoints(element);
+        const headerStrips = collectTableHeaderStrips(element);
         const canvas = await html2canvas(element, {
             scale: 2,
             useCORS: true,
@@ -2769,7 +2902,7 @@ async function downloadOrderHistoryPdf() {
 
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
-        addHistoryCanvasToPdf(canvas, pdf);
+        addHistoryCanvasToPdf(canvas, pdf, breakpoints, headerStrips);
 
         const safeName = (storeName || currentStorePhone).replace(/[^\w\u0B80-\u0BFF]+/g, '_');
         pdf.save(`OrderHistory_${safeName}.pdf`);
